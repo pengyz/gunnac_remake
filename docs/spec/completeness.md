@@ -488,8 +488,8 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 > Mesen 共写 / git 索引卷入；采样双陷阱：粒度伪造不变量 / 栈页 watch 盲区；视觉绑定模式），
 > 假设本身留在本表——**知识条目 ≠ 假设**，两者引用互见但不混写。
 >
-> 【t41 挂账】R-item-2 / R-shot-level-3 的"回卷 $0C"措辞待按 kernel/deep **路径 scope 标注**
-> （t35 已证两路径回卷不同：kernel FF→$0C vs deep FF→$00）——spec 文字修订归下一张 spec 卡。
+> 【t41 挂账 → **t43 已清**】R-item-2 / R-shot-level-3 的"回卷 $0C"措辞已按 kernel/deep **路径 scope 标注**
+> （kernel(slot==0) FF→$0C / deep(slot≠0) 裸 INC FF→$00，t35 两路径分野）；deep wrap 用例 pk-10 待 t39 补入。
 
 ---
 

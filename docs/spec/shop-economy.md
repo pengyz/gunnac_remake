@@ -109,11 +109,12 @@
 > 【2026-10-12 t37 追加（FA-1 反向规则）】以下 R-item-2/3 承载 pk-* 对拍用例（升级/切换行为）；
 > 在本追加前，pk-* 7 用例不得记为 R-item-1/R-bomb-1 覆盖（t34 审计纪律照办）。
 
-### R-item-2: 同型圈连收升级：`$33`（weapon_level）**+1 递增；溢出 255(0xFF) 回卷 12(0x0C)**——回卷目标而非上限
-- 证据: L2 对拍用例 **pk-1-same-0to1 / pk-2-same-5to6 / pk-3-same-b2c / pk-4-wrap-ffto0c / pk-5-same-0cto0d**（`oracle/subroutines/l2_cases.jsonl`：ROM 子程序 vs `game-core::weapons` 双实现对拍，含 255→12 回卷边界）+ `bank2:$922B-$9258`（拾取处理 `CMP $34` 同型分支 → `INC $33` @`$923D`，溢出回卷置 $0C @`$924D`）+ N-0033 + t25/t31 结论
-- 可判定性: **机器可判定（L2 纯函数，已实证 5 用例含边界）**
-- 关联: B-SYS-ITEM、N-0033、R-shot-level-3（级→配置语义）、R-shot-level-4（深路径 pk-8/pk-9 与 $925F 分支待证，t35 在考）
-- 备注：**pk-5 实测 12→13 递增继续**——`$0C` 是回卷目标，不是等级上限（详见 [shot-system.md](shot-system.md) R-shot-level-3 更正注）
+### R-item-2: 同型圈连收升级：`$33`（weapon_level）**+1 递增；溢出回卷按路径分野**——kernel 路径（slot==0）FF→`$0C` 回卷，deep 路径（slot≠0）裸 INC FF→`$00` 自然回卷
+- 证据: **kernel 路径**（`$34==0`，拾取处理 `bank2:$922B-$9258`）：L2 对拍 pk-1/pk-2/pk-3/**pk-4-wrap-ffto0c**（255→12）/pk-5（12→13 递增继续）+ `INC $33` @`$923D`、溢出回卷置 $0C @`$924D` + N-0033；**deep 路径**（`$34≠0`，`$925F` 深分支 → 裸 `INC $33` @`$92B4`）：溢出**自然回卷 FF→$00**（无 $0C 修正）——t35 深路径定谳（`docs/findings/upgrade-branch-h02.md` + N-0058 范围更正）；deep 实测用例 pk-8/pk-9（三方全等），**wrap 分歧 deep 用例 pk-10 待 t39 补入 l2_cases.jsonl**（已证分歧按纪律未入文件、JSON 语义挂账）
+- 可判定性: **机器可判定（L2 纯函数）**——kernel 已实证 5 用例含 wrap 边界；deep 部分（pk-8/9 已实测；FF→$00 wrap 断言待 pk-10）
+- 关联: B-SYS-ITEM、N-0033、N-0058、R-shot-level-3（级→配置语义）、R-shot-level-4（$925F 深路径分支）
+- 备注：**pk-5 实测 12→13 递增继续**——`$0C` 是 kernel 回卷目标，不是等级上限；deep 路径可越 12 → `$9457` 越界索引行为 = **H-A** 必答项
+- 【2026-10-12 t43 scope 标注】原文"溢出 255 回卷 12（$0C）"未分路径，按 t35 两路径分野收窄为 kernel 语义；deep 回卷 $00 同步补入
 
 ### R-item-3: 异型圈切换：`$34`（weapon_slot）**写为新拾取值**（直接切换，非递增）
 - 证据: L2 对拍用例 **pk-6-switch-1to3**（$34: 1→3）、**pk-7-switch-0to5**（$34: 0→5）（`oracle/subroutines/l2_cases.jsonl` 双实现对拍）+ `bank2:$922B` 拾取处理异型分支 `STA $34` + N-0032 + t25/t31 结论
