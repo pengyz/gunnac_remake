@@ -4,11 +4,11 @@
   "metrics": {
     "rom_files_verified": 1,
     "seed_projection_files": 1,
-    "naming_ledger_entries": 60,
+    "naming_ledger_entries": 64,
     "assets_manifest_entries": 0,
     "knowledge_entries": 13,
-    "rust_test_count": 26,
-    "completeness_cells": 7
+    "rust_test_count": 27,
+    "completeness_cells": 8
   },
   "assets": {},
   "seed": {

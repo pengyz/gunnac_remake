@@ -7649,6 +7649,16 @@
   ],
   "known_data_candidates": [
     {
+      "name": "stage_page_table（t42 候选）",
+      "prg": "0x04100-0x04220",
+      "evidence": "docs/findings/stage-timeline.md §3（$A0-$BF 页值数据表，读者未定位）"
+    },
+    {
+      "name": "wave_event_records（t42）",
+      "prg": "0x10D10-0x10DFF",
+      "evidence": "docs/findings/stage-timeline.md §2.1（00 FE 分段事件记录流）"
+    },
+    {
       "name": "enemy_spawn_records=t_005（t32）",
       "prg": "0x10DD0-0x12DFF",
       "evidence": "docs/findings/enemy-dataface.md §1.1（5 字节 {参数×3, 行为脚本指针}）"

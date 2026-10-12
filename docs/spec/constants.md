@@ -23,6 +23,14 @@
 | C-extend-threshold | `extend_threshold_bcd` = `$E7-$EC` = **008000（8000）**，达标置 `$ED=$40` | `bank14:DAE7-DAFC` + probe 恒 0,0,8,0,0,0 | A | R-money-6 |
 | C-bomb-type-index | `bomb_type_index` = `$0190` 值域 **0-3**（四弹种）；映射 0=F/3=W 实测、1=B/2=T 推定 | `bank15:E138-E13D` + probe f2220 拾「W」0→3 | A（值域）/B（映射 1=B、2=T） | R-bomb-1、R-bomb-3 |
 
+## 1.5 关卡结构锚点（2026-10-12 t46，结构级；语义未证项见 stage-timeline §4）
+
+| 常量 ID | 值 | 来源 | 级 | 关联 |
+|---|---|---|---|---|
+| C-wave-chain | 波次链区 `bank8:$AD00-$ADD0`（file 0x10D10-0x10DE0）：`00 FE` 分隔分段事件记录流 | `docs/findings/stage-timeline.md` §2.1 实录 + xxd 复现 | B | R-stage-1 |
+| C-wave-dir | 目录 `bank8:$ACEF` = 块范围对（`44 AD D0 AD` → $AD44-$ADD0） | stage-timeline §2.3 | B | R-stage-3 |
+| C-scroll-vars | 滚动寄存器变量 `$1C/$1D`（NMI `bank15:$EFC8/$EFCD STA $2005` 消费） | stage-timeline §4 + S0 | B | R-stage-4 |
+
 ## 2. 登记不解释（存在性已证，含义未证）
 
 | 常量 ID | 值 | 来源 | 级 | 关联 | 备注 |
@@ -48,3 +56,4 @@
 - `v2 (2026-10-12, t23) 移动/射击常量：C-vel-h、C-vel-h-neg、C-clamp-x、C-clamp-y、C-bomb-consume（逐值）；C-bomb-type-tbl、C-vel-tables 入登记不解释`
 - `v3 (2026-10-12, t26) 金钱/炸弹常量：C-money-bcd（$E0-$E6 七位 BCD）、C-money-addend-tbl（type 1..10 逐值 10/30/100/150/250/400/600/800/1000/2000；行 11+ 表界未证不入表）、C-money-cap（999999）、C-extend-threshold（8000→$ED=$40）、C-bomb-type-index（$0190 0-3，映射 0=F/3=W 实测 1=B/2=T 推定）`
 - `v4 (2026-10-12, t36) 弹丸六表逐值（§2.5）：C-lvl-offsets（12 项）、C-shot-cfg-stream（12 级逐对）、C-motion-lut-x/y（16 项）、C-action-stream（观测区 36B，界未证）、C-action-durations（FF 段+0=跳转语义）——全部 seed 逐字节核；t29 样本列错位已在 shot-system.md §5 更正（指针标签经代码级复核正确）`
+- `v5 (2026-10-12, t46) 关卡结构锚点（§1.5）：C-wave-chain（波次链区 $AD00-$ADD0 分段记录流）、C-wave-dir（$ACEF 块范围对）、C-scroll-vars（$1C/$1D 滚动寄存器）——结构级 B 级，语义留 S1/S2`

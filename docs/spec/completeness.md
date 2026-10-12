@@ -176,6 +176,14 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | B-STG-07 | 第 7 区域（同上） | 同上 | A/B | L0 |
 | B-STG-08 | 第 8 区域（同上；疑含最终 Boss → H-06） | 同上 + E-W07 + E-R09（`A POWERFUL INVADER IN ONE OF THE EIGHT AREAS`） | A/B | L0 |
 
+#### 2.3.1 关卡子格登记（按证据准入，2026-10-12 t46 首格）
+
+| 格 ID | 内容单元 | 证据指针 | 级 | 分子 |
+|---|---|---|---|---|
+| B-STG-01-TL | STG-01 滚动时间线：波次链结构 / 滚动指令嵌入 / bank 图归属 / 目录结构（帧级对齐待 S1） | stage-timeline.md §1-5（bank8 $AD00-$ADD0 链/$ACEF 目录/$AE87 滚动写点）, gameplay-stage1 churn 1090/1090 帧 | B | **L2**（R-stage-1..6；帧级对齐 L3 待 S1） |
+
+> 其余 TL/EN/BOSS 子格按下方规则**证据后准入，不预建**。
+
 **关卡子格登记规则**（约束①的具体化，防猜测入分母）：每关的
 `B-STG-xx-TL`（滚动时间线）、`B-STG-xx-EN`（敌人生成/波次）、`B-STG-xx-BOSS`（关底 Boss）
 **不预先入分母**；由 S2 场景捕获或 S1 表识别取得证据后，按 §8 约束①声明覆盖面、当场入分母。
@@ -368,11 +376,24 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 备注: A1 闭合（越界疑虑随公式勘误消解）；$018A 奖励链数值实现属移植面挂账
 ```
 
+#### 2.4.9 分子登记记录（L2，关卡子格首格；t46 2026-10-12）
+
+> 格式按 §6.2；B-STG-01-TL 按 §2.3 子格规则证据准入（首个关卡子格）；覆盖实质=结构级，帧级对齐待 S1。
+
+```
+格: B-STG-01-TL
+强度: L2
+证据: bank8:$AD00-$ADD0（波次链分段记录流，00 FE 分隔）、bank8:$ACEF（块范围对）、bank8:$AE87（滚动写点 STA $1C）、bank9/10 头同族（STG-02/03 候选定位）、scenario:analysis/traces/gameplay-stage1（对象 churn 1090/1090 帧全程活跃）、docs/findings/stage-timeline.md §1-5
+工件: docs/spec/stage-timeline.md#R-stage-1..6、docs/spec/constants.md#C-wave-chain/C-wave-dir/C-scroll-vars
+日期: 2026-10-12
+备注: S1（段参数语义）未证前帧级对齐不可判——L3 前置；S2-S6 假设留 stage-timeline §4；其余 TL/EN/BOSS 子格不预建（证据后准入）
+```
+
 ### 2.5 分母统计（v0）
 
 | 面 | 格数 | 备注 |
 |---|---|---|
-| 行为面/内容面（§2） | 25 + 4 + 8 + 10 = **47** | 武器 25 / 炸弹 4 / 关卡 8 / 系统 10（t23 +MOVE/FIRE、t27 +RESPAWN）；子格未计 |
+| 行为面/内容面（§2） | 25 + 4 + 8 + 10 + 1 = **48** | 武器 25 / 炸弹 4 / 关卡 8 / 系统 10 / **关卡子格 1**（t46 +B-STG-01-TL）；其余子格不预建 |
 | 规则面（§5） | 46（下限，按行为格派生） | 每格 ≥1 条 R- 规则 |
 | 符号面（§3） | **未计**（占位） | S1 后机械导出 |
 | 数据面（§4） | **未计**（占位） | S1 后机械导出 |
@@ -503,6 +524,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 |---|---|---|
 | **H**（矩阵假设） | 本节上表 + `docs/findings/upgrade-branch-h02.md` | **H-01/H-02 收口**（t25 两说合一 + t35 深路径定谳：同型/异型 × $018C==$FF 2×2 + $32 bit2 门控；kernel 回卷 $0C / deep 裸 INC 回卷 $00 **两路径语义分野**，范围收窄见 shot-behavior §1.2 更正 + N-0058）｜H-03..H-13、H-15、H-16 见上表｜**H-14 收口**（t36 三线分工定谳）｜**H-A 新立**（t35）：$33 可越 12（deep 路径）→ `$9457` 越界索引行为 = 必答项 |
 | **W**（RAM watch 假设） | `docs/findings/ram-watch-s3.md` §7/§8.4/§9.5 | W1 证伪（真源 $E0-$E6）｜W2 观察中｜W3 未闭环（等级/残机 _todo_）｜W4 未闭环（slot 偏移）｜**W5 收口**（=重生坐标重置）｜W6 B 级维持（速度查表分划）｜W7 → [gotcha-parallel-read-image-order-unreliable](../knowledge/gotcha-parallel-read-image-order-unreliable.md)｜**W8 证伪**（孤儿 run 干扰）→ [gotcha-concurrent-mesen-output-corruption](../knowledge/gotcha-concurrent-mesen-output-corruption.md) |
+| **S**（t42 关卡结构假设） | `docs/findings/stage-timeline.md` §7 | S1 段参数语义（时刻/序号/掩码，C）｜S2 $ACEF 目录消费方式（C）｜S3 bank2 $8100 页目录读者（C）｜S4 地形碰撞数据（C）｜S5 关卡长度/切换条件（C）｜S6 bank9/10 逐关归属（B，候选定位级）——S 系列与 H/W/Q 并列互通，收口须同步本表 |
 | **Q**（t28 孤儿 run 复核遗留） | `docs/findings/orphan-run-recheck.md` §四 | Q1 **收口**（t29：$0190 拾取处理器 + $3B 连收计数）｜Q2 → N-0037 同域｜Q3 干净重跑已做（t29 akey-role）｜Q4 已落地（`oracle/scenarios/README.md` +1 帧约定） |
 
 > 知识沉淀去向：被证伪/收口的方法论教训入 `docs/knowledge/`（并行不可信家族 ×3：read_image 错序 /
@@ -562,6 +584,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 `v0.7 (2026-10-12, t36) 弹丸系统规格化（关键路径解锁）：R-shot-gen-1..4/R-shot-motion-1..3/R-shot-level-1..4（11 条）入 docs/spec/shot-system.md（B-SYS-FIRE 证据扩充 §2.4.6，覆盖只增）；constants.md v4 弹丸六表逐值（级表/配置流/双 LUT/动作流/时长表，seed 逐字节核）；H-02/H-14 收口；残项 A1-A5 + $925F 分支（t35 在考）如实留空；t29 样本列错位更正（指针标签经代码级复核正确）。`
 `v0.8 (2026-10-12, t37) t34 审计处置：FA-1 反向规则 R-item-2/3 补齐（pk-1..7 对拍用例获承载，coverage_map 回填 l2_cases_without_rule 7→0）；FA-2 声明降级（R-respawn-2/3/4 "L3 已可判"→"L3 部分"，真覆盖需求=窄窗重生场景+$018F/$04E0 watch，列单独 commit 需求未擅动）；FA-5 digit-* 部分覆盖如实现状登记（R-money-4 注）；R-shot-level-3 "级上限 $0C" 证伪更正（pk-5 实测 12→13，$0C=回卷目标）；§2.4.7 登记。`
 `v0.9 (2026-10-12, t44) FA-2 真覆盖登记：R-respawn-2/3/4 升 L3 已判（t40 证据包 respawn-window.md §3：双事件逐帧向量+240 窄窗 capture+时序定谳），FA-2 降级注撤销、t27 分段遮蔽观察升 A 级；追加范围（t39 同步）：R-shot-level-3 公式勘误 3+→4+((级-4)&7)（ha-2 实证，值域 [0,11] 无越界，A1 闭合）、R-shot-level-4 转正（t35+t39 双定谳）、R-item-2 deep 用例 pk-10/11/12 转正；残余转注 E1/E2 窗长差异→H-16 续问、死亡语义 W3；§2.4.8 登记。`
+`v0.10 (2026-10-12, t46) 关卡系统规则面开张：stage-timeline.md R-stage-1..6（波次链分段记录流/行为脚本指针族/$ACEF 块范围对/滚动指令嵌入=混合指令流定性/bank 图归属/时间线骨架+churn 交叉验证）；B-STG-01-TL 首个关卡子格按证据准入（§2.3.1，L2，帧级对齐待 S1），其余子格不预建；行为面 47→48；S1-S6 入 §7.1 S 系列；constants §1.5 关卡结构锚点。`
 
 ---
 
