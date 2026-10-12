@@ -15,12 +15,12 @@
   ],
   "faces": {
     "behavior": {
-      "denominator": 52,
-      "covered": 12
+      "denominator": 59,
+      "covered": 19
     },
     "rule": {
-      "denominator": 52,
-      "covered_cells": 12,
+      "denominator": 59,
+      "covered_cells": 19,
       "rule_entries": 21,
       "note": "规则面分母=行为格数×1 下限；条目数为 shop-economy 13 + ui-flow 8（completeness.md §5）"
     },
@@ -612,6 +612,69 @@
           "R-stage-tick-1..3"
         ]
       },
+      "covered": true
+    },
+    "B-STG-02-EN": {
+      "id": "B-STG-02-EN",
+      "face": "behavior",
+      "content": "STG-2 敌群：✅调度记录 242/14+脚本集 {A39B}+共享族归属；⚠tick 参数（子流 W29）；❌内容 5B 逐条",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {},
+      "covered": true
+    },
+    "B-STG-03-EN": {
+      "id": "B-STG-03-EN",
+      "face": "behavior",
+      "content": "STG-3 敌群：✅记录 29/13+**CNT tick 表 7 段**+链段族 8 脚本；⚠间隔换算（W28′）；❌逐条语义",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {},
+      "covered": true
+    },
+    "B-STG-04-EN": {
+      "id": "B-STG-04-EN",
+      "face": "behavior",
+      "content": "STG-4 敌群：✅记录 214/38+**BOSS 族 16 脚本**（$A4xx）；⚠tick 参数；❌Boss 触发",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {},
+      "covered": true
+    },
+    "B-STG-05-EN": {
+      "id": "B-STG-05-EN",
+      "face": "behavior",
+      "content": "STG-5 敌群：✅记录 219/41+**EN 族 13 脚本**（最全）；⚠tick 参数；❌逐条语义",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {},
+      "covered": true
+    },
+    "B-STG-06-EN": {
+      "id": "B-STG-06-EN",
+      "face": "behavior",
+      "content": "STG-6 敌群：✅记录 250/10+脚本 {B4E6}；—；❌tick、语义",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {},
+      "covered": true
+    },
+    "B-STG-07-EN": {
+      "id": "B-STG-07-EN",
+      "face": "behavior",
+      "content": "STG-7 敌群：✅与 STG-1 **共享流**（内容同，N-0108）；—；❌差异化内容（如有）",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {},
+      "covered": true
+    },
+    "B-STG-08-EN": {
+      "id": "B-STG-08-EN",
+      "face": "behavior",
+      "content": "STG-8 敌群：✅记录 52/19+**CNT tick 表 7 段**（同 STG-3）；⚠间隔换算（W28′）；❌逐条语义",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {},
       "covered": true
     },
     "B-STG-01-BOSS": {
