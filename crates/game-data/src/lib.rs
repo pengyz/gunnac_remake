@@ -5,4 +5,5 @@
 
 #![forbid(unsafe_code)]
 
+pub mod chr;
 pub mod text;
