@@ -158,3 +158,30 @@ pub fn tick(obj: &mut ShotObject) -> Option<()> {
     obj.pos_y = lut_accumulate_axis(obj.pos_y, obj.motion_code, &LUT_Y)?;
     Some(())
 }
+
+/// 弹槽分配结果（bank2:$888D 退出约定：命中 ⇒ C=0/A=state=0/Y=槽偏移；满载 ⇒ SEC/Y=A=$F0）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SlotAlloc {
+    /// 首次适应命中（组序×组内序，低偏移优先）。
+    Found { slot: u8, a: u8 },
+    /// 满载：SEC，Y=A=$F0（`TYA/ADC #$18` 遗留值，t48 case-4 ROM 实测）。
+    Full,
+}
+
+/// 弹槽分配器（bank2:$888D-$88BA，t48 定谳 `docs/findings/shot-slot-geometry.md`）：
+/// 4 组×5 槽（$80-$84/$9C-$A0/$B8-$BC/$D4-$D8，组内 stride 1、组距 $1C），
+/// 空槽判定 state[Y]==0，首次适应首命中返回；回收=state:=0（调用方写）。
+/// `state` 按槽偏移 Y 索引（$040E+Y 的镜像数组）。
+pub fn shot_slot_alloc(state: &[u8]) -> SlotAlloc {
+    const GROUPS: [u8; 4] = [0x80, 0x9C, 0xB8, 0xD4];
+    for base in GROUPS {
+        for k in 0..5u8 {
+            let y = base.wrapping_add(k);
+            let a = *state.get(y as usize).expect("state 数组须覆盖槽偏移");
+            if a == 0 {
+                return SlotAlloc::Found { slot: y, a };
+            }
+        }
+    }
+    SlotAlloc::Full
+}

@@ -80,10 +80,13 @@ fn main() -> ExitCode {
                 }
             };
             match game_oracle::l3::diff_shot_trajectory(&frames) {
-                Ok((compared, problems)) => {
+                Ok((compared, mut problems)) => {
+                    let alloc = game_oracle::l3::alloc_events_legal(&frames);
+                    let n_alloc = if alloc.is_empty() { "全合法" } else { "有违例" };
+                    problems.extend(alloc);
                     total += compared;
                     if problems.is_empty() {
-                        println!("[ok]   {path}: 弹轨迹 {compared} 帧全等（脚本机+LUT 累加；出生帧播种，死亡帧不入比对面）");
+                        println!("[ok]   {path}: 弹轨迹 {compared} 帧逐槽全等（出生帧播种+逐帧 tick）；槽位首次适应分配 {n_alloc}");
                     } else {
                         failures += 1;
                         println!("[FAIL] {path}:");
