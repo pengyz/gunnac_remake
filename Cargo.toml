@@ -1,6 +1,6 @@
 # Gun-Nac 重制 —— cargo workspace（AGENTS.md §2 红线为架构合同）
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/game-data",
     "crates/game-core",
@@ -10,7 +10,7 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "UNLICENSED"
 
 # 依赖政策：game-core 只允许依赖 game-platform（纯 trait 缝）；平台 crate
