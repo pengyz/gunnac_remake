@@ -35,6 +35,12 @@ python3 tools/scenario_run.py run-all         # 全部顺序跑
 
 ## 帧计数与时序约定（差分复现靠它锁死）
 
+**Q4 输入注入 +1 帧延迟约定（t28 实证，12/10 边界差异全为此类）**：
+场景 DSL 的 `press`/`hold` 在 **schedule 帧 N** 注入按键，而游戏侧 `controller_held`（$18）
+**反映于帧 N+1**（trace 中 endFrame N+1 的 watch 才看到该位）。等价说法（L3 对齐约定）：
+`state(N) = tick(state(N-1), held(N))` —— 当帧 trace 的 held 驱动进入下一状态的转移。
+两个说法同源：schedule(N) == trace.held(N+1)。改输入脚本或改差分对齐时勿混用两种计数。
+
 - `frame` 在 `inputPolled` 回调递增：第 N 次 poll = 帧 N，该帧注入 `schedule[N]` 的按键；
 - trace 行 / 截图 / RAM dump 在 `endFrame`（帧 N 渲染完成后）产生；
 - `frame == frames` 时写 `<场景名>.done` 标记并停机；驱动等标记后 SIGTERM 收尾。

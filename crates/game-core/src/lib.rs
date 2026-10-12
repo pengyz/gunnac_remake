@@ -11,6 +11,7 @@
 
 pub mod l2ports;
 pub mod player;
+pub mod weapons;
 
 pub use game_platform::{Buttons, Clock, GameRng, Input};
 

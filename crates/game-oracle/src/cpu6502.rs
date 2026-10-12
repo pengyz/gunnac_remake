@@ -31,6 +31,7 @@ pub const FLAG_N: u8 = 0x80;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepResult {
     Continue,
+    Jsr,
     Rts,
     Rti,
     Brk,
@@ -335,6 +336,7 @@ impl Cpu {
                 self.push(bus, self.pc as u8);
                 let hi = self.fetch(bus) as u16;
                 self.pc = (hi << 8) | lo;
+                return Ok(Jsr);
             }
             0x60 => {
                 let lo = self.pop(bus) as u16;

@@ -325,6 +325,7 @@ pub fn run_rom_case(rom: &[u8], case: &Case) -> Result<Out, String> {
     let (a, x, y, p) = case.in_regs;
     let mut cpu = Cpu::new(a, x, y, 0xFD, p, case.entry);
     let call_mode = case.stops.is_empty();
+    let mut depth = 0i32; // JSR/RTS 配对：片段内层 RTS 归位，仅深度 0 的 RTS 才是逃逸
     if call_mode {
         // 压入 (STOP_SENTINEL-1)，RTS 后 PC = STOP_SENTINEL（栈写入已被 is_stack 剔除）
         let ret = STOP_SENTINEL.wrapping_sub(1);
@@ -339,8 +340,11 @@ pub fn run_rom_case(rom: &[u8], case: &Case) -> Result<Out, String> {
         }
         match cpu.step(&mut bus)? {
             StepResult::Continue => {}
+            StepResult::Jsr => depth += 1,
             StepResult::Rts => {
-                if !call_mode {
+                if depth > 0 {
+                    depth -= 1;
+                } else if !call_mode {
                     return Err(format!("{}: 未到 stops 即遇 RTS（case 边界错？）", case.id));
                 }
             }
@@ -434,6 +438,24 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
                 (ns.x, x_in, ns.x_subpix)
             } else {
                 (held & 0x03, x_in, ns.y_subpix)
+            }
+        }
+        "pickup_handler" => {
+            let mut st = game_core::weapons::WeaponState {
+                slot: ram(0x0034), level: ram(0x0033), bomb_ammo: ram(0x018F),
+            };
+            let before = st.level;
+            match game_core::weapons::pickup_handler(&mut st, a_in) {
+                game_core::weapons::PickupOutcome::Leveled { level } => {
+                    writes.insert(0x0033, level);
+                    // 退出寄存器 = ROM 副产物：INC 溢出回卷路径 A=$0C（LDA #$0C），否则 A=$32 入参
+                    let a_out = if before == 0xFF { 0x0C } else { ram(0x0032) };
+                    (a_out, x_in, y_in)
+                }
+                game_core::weapons::PickupOutcome::Switched { slot } => {
+                    writes.insert(0x0034, slot);
+                    (slot, x_in, y_in) // A=拾取物 type（STA $34 不改 A）
+                }
             }
         }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),
