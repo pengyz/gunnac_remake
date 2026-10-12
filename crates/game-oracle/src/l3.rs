@@ -510,3 +510,64 @@ pub fn enemy_clamp_legal(rows: &[EnemyRow]) -> Vec<String> {
     }
     problems
 }
+
+/// 关卡卷轴逐帧行（$1C/$1D 对）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScrollRow {
+    pub f: u32,
+    pub x: u8,
+    pub y: u8,
+}
+
+/// 解析卷轴 golden JSONL。
+pub fn parse_scroll_rows(jsonl: &str) -> Result<Vec<ScrollRow>, String> {
+    let mut out = Vec::new();
+    for (lineno, line) in jsonl.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let v = crate::l2::parse_json(line).map_err(|e| format!("第 {} 行: {e}", lineno + 1))?;
+        let obj = match v { Json::Obj(o) => o, _ => return Err(format!("第 {} 行非对象", lineno + 1)) };
+        out.push(ScrollRow {
+            f: obj_num(&obj, "f")? as u32,
+            x: obj_num(&obj, "scroll_x")? as u8,
+            y: obj_num(&obj, "scroll_y")? as u8,
+        });
+    }
+    if out.is_empty() {
+        return Err("卷轴 golden 为空".into());
+    }
+    Ok(out)
+}
+
+/// 卷轴 L3 全等对拍：首行播种（R-bg-scroll-3 边界装载起点），此后逐帧
+/// `state(N)=tick(N, state(N-1))`（对齐约定与 player L3 同族），$1C/$1D **逐帧全等**。
+pub fn diff_scroll_trace(rows: &[ScrollRow]) -> Result<(usize, Vec<String>), String> {
+    use game_core::stage::{scroll_tick, StageScroll};
+    if rows.len() < 2 {
+        return Err("卷轴 golden 至少 2 行".into());
+    }
+    let mut st = StageScroll { x: rows[0].x, y: rows[0].y };
+    let mut problems = Vec::new();
+    let mut compared = 0usize;
+    for w in rows.windows(2) {
+        let (prev, cur) = (w[0], w[1]);
+        if cur.f != prev.f + 1 {
+            return Err(format!("f{}→{} 非逐帧连续（口径=逐帧全采）", prev.f, cur.f));
+        }
+        st = scroll_tick(cur.f, &st);
+        compared += 1;
+        if st.x != cur.x || st.y != cur.y {
+            problems.push(format!(
+                "f{}: sim=(${:02X},${:02X}) oracle=(${:02X},${:02X})",
+                cur.f, st.x, st.y, cur.x, cur.y
+            ));
+            if problems.len() >= 10 {
+                problems.push("…（失配过多，截断显示）".to_string());
+                break;
+            }
+        }
+    }
+    Ok((compared, problems))
+}

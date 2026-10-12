@@ -13,6 +13,7 @@ pub mod enemy;
 pub mod l2ports;
 pub mod player;
 pub mod shot;
+pub mod stage;
 pub mod terrain;
 pub mod weapons;
 
