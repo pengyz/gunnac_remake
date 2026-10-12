@@ -13,6 +13,7 @@ pub mod enemy;
 pub mod l2ports;
 pub mod player;
 pub mod shot;
+pub mod terrain;
 pub mod weapons;
 
 pub use game_platform::{Buttons, Clock, GameRng, Input};
