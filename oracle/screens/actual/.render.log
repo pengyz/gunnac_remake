@@ -12,3 +12,11 @@ gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nametable_non
 gameplay-stage1_f01500_b1 frame=1500 base=1 scroll=(0,114) nametable_nonzero=0
 dbg frame=1500 base=0 scroll=(0,114) nametable_nonzero=0
 title-menu_f00180_boot-black frame=180 base=0 scroll=(0,0) nametable_nonzero=0
+gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=198183
+gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=198183
+gameplay-stage1_f01260_stage-start frame=1260 base=0 scroll=(0,114) nt_nz=0 probe=198183
+gameplay-stage1_f02349_end frame=2349 base=0 scroll=(0,96) nt_nz=0 probe=198183
+dbg frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=198183
+gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=198183
+gameplay-stage1_f01260_stage-start frame=1260 base=0 scroll=(0,114) nt_nz=0 probe=198183
+gameplay-stage1_f02349_end frame=2349 base=0 scroll=(0,96) nt_nz=0 probe=198183

@@ -22,34 +22,66 @@ fn main() {
         .and_then(|i| args.get(i + 1)).and_then(|v| v.parse().ok()).unwrap_or(0);
     let rom = std::fs::read("rom/gunnac_cn.nes").expect("ROM");
     let trace = std::fs::read_to_string(format!("analysis/traces/{scene}.frames.jsonl")).expect("trace");
+    // NMI 级重建（R-l4-linebuf 五不变量，t94/t96）：
+    // 帧 N 主循环扫写填充行缓冲（probe 写事件）→ 帧 N+1 vblank NMI 读走（读后即废）→
+    // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
     let mut nt = Nametable::default();
-    let (mut sx, mut sy) = (0u8, 0u8);
+    let mut buf = [0u8; 0x31]; // $0130-$015F + $0160
+    let mut attrs = [0u8; 8];
+    let mut pending_row: Option<([u8; 32], [u8; 8], u8, u8, u8)> = None;
+    let mut sx = 0u8;
+    let mut sy = 0u8;
+    let mut zp_prev: Vec<u8> = vec![0; 256];
+    // probe 写事件（NMI 级相位）
+    let probe_path = format!("analysis/traces/{scene}.probe.jsonl");
+    let probe: Vec<(u64, u16, u8)> = std::fs::read_to_string(&probe_path).map(|t| {
+        t.lines().filter_map(|l| {
+            let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
+            let a = l.split("\"a\":\"").nth(1)?;
+            let a = u16::from_str_radix(a.split('"').next()?, 16).ok()?;
+            let v = l.split("\"v\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
+            Some((f, a, v))
+        }).collect()
+    }).unwrap_or_default();
+    let mut probe_i = 0usize;
+    let apply_frame_writes = |buf: &mut [u8; 0x31], attrs: &mut [u8; 8], f: u64, pi: &mut usize| {
+        while *pi < probe.len() && probe[*pi].0 == f {
+            let (_f, a, v) = probe[*pi];
+            *pi += 1;
+            match a {
+                0x0130..=0x0160 => buf[(a - 0x0130) as usize] = v,
+                0x00D3..=0x00DA => attrs[(a - 0x00D3) as usize] = v,
+                _ => {}
+            }
+        }
+    };
     for line in trace.lines() {
         let Some(rest) = line.split("\"f\":").nth(1) else { continue };
         let f: u64 = rest.split(',').next().unwrap().parse().unwrap();
         if f > frame { break; }
+        // —— NMI 语义边界（帧首）：上传上一帧填充的行缓冲（读后即废）——
+        if let Some((row, at, lo, hi, al)) = pending_row.take() {
+            nt.nmi_flush(&row, &at, lo, hi, al, 1);
+        }
         let zi = line.find("\"zp\":\"").unwrap();
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
-        let bi = line.find("\"bg_nmi\":\"");
-        let bg = bi.map(|i| hex_decode(&line[i + 10..][..line[i + 10..].find('"').unwrap()]));
-        if let Some(bg) = bg {
-            if bg.len() >= 0x31 && bg[0x30] != 0 && f == 1193 {
-                eprintln!("DBG f1193 bg.len={} p30={} row[0..8]={:02x?} zp8E={:02x} zp8F={:02x} zp90={:02x}", bg.len(), bg[0x30], &bg[0..8], zp[0x8E], zp[0x8F], zp[0x90]);
-            }
-            if bg.len() >= 0x31 && bg[0x30] != 0 {
-                let mut row = [0u8; 32];
-                row.copy_from_slice(&bg[0x00..0x20]);
-                let mut attrs = [0u8; 8];
-                attrs.copy_from_slice(&bg[0x31..0x39].get(0..8).unwrap_or(&[0; 8]).try_into().unwrap_or([0; 8]));
-                nt.nmi_flush(&row, &attrs, zp[0x8E], zp[0x8F], zp[0x90], bg[0x30]);
-            }
+        // —— 主循环相位：probe 写事件填充缓冲 ——
+        apply_frame_writes(&mut buf, &mut attrs, f, &mut probe_i);
+        // 帧末挂起：行缓冲若本帧被写过（扫写）→ 排队下帧 NMI 上传（地址取当帧 zp）
+        let wrote = probe.iter().any(|(pf, pa, _)| *pf == f && (0x0130..=0x0150).contains(pa));
+        if wrote {
+            let mut row = [0u8; 32];
+            row.copy_from_slice(&buf[0x00..0x20]);
+            pending_row = Some((row, attrs, zp[0x8E], zp[0x8F], zp[0x90]));
         }
+        let _ = &zp_prev;
+        zp_prev = zp.clone();
         if f == frame {
             sx = zp[0x1C];
             sy = zp[0x1D];
         }
     }
-    // 渲染：nametable 32×30 tile + 卷轴偏移（mod 256 环绕）
+    // 渲染：nametable 32×30 + 卷轴
     let mut canvas = Canvas::new();
     let font_bank = game_data::chr::FONT_BANK_START;
     for ty in 0..30usize {
@@ -57,7 +89,6 @@ fn main() {
             let tile = nt.tiles[ty * 32 + tx] as usize + base * 256;
             let px = (tx as i32) * 8 - sx as i32;
             let py = (ty as i32) * 8 - sy as i32;
-            // CHR tile：bank = tile/64（字模区起），tile%64
             let bank = font_bank + tile / 64;
             if bank < 128 {
                 canvas.draw_chr(&rom, bank, tile % 64, px, py, &GREY4);
@@ -68,6 +99,6 @@ fn main() {
     let out_path = format!("oracle/screens/actual/{name}.png");
     canvas.export_png(std::path::Path::new(&out_path)).expect("导出");
     let mut log = std::fs::OpenOptions::new().create(true).append(true).open("oracle/screens/actual/.render.log").unwrap();
-    writeln!(log, "{name} frame={frame} base={base} scroll=({sx},{sy}) nametable_nonzero={}", nt.tiles.iter().filter(|&&t| t != 0).count()).unwrap();
+    writeln!(log, "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={}", nt.tiles.iter().filter(|&&t| t != 0).count(), probe.len()).unwrap();
     let _ = (SCREEN_W, SCREEN_H);
 }
