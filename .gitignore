@@ -1,0 +1,28 @@
+# ===== Gun-Nac 重制仓库 .gitignore =====
+# 原则（AGENTS.md §2）：可再生工作区与二进制产物不入库；
+# ROM 字节不入库，由根目录 SHA256SUMS 跟踪哈希（供 gates/cli.py rom 校验）。
+
+# ROM 字节（唯一资产真相源，sha256 见 SHA256SUMS；rom/ 永不修改）
+*.nes
+
+# 可再生工作区（由 rom/ + 工具可复现）
+analysis/
+assets/
+target/
+shots/
+__pycache__/
+*.pyc
+
+# 工具二进制（可重新下载/解压，非源码）
+tools/mesen2/
+tools/mesen2.zip
+
+# 根目录临时 CHR 抽样渲染产物（可由脚本再生）
+/_chr_*.png
+
+# AgentTeams 运行时状态（harness 动态写入，非仓库内容）
+.agent-teams/
+
+# 编辑器/系统杂项
+.DS_Store
+*.swp
