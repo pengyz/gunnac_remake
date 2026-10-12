@@ -106,15 +106,30 @@
 - 可判定性: 机器可判定（截图 diff）；**导弹 ↔ 炸弹字母（F/B/T/W）映射及其余弹种上限未证（H-11），不发明**
 - 关联: B-SYS-ITEM、B-BMB-F/B/T/W、H-11
 
+> 【2026-10-12 t37 追加（FA-1 反向规则）】以下 R-item-2/3 承载 pk-* 对拍用例（升级/切换行为）；
+> 在本追加前，pk-* 7 用例不得记为 R-item-1/R-bomb-1 覆盖（t34 审计纪律照办）。
+
+### R-item-2: 同型圈连收升级：`$33`（weapon_level）**+1 递增；溢出 255(0xFF) 回卷 12(0x0C)**——回卷目标而非上限
+- 证据: L2 对拍用例 **pk-1-same-0to1 / pk-2-same-5to6 / pk-3-same-b2c / pk-4-wrap-ffto0c / pk-5-same-0cto0d**（`oracle/subroutines/l2_cases.jsonl`：ROM 子程序 vs `game-core::weapons` 双实现对拍，含 255→12 回卷边界）+ `bank2:$922B-$9258`（拾取处理 `CMP $34` 同型分支 → `INC $33` @`$923D`，溢出回卷置 $0C @`$924D`）+ N-0033 + t25/t31 结论
+- 可判定性: **机器可判定（L2 纯函数，已实证 5 用例含边界）**
+- 关联: B-SYS-ITEM、N-0033、R-shot-level-3（级→配置语义）、R-shot-level-4（深路径 pk-8/pk-9 与 $925F 分支待证，t35 在考）
+- 备注：**pk-5 实测 12→13 递增继续**——`$0C` 是回卷目标，不是等级上限（详见 [shot-system.md](shot-system.md) R-shot-level-3 更正注）
+
+### R-item-3: 异型圈切换：`$34`（weapon_slot）**写为新拾取值**（直接切换，非递增）
+- 证据: L2 对拍用例 **pk-6-switch-1to3**（$34: 1→3）、**pk-7-switch-0to5**（$34: 0→5）（`oracle/subroutines/l2_cases.jsonl` 双实现对拍）+ `bank2:$922B` 拾取处理异型分支 `STA $34` + N-0032 + t25/t31 结论
+- 可判定性: **机器可判定（L2 纯函数，已实证 2 用例）**
+- 关联: B-SYS-ITEM、N-0032、R-shot-gen-4（$34 分派五路）
+
 ### R-bomb-1: `bomb_type_index` $0190 四值域（0-3），初始化由 RNG 决定
 - 证据: `bank15:E138-E13D`（`LDA(RNG) / LSR×3 / AND #$03 / STA $0190`）+ `docs/findings/ram-watch-s3.md` §8.3
 - 可判定性: 机器可判定（L2 子程序级 diff：RNG 快照 → $0190 写值断言）
 - 关联: B-SYS-ITEM、B-BMB-F/B/T/W、C-bomb-type-index、N-0030
 
-### R-bomb-2: 拾取字母圈三方同步：`$0190` 切换 + HUD 字母切换 + `$018F` 弹数变化同帧段发生
-- 证据: probe diff f2160→f2280：f2220 拾取字母圈「W」→ `$0190: 0→3`、HUD 字母 **F→W**、`$018F: 3→4` 同步（`ram-watch-s3.md` §8.3）
-- 可判定性: 机器可判定（L3：三变量 ∈ 状态向量同步比对）
-- 关联: B-SYS-ITEM、B-BMB-F/B/T/W、N-0030、N-0017、H-12（字母归因已收口）
+### R-bomb-2: 拾取字母圈弹种切换：`$0190` 切换 + HUD 字母切换同步（同帧）；`$018F` 弹数变化属**同事件簇但可错帧**的独立维度
+- 证据: probe diff f2160→f2280：f2220 拾取字母圈「W」→ `$0190: 0→3`、HUD 字母 **F→W**、`$018F: 3→4`（**60 帧 probe 粒度的同簇观察**，`ram-watch-s3.md` §8.3）+ **A 级反例**：`oracle/traces/gameplay-stage1.weapons.jsonl` f2174（bomb: 弹数 3→4）→ f2175（bomb: 弹种 0→3 且弹数不变；同帧 weapon: `$34` 0→3）——三变化相隔 1 帧、弹种切换不必然伴随弹数变化
+- 可判定性: 机器可判定（L3：$0190+HUD 字母同帧断言；$018F 按事件簇断言）
+- 关联: B-SYS-ITEM、B-BMB-F/B/T/W、N-0030、N-0017、H-12（字母归因已收口）、A2（f2175 同帧双处理器现象）
+- 【2026-10-12 更正（t36）】原"三方同帧段同步"**收窄**：t22 证据是 60 帧 probe 粒度的同簇观察，不支持同帧不变量；f2174/f2175 反例（golden 据此判失配）证明弹数变化与弹种切换是两个维度。原表述保留如上不删历史。
 
 ### R-bomb-3: 索引 ↔ 字母映射：**0=F、3=W 实测**（A 级）；**1=B、2=T 推定**（B 级，按 E-R08 `F B T W` 串序）
 - 证据: 实测：R-bomb-2 拾「W」→ index 3 + HUD F→W（`ram-watch-s3.md` §8.3）；推定：`rom:9626 F B T W` 串序（E-R08）与四值域同长 —— **推定部分不得作结论**（H-11 保留推定残项）
