@@ -302,7 +302,7 @@ pub fn parse_cases(jsonl: &str) -> Result<Vec<Case>, String> {
         let oregs = match obj_get(&out_o, "regs")? { Json::Obj(o) => o.clone(), _ => return Err("out.regs 非对象".into()) };
         let out_regs = (as_u8(obj_get(&oregs, "a")?)?, as_u8(obj_get(&oregs, "x")?)?, as_u8(obj_get(&oregs, "y")?)?);
         let out_writes = byte_map(obj_get(&out_o, "writes")?)?;
-        let out_exit = match obj.iter().find(|(k, _)| k == "exit") {
+        let out_exit = match out_o.iter().chain(obj.iter()).find(|(k, _)| k == "exit") {
             Some((_, Json::Str(s))) => Some(parse_bank_addr(s)?.1),
             Some((_, other)) => return Err(format!("exit 须为 bankNN:AAAA：{other:?}")),
             None => None,
@@ -373,6 +373,7 @@ pub fn run_rom_case(rom: &[u8], case: &Case) -> Result<Out, String> {
 pub fn run_rust_case(case: &Case) -> Result<Out, String> {
     use game_core::l2ports;
     let mut writes = BTreeMap::new();
+    let mut exit_at = 0u16;
     let (a_in, x_in, y_in, _) = case.in_regs;
     let ram = |addr: u16| -> u8 {
         case.in_ram.iter().find(|(a, _)| *a == addr).map(|(_, v)| *v).unwrap_or(0)
@@ -494,8 +495,10 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
         }
         "shot_schedule_step" => {
             let (counter, period) = (ram(0x072E), ram(0x074A));
-            let (_new_counter, spawn) = game_core::shot::schedule_step(counter, period);
-            // 片段止于分支落点（INC $072E 在 JSR 之后未达）——出参=分支落点
+            let (new_counter, spawn) = game_core::shot::schedule_step(counter, period);
+            // 片段止于分支落点（INC $072E 在 JSR 之后未达）——出参=分支落点；决策可自证
+            assert_eq!(new_counter, if spawn { counter.wrapping_add(1) } else { counter });
+            exit_at = if spawn { 0xA205 } else { 0xA232 };
             (counter, x_in, y_in)
         }
         "shot_spawn_init" => {
@@ -533,10 +536,6 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
             (ny, x_in, code) // 退出：A=Y 轴结果（STA 前驻留），Y=运动码
         }
         "shot_config_loader" => {
-            let pairs = game_core::shot::config_pairs_for_level(
-                game_core::weapons::config_index_for_level(0) // 占位：本片段按 X=偏移直读
-            );
-            let _ = pairs;
             let mut i = x_in as usize;
             let mut slot = 0u16;
             loop {
@@ -556,7 +555,7 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
             // Y=$80 起，4 组×5 槽（组内 stride 1，组距 $1C：$80/$9C/$B8/$D4），
             // 空槽判定 $040E+Y==0，首命中返回；全满 SEC（Y=$F0, A=末读值）。
             let mut y: u8 = 0x80;
-            let mut a = 0u8;
+            let mut a;
             let mut hit: Option<u8> = None;
             for _ in 0..4 {
                 let base = y;
@@ -580,7 +579,7 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
         }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),
     };
-    Ok(Out { a, x, y, writes, exit: 0 })
+    Ok(Out { a, x, y, writes, exit: exit_at })
 }
 
 /// 单用例三方裁定。返回 (rom 侧出参, rust 侧出参, 问题列表)。
