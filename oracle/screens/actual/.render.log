@@ -1,0 +1,3 @@
+gameplay-stage1_f01500_mid-combat frame=1500 ptr=0xb6e1 scroll=(0,114) pattern_len=2335
+gameplay-stage1_f01260_stage-start frame=1260 ptr=0xb6e1 scroll=(0,114) pattern_len=2335
+gameplay-stage1_f02349_end frame=2349 ptr=0xb6e1 scroll=(0,96) pattern_len=2335

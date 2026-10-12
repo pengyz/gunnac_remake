@@ -140,7 +140,7 @@ fn bg_visual_scout_sample_export() {
         for line in text.lines() {
             if line.contains("\"f\":1500,") || line.contains("\"f\": 1500,") {
                 if let Some(i) = line.find("\"zp\":\"") {
-                    let rest = &line[i + 7..];
+                    let rest = &line[i + 6..];
                     let hex = &rest[..rest.find('"').unwrap()];
                     let zp = hex_decode(hex);
                     sx = zp[0x1C];
