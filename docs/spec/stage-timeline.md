@@ -87,6 +87,24 @@
 - 可判定性: 部分（机制定位后可 L3 全判）；当前=观察级规则
 - 关联: B-SYS-SPAWNRHYTHM、Wv-3、R-stage-1a
 
+## 2.55 行为规则 —— R-stage-chain-*（关卡脚本四层链架构，2026-10-12 t78 入档；t76/N-0096）
+
+### R-stage-chain-1: **关卡脚本四层链**（A 级，seed 全套实证）：`($88)` 根流 → **`$97` 解释器**（`bank00:$8308`）→ `$FC` 装载 `($A1)` **4B 记录机**（`$83F6`）→ **VM 槽字节码机**（`$844A`）→ `$0150` 输出表 → 桥（`$85A0`）→ BG 缓冲
+- 证据: `docs/findings/ac80-format-w21.md` §1（t76）+ N-0096（stage_script_pipeline）；根流装载 `bank00:$8205`
+- 可判定性: **机器可判定（L2 数据解析：链层跳转/基址装载断言）**
+- 关联: B-STG-01-TL、R-enemy-2（VM 层）、R-enemy-8（4B 记录机）、R-stage-1（波次链层）
+
+### R-stage-chain-2: `$97` 指令流解释器（`bank00:$8308-$8388`）记录格式与控制字节：`f2<$80` = **4B 记录**（`(f3,f4)`=指针对）；`f2=$80-$FB` = **6B 记录**（`(f5,f6)`=bank8 流指针→`$99/$9A`）；`$FC`=装载 `($A1)` 基址；**`$FD`=循环计数装入（f1→`$9D`）**；`$FE`=循环（`DEC $9D`）；`$FF`=跳转（新流指针）
+- 证据: `docs/findings/ac80-format-w21.md` + N-0097（stream_interpreter_97，逐字节）
+- 可判定性: **机器可判定（L2 数据解析：6B/4B 记录解码 + $FD/$FE/$FF 控制字节语义断言）**
+- 关联: B-STG-01-TL、N-0097、Wv-2（收口）
+
+### R-stage-chain-3: 波次链格式**重释**（t47 → t76）：`bank8:$AD00` 波次链 = **`$97` 解释器 6B 记录流**（决定性验证：`46 AD 03 00 E6 B2` 的 `(f5,f6)=$B2E6` bank8 指针吻合）
+- 证据: `docs/findings/ac80-format-w21.md` + N-0098（wave_event_records）
+- 可判定性: 机器可判定（L2 数据解析：6B 解码回放）
+- 关联: B-STG-01-TL、R-stage-1、Wv-2
+- 【2026-10-12 t78 重释更正（t76/N-0098）】t47"**FE=段末/FF=链末**"表述重释为**解释器控制字节**（`$FE`=循环/`$FF`=跳转）——非终止符；t47 段参数对"10 FD/08 FD"= **`$FD` 循环计数命令实解**（Wv-2 收口）。原表述留档不删
+
 ## 2.6 行为规则 —— R-bg-scroll-*（STG-01 BG 时间线，2026-10-12 t70 入档；**L3 已判**）
 
 > 证据：`docs/findings/bg-content-line.md` §4（A 级，t69）+ N-0089（bg_scroll_timeline）；
@@ -135,7 +153,7 @@
 
 ## spec 产出契约
 
-- 规则清单: R-stage-1..6 + R-stage-1a（S1 三裁定注）+ R-spawn-1..3（共 10 条，逐条带 bank:addr/scenario + 复现指针）
+- 规则清单: R-stage-1..6 + R-stage-1a + R-stage-chain-1..3（四层链）+ R-spawn-1..3 + R-bg-scroll-1..4（共 17 条）
 - 常量对照: [constants.md](constants.md) 见 §1 三锚点（C-wave-chain/C-wave-dir/C-scroll-vars）
 - 可判定性标注: 机器可判定 7 条（L2 数据解析/事件序列）+ 部分/人工 3 条（R-stage-1a 语义未定谳、R-stage-6 帧级对齐不成立、R-spawn-3 机制未定位）
 - 门禁: `python3 gates/cli.py all`（见输出）
