@@ -1,0 +1,40 @@
+# 场景：主武器生成器活动可观测（t52 F1 · R-shot-gen 写链取证）
+# 证据注记（假设区）：
+#   - F1 谜题定谳（t52）：六型生成器 bank3:$A1F5 由 **B 键按住**（$18 bit6）+ $39/$3A 自动重复计时器
+#     驱动（bank3:$A1A9-$A1C2）；gameplay-stage1 无 B 长按 → 写链 0 命中
+#   - 本场景：实机段持续按住 B（1000 帧）→ 生成器写链/计数器/槽位填充可观测
+#   - F2b：槽位 state 字段真实语义（寿命倒数？）在此活动条件下定谳
+name fire-hold
+frames 2350
+press_len 4
+
+# 标题/菜单 → 商店 → 双 B 退出（同源前缀）
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+
+# 1300-2300 持续按住 B（主武器连发观察窗；不按 A/不移动，排除投放/移动干扰）
+hold 1300-2300 b
+
+capture_every 40 probe
+capture 1260 stage-start
+capture 2300 fire-end
+
+watch_range 0000-00ff zp
+watch 0320
+watch 018f bomb_ammo
+watch 0190 bomb_type_index
+watch 04e0 player_x
+watch 04fc player_y
+watch 072e shot_counter_0
+watch 072f shot_counter_1
+watch 0730 shot_counter_2
+watch_range 0300-07ff iram
+watch_range 6000-7fff wram
