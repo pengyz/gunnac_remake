@@ -53,3 +53,4 @@
 | [pattern-evidence-spotcheck-independent-reproduction.md](pattern-evidence-spotcheck-independent-reproduction.md) | pattern | 验收 = 独立复现证据指针，不看报告写得对不对 |
 | [decision-baseline-raise-policy.md](decision-baseline-raise-policy.md) | decision | 基线分级：进度类上调 captain 验收后代执行；下调/放宽/白名单仍须用户确认 |
 | [decision-gate-trust-root-boundary.md](decision-gate-trust-root-boundary.md) | decision | 信任根边界：三文件自洽伪造不可内圈检出——不造内圈，Evidence/Confidence+git 评审兜底，Stage B 再议外部信任根 |
+| [gotcha-parallel-read-image-order-unreliable.md](gotcha-parallel-read-image-order-unreliable.md) | gotcha | 并行多图 read_image 结果序不可信——多图单张调用或字节级锚定，数值结论禁只凭读图 |

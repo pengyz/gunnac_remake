@@ -601,6 +601,7 @@
           "trace:analysis/traces/shop#f1080/f1140"
         ],
         "rule": [
+          "R-shop-1..4",
           "R-shop-5..8"
         ]
       },
@@ -623,10 +624,13 @@
           "scenario:analysis/traces/shop"
         ],
         "trace": [
+          "trace:analysis/traces/gameplay-stage1#f2160/f2220/f2280/f2340",
           "trace:analysis/traces/shop#f1140"
         ],
         "rule": [
-          "R-money-1..4"
+          "R-money-1..3",
+          "R-money-1..4",
+          "R-money-1..6"
         ]
       },
       "covered": true
@@ -650,9 +654,11 @@
         ],
         "trace": [
           "trace:analysis/traces/gameplay-stage1#f1260/f1500/f2349",
+          "trace:analysis/traces/gameplay-stage1#f2220",
           "trace:analysis/traces/shop#f1140"
         ],
         "rule": [
+          "R-bomb-1..3",
           "R-item-1",
           "R-ui-8"
         ]
@@ -706,6 +712,7 @@
           "trace:analysis/traces/title-menu#f180/f360/f540/f1079"
         ],
         "rule": [
+          "R-ui-1..5",
           "R-ui-6..8"
         ]
       },
