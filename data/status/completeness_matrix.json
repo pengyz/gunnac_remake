@@ -15,12 +15,12 @@
   ],
   "faces": {
     "behavior": {
-      "denominator": 47,
-      "covered": 7
+      "denominator": 49,
+      "covered": 9
     },
     "rule": {
-      "denominator": 47,
-      "covered_cells": 7,
+      "denominator": 49,
+      "covered_cells": 9,
       "rule_entries": 21,
       "note": "规则面分母=行为格数×1 下限；条目数为 shop-economy 13 + ui-flow 8（completeness.md §5）"
     },
@@ -578,6 +578,23 @@
       "bindings": {},
       "covered": false
     },
+    "B-STG-01-TL": {
+      "id": "B-STG-01-TL",
+      "face": "behavior",
+      "content": "STG-01 滚动时间线：波次链结构 / 滚动指令嵌入 / bank 图归属 / 目录顺序扫入口",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {
+        "scenario": [
+          "scenario:analysis/traces/gameplay-stage1"
+        ],
+        "trace": [],
+        "rule": [
+          "R-stage-1..6"
+        ]
+      },
+      "covered": true
+    },
     "B-SYS-SHOP": {
       "id": "B-SYS-SHOP",
       "face": "behavior",
@@ -765,6 +782,8 @@
         ],
         "rule": [
           "R-fire-1..6",
+          "R-shot-alloc-1..4",
+          "R-shot-gen-1..3",
           "R-shot-gen-1..4",
           "R-shot-level-1..4",
           "R-shot-level-3",
@@ -792,6 +811,23 @@
         ],
         "rule": [
           "R-respawn-1..4"
+        ]
+      },
+      "covered": true
+    },
+    "B-SYS-SPAWNRHYTHM": {
+      "id": "B-SYS-SPAWNRHYTHM",
+      "face": "behavior",
+      "content": "spawn 节律：16 帧周期连发 / 突发簇 / 独立定时机制（2026-10-12 t49 约束①准入，t47 证据包）",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {
+        "scenario": [],
+        "trace": [
+          "trace:analysis/traces/gameplay-stage1.frames.jsonl"
+        ],
+        "rule": [
+          "R-spawn-1..3"
         ]
       },
       "covered": true
