@@ -145,6 +145,10 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | B-WPN-05-LV4 | 武器槽#5 · 等级 4 | 同上 | A/B | L0 |
 | B-WPN-05-LV5 | 武器槽#5 · 等级 5 | 同上 | A/B | L0 |
 
+> 【2026-10-12 t56 控制方案备注】25 格 B-WPN-xx-LVx 仍 L0，但**语义基础已变**（t52 F1）：
+> 主武器触发=B 键长按连发（非自动连射）、弹种切换=拾取字母圈——逐槽逐级验证设计（射击时机断言、
+> 升级观测路径）须按新控制方案编排；级配制语义（R-shot-level）不受影响。
+
 > 级轴计数备注：`WEAPON-0`（E-R03）提示运行时显示可能 0 起算；**分母按 5 档计**（任务卡与 E-W03 "five upgrades" 一致），
 > "0..4 还是 1..5"的显示映射属实现细节考证 → H-04。
 
@@ -535,7 +539,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | H-11 | 「导弹」↔ 炸弹字母映射——【2026-10-12 t26 更新】bomb_type_index $0190 收口（0=F/3=W 实测 A 级，R-bomb-3）；**残项=1=B/2=T 推定（B 级）、20 上限对应弹种、其余弹种上限** | C（残项） | S2 单字母拾取场景实测 1=B/2=T |
 | H-12 | 实机 HUD 语义——【2026-10-12 t26 更新】字母行归因**已收口**（= bomb_type_index $0190，f2220 拾「W」三方同步，R-bomb-2）；**残项=等级 var、残机 var（W3）、红圈掉落物 slot 偏移（W4）**，继续留命名台账 | C（残项） | t18 后续 RAM diff / object slot trace |
 | H-13 | 商店进入/离开的完整条件（菜单序列各输入的独立作用、关间序列、GAME OVER 后路径） | C | S2 单变量场景矩阵 |
-| H-14 | A 边沿/主武器/炸弹键分工机制——【2026-10-12 t36 收口】**定谳**：主武器=计数器驱动自动连射（`bank3:$A1FD-$A22B` 无按键判断，R-shot-gen-2）、A 边沿=投放（R-fire-1）、B=弹种切换（N-0030 路径）；齐射型由 `$34` 分派（R-shot-gen-4） | ~~C~~ | 已收口（t25 静态定谳 + t29/t36 规格化） |
+| H-14 | 控制方案分工——【2026-10-12 t36 收口】→【**t56 更正（t52 F1 冲击波）**】t36 定谳两处作废，正确：**A 边沿=投放**（R-fire-1）、**B 长按=主武器连发**（`$18` bit6→`$39/$3A`→`$32` bit2 门控链，R-shot-gen-2）、**弹种切换=拾取字母圈触发**（R-bomb-2/3）；~~主武器=计数器驱动自动连射/B=弹种切换~~（N-0073 撤回 N-0035 定性、N-0072 更正 t25）；齐射型由 `$34` 分派（R-shot-gen-4）维持 | ~~C~~ | 已收口（t52 定谳版为准，t36 文本作废留档） |
 | H-15 | `game_action_mode`（$0401）除 0/7 外的值域语义（N-0024 同址多用途） | C | S2 多场景 $0401 采样 |
 | H-16 | 受击判定（hit-test）本身未证：判定盒/触发条件/无敌窗口——【2026-10-12 t44 更新】事件内时序**已定谳**（t40：冻结→N-1 弹药回满→N 坐标复位）；**残项=E1/E2 窗长差异（86 vs 129）影响因子** + 判定盒/触发条件 | C（残项） | t25 `oracle/scenarios/hit-test.txt` 重跑 + 窗长差异对照（受击时刻/无敌帧/演出？）；死亡语义（残机/结束条件）同域未证（W3） |
 | N-0037 | `_todo_slot_letter_binding`：HUD 行 1 字母位来源未定（letter-bank 或查表）——N-0032"字母=weapon_slot($34)"绑定已证伪撤回（f2220 分离事件：$34=3 而字母仍 'A'，位图 rows 40-51） | C | S2/S3 字形表查表考证 + 像素级绑定证明（pattern-visual-binding-needs-pixel-proof） |
@@ -554,7 +558,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | **W**（RAM watch 假设） | `docs/findings/ram-watch-s3.md` §7/§8.4/§9.5 | W1 证伪（真源 $E0-$E6）｜W2 观察中｜W3 未闭环（等级/残机 _todo_）｜W4 未闭环（slot 偏移）｜**W5 收口**（=重生坐标重置）｜W6 B 级维持（速度查表分划）｜W7 → [gotcha-parallel-read-image-order-unreliable](../knowledge/gotcha-parallel-read-image-order-unreliable.md)｜**W8 证伪**（孤儿 run 干扰）→ [gotcha-concurrent-mesen-output-corruption](../knowledge/gotcha-concurrent-mesen-output-corruption.md) |
 | **S**（t42 关卡结构假设） | `docs/findings/stage-timeline.md` §7 | S1 段参数语义（时刻/序号/掩码，C）｜S2 $ACEF 目录消费方式（C）｜S3 bank2 $8100 页目录读者（C）｜S4 地形碰撞数据（C）｜S5 关卡长度/切换条件（C）｜S6 bank9/10 逐关归属（B，候选定位级）——S 系列与 H/W/Q 并列互通，收口须同步本表 |
 | **Wv**（wave 域，2026-10-12 t51 消歧：原 W1-W5 → Wv-1..5） | `docs/findings/wave-semantics-s1.md` §7 | Wv-1 链首字用途（C）｜Wv-2 `XX FD` 标记+参数对语义（C）｜Wv-3 16 帧节律定时机制（B，= B-SYS-SPAWNRHYTHM L3 前置）｜Wv-4 地形流消费例程（C，S4 延续）｜Wv-5 链尾段 `C8 AD` 后续（C） |
-| **Ws**（shot 域，t51 消歧） | `docs/findings/shot-slot-geometry.md` §4 | Ws-6（源编号 W6）：`$05CE`（motion_code）槽偏移写点不在生成例程内（脚本机运行时写）——抽取器六字段齐备性补证｜**Ws-7（待 t52 定谳）**：W5/Ws 交错语义（槽位集 ↔ $1C 网格/B5 交错区归属）——t50 F2 关联，先标"待 t52" |
+| **Ws**（shot 域，t51 消歧） | `docs/findings/shot-slot-geometry.md` §4、`docs/findings/shot-gating-f1.md` §4 | Ws-6：`$05CE`（motion_code）写点（脚本机运行时写，六字段补证）｜**Ws-7** 弹 state 与网格字段**同址所有权**（时分复用？B 级；原"交错语义待 t52"占位经 t52 F2b 收口转正至此）｜**Ws-8**（t52 W8）：`$32` bit2/bit3 置位时机（模式来源，C）｜**Ws-9**（t52 W9）：计数器满阈值停发/复位闭环（`$91B3` 调用时机 vs `$074A` 周期，B） |
 | **Q**（t28 孤儿 run 复核遗留） | `docs/findings/orphan-run-recheck.md` §四 | Q1 **收口**（t29：$0190 拾取处理器 + $3B 连收计数）｜Q2 → N-0037 同域｜Q3 干净重跑已做（t29 akey-role）｜Q4 已落地（`oracle/scenarios/README.md` +1 帧约定） |
 
 > 【t51 W 系列消歧规则】三域并存，引用必须带域前缀：**W**=ram-watch（W1-W8，历史深嵌不改名）、
@@ -621,6 +625,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 `v0.11 (2026-10-12, t49) t47 消化：R-stage 修正（"参数对递增"=地址伪影更正：块首字=自起点−6 7/7；记录格式 FE 分段 8 块/自指首字/链末 FF 升 A 级）+ R-stage-1a 三裁定（时刻✗/序号✗/掩码部分支持）+ $ACEF 收口顺序扫入口；STG-01-TL L3 升格否定如实登记（维持 L2/部分）；B-SYS-SPAWNRHYTHM 新格约束①准入（R-spawn-1..3，L2→L3 部分，16 帧节律+突发簇 104 事件 A 级）；t47 W1-W5 入 §7.1（与 ram-watch W 撞车标警告）；行为面 48→49。`
 `v0.12 (2026-10-12, t51) t48 登记：R-shot-alloc-1..4 建档（槽位几何 4 组×5/组距 $1C、分配器首次适应/空槽=state==0/回收=寿命归零/满载 SEC；L2 shot-alloc-1..4 三方全等）+ R-shot-gen-1..3/alloc-* 升格标注"L3（前提 t50 golden 转正，落地后改已判）"（FA-2 先例不虚高）；t45 槽位几何未证注记撤销（18 例矛盾值=伪读，oracle/traces/README 原地更正）；W 系列三域消歧（W=ram-watch 不改/Wv=wave 原 W1-W5/Ws=shot 原 W6，新遗留自携域前缀）；B-SYS-FIRE 证据扩充（§2.4.11）。`
 `v0.13 (2026-10-12, t53) F2 churn 证伪更正：shot-slot-geometry §3 churn 统计口径不成立原地更正（20 槽 state=B5 交错区静态非寿命数据/20 帧不递减/同址交错；921 帧零解释被 F1 反证）；R-shot-alloc-* 证据链撤除 churn 引用（几何/分配断言不依赖）；Ws-7（W5/Ws 交错语义）入索引标待 t52；知识条目 gotcha-false-green-idle-assertions 入库（断言存在≠生效，caed518 ss-1/2 空转教训）。`
+`v0.14 (2026-10-12, t56) 控制方案大修（t52 冲击波更正扫荡）：R-shot-gen-2 证伪更正（主武器=B 键按住连发，门控链 $18 bit6→$39/$3A→$32 bit2；N-0035"自动连射"撤回 N-0073、t25"B=弹种切换"更正 N-0072）；H-14 定谳文本两处作废重写（A=投放/B 长按连发/弹种切换=拾取字母圈）；R-move-1 补 bit6=B；R-shot-alloc-1 churn 口径更新（fire-hold 0-9 众数 2-6、容量 20 未饱和，N-0074）；B-WPN 25 格控制方案备注；Ws-7/8/9 入索引。`
 
 ---
 
