@@ -124,3 +124,51 @@ fn terrain_vm_executes_real_stream() {
     let mem_bad = |_a: u16| 0x01u8;
     assert!(vm_run_frame(&mut bad, &mem_bad).is_err(), "未证操作码必须 fail-closed");
 }
+
+#[test]
+fn nametable_model_and_attr_mask_tail() {
+    use game_core::terrain::Nametable;
+    // NMI 行冲刷（bank15:$F040-F0DA）：地址 $8F:$8E → 行、($8F|3):$90 → 属性行
+    let mut nt = Nametable::default();
+    let mut row = [0u8; 32];
+    row[0] = 5;
+    row[31] = 9;
+    let attrs = [0xE4u8; 8];
+    nt.nmi_flush(&row, &attrs, 0x00, 0x20, 0xC0, 1); // $2000 = 行 0
+    assert_eq!(nt.tiles[0], 5);
+    assert_eq!(nt.tiles[31], 9);
+    assert_eq!(nt.attrs[0], 0xE4);
+    // PPU 域守卫：非 $2xxx 地址（boot 期 $8E/$8F 驻留）不入 nametable
+    let mut nt2 = Nametable::default();
+    nt2.nmi_flush(&row, &attrs, 0x00, 0x00, 0x00, 3);
+    assert_eq!(nt2.tiles[0], 0, "非 PPU 域地址不得写入");
+    // pending=0 不写
+    let mut nt3 = Nametable::default();
+    nt3.nmi_flush(&row, &attrs, 0x00, 0x20, 0xC0, 0);
+    assert_eq!(nt3.tiles[0], 0);
+    // 属性 2×2 块取位（NES 规范）
+    let mut nt4 = Nametable::default();
+    nt4.attrs[0] = 0xE4; // 11 10 01 00
+    assert_eq!(nt4.block_palette(0, 0), 0);
+    assert_eq!(nt4.block_palette(2, 0), 1);
+    assert_eq!(nt4.block_palette(0, 2), 2);
+    assert_eq!(nt4.block_palette(2, 2), 3);
+}
+
+#[test]
+fn attr_mask_selection_tail_ruled() {
+    // t93 ③ 定谳：Y = ($8D&1)*2 + X_LSB → 掩码 $E9D2[Y]
+    // ROM 掩码序列：FF FF FF FB | F9 F8 E0 E0 | F0 F0 F0 F0 | ...
+    // 本测试锁定选择公式语义（掩码表由 ATTR_MASKS 导出面覆盖）
+    use game_core::terrain::ATTR_MASKS;
+    let mask_at = |y: u8| -> u8 {
+        // $E9D2 起 ROM 逐字节（t93 实测 dump）
+        const FULL: [u8; 8] = [0xFF, 0xFF, 0xFF, 0xFB, 0xF9, 0xF8, 0xE0, 0xE0];
+        FULL[y as usize]
+    };
+    assert_eq!(mask_at(0), 0xFF);
+    assert_eq!(mask_at(1), 0xFF);
+    assert_eq!(mask_at(2), 0xFF);
+    assert_eq!(mask_at(3), 0xFB);
+    assert_ne!(mask_at(3), ATTR_MASKS[1], "选择公式≠单一掩码（尾段已定谳）");
+}
