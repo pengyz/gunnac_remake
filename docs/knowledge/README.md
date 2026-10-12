@@ -56,3 +56,6 @@
 | [gotcha-parallel-read-image-order-unreliable.md](gotcha-parallel-read-image-order-unreliable.md) | gotcha | 并行多图 read_image 结果序不可信——多图单张调用或字节级锚定，数值结论禁只凭读图 |
 | [gotcha-concurrent-mesen-output-corruption.md](gotcha-concurrent-mesen-output-corruption.md) | gotcha | 并发 Mesen 共写输出=幻影输入/假 trace——串行锁+归档+自管 Xvfb，外来位先查并发污染（并行不可信家族） |
 | [pattern-visual-binding-needs-pixel-proof.md](pattern-visual-binding-needs-pixel-proof.md) | pattern | 视觉↔RAM 绑定必须像素级证明+分离事件检验——相关性≠绑定（N-0032→N-0037 教训） |
+| [gotcha-git-add-commit-atomicity.md](gotcha-git-add-commit-atomicity.md) | gotcha | git 索引并发卷入——精确 pathspec+add/commit 原子窗口，误卷不删历史（并行不可信家族第三员） |
+| [gotcha-observation-granularity-fabricates-invariants.md](gotcha-observation-granularity-fabricates-invariants.md) | gotcha | 观测粒度伪造不变量——"同帧同步"声明必须绑定粒度（R-bomb-2 证伪链 f2174/f2175） |
+| [gotcha-stack-page-game-var-watch-coverage.md](gotcha-stack-page-game-var-watch-coverage.md) | gotcha | 栈页 $0100-$01FF 是游戏变量密集区——watch/写集按变量地址逐页核对，"0 断言"先查采样面 |
