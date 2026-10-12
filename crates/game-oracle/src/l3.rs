@@ -98,7 +98,14 @@ pub fn diff_player_trace(frames: &[PlayerFrame]) -> Result<(usize, Vec<String>),
     Ok((compared, problems))
 }
 
-/// 武器状态转移事件（L3 trace 对拍）：{f, before:{slot,level}, after:{slot,level}}。
+/// 事件 golden 行（L3 trace 对拍）：kind=weapon（$34/$33 转移）或 kind=bomb（$0190/$018F 转移）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TraceEvent {
+    Weapon(WeaponEvent),
+    Bomb(BombEvent),
+}
+
+/// 武器状态转移（weapon_slot $34 / weapon_level $33）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WeaponEvent {
     pub f: u32,
@@ -108,6 +115,18 @@ pub struct WeaponEvent {
     pub after_level: u8,
 }
 
+/// 弹药/弹型转移（bomb_type_index $0190 / bomb_ammo $018F，$0100 页游戏变量）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BombEvent {
+    pub f: u32,
+    pub before_type: u8,
+    pub before_ammo: u8,
+    pub before_idx: u8,
+    pub after_type: u8,
+    pub after_ammo: u8,
+    pub after_idx: u8,
+}
+
 fn obj_num(obj: &[(String, Json)], key: &str) -> Result<i64, String> {
     obj.iter()
         .find(|(k, _)| k == key)
@@ -115,15 +134,19 @@ fn obj_num(obj: &[(String, Json)], key: &str) -> Result<i64, String> {
         .ok_or_else(|| format!("缺字段 {key}"))
 }
 
-/// 解析武器事件 golden JSONL。
-pub fn parse_weapon_events(jsonl: &str) -> Result<Vec<WeaponEvent>, String> {
+/// 解析事件 golden JSONL（weapon/bomb 双类）。
+pub fn parse_weapon_events(jsonl: &str) -> Result<Vec<TraceEvent>, String> {
     let mut out = Vec::new();
     for (lineno, line) in jsonl.lines().enumerate() {
         let line = line.trim();
         if line.is_empty() { continue; }
         let v = crate::l2::parse_json(line).map_err(|e| format!("第 {} 行: {e}", lineno + 1))?;
         let obj = match v { Json::Obj(o) => o, _ => return Err(format!("第 {} 行非对象", lineno + 1)) };
-        let f = obj_num(&obj, "f")?;
+        let f = obj_num(&obj, "f")? as u32;
+        let kind = match obj.iter().find(|(k, _)| k == "kind") {
+            Some((_, Json::Str(s))) => s.clone(),
+            _ => "weapon".to_string(), // 兼容 t31 旧格式（无 kind=weapon）
+        };
         let before = match obj.iter().find(|(k, _)| k == "before") {
             Some((_, Json::Obj(o))) => o.clone(),
             _ => return Err(format!("第 {} 行缺 before", lineno + 1)),
@@ -132,33 +155,80 @@ pub fn parse_weapon_events(jsonl: &str) -> Result<Vec<WeaponEvent>, String> {
             Some((_, Json::Obj(o))) => o.clone(),
             _ => return Err(format!("第 {} 行缺 after", lineno + 1)),
         };
-        out.push(WeaponEvent {
-            f: f as u32,
-            before_slot: obj_num(&before, "slot")? as u8,
-            before_level: obj_num(&before, "level")? as u8,
-            after_slot: obj_num(&after, "slot")? as u8,
-            after_level: obj_num(&after, "level")? as u8,
-        });
+        match kind.as_str() {
+            "weapon" => out.push(TraceEvent::Weapon(WeaponEvent {
+                f,
+                before_slot: obj_num(&before, "slot")? as u8,
+                before_level: obj_num(&before, "level")? as u8,
+                after_slot: obj_num(&after, "slot")? as u8,
+                after_level: obj_num(&after, "level")? as u8,
+            })),
+            "bomb" => out.push(TraceEvent::Bomb(BombEvent {
+                f,
+                before_type: obj_num(&before, "type")? as u8,
+                before_ammo: obj_num(&before, "ammo")? as u8,
+                before_idx: obj_num(&before, "idx").unwrap_or(0) as u8,
+                after_type: obj_num(&after, "type")? as u8,
+                after_ammo: obj_num(&after, "ammo")? as u8,
+                after_idx: obj_num(&after, "idx").unwrap_or(0) as u8,
+            })),
+            other => return Err(format!("第 {} 行未知 kind {other}", lineno + 1)),
+        }
     }
     Ok(out)
 }
 
-/// 武器事件合法性：每个 trace 转移必须等于 pickup_handler 的某个合法步
-/// （同型升级含回卷 / 异型切换）或 respawn 复位（slot=0, level=0，R-respawn-*）。
-/// 返回违规明细（空=全合法）。
-pub fn weapon_events_legal(events: &[WeaponEvent]) -> Vec<String> {
+/// weapon 转移合法性：同型升级（含 FF→0C 回卷）/ 异型切换 / 重生复位（R-respawn-*）。
+pub fn weapon_events_legal(events: &[TraceEvent]) -> Vec<String> {
     let mut problems = Vec::new();
     for e in events {
-        let leveled = e.after_slot == e.before_slot
-            && (e.after_level == e.before_level.wrapping_add(1)
-                && !(e.before_level == 0xFF && e.after_level != 0x0C)
-                || (e.before_level == 0xFF && e.after_level == 0x0C));
-        let switched = e.after_slot != e.before_slot && e.after_level == e.before_level;
-        let respawned = e.after_slot == 0 && e.after_level == 0;
+        let (f, bs, bl, as_, al) = match e {
+            TraceEvent::Weapon(w) => (w.f, w.before_slot, w.before_level, w.after_slot, w.after_level),
+            TraceEvent::Bomb(_) => continue,
+        };
+        let leveled = as_ == bs
+            && (al == bl.wrapping_add(1) && !(bl == 0xFF && al != 0x0C)
+                || (bl == 0xFF && al == 0x0C));
+        let switched = as_ != bs && al == bl;
+        let respawned = as_ == 0 && al == 0;
         if !(leveled || switched || respawned) {
             problems.push(format!(
-                "f{}: (slot={},level={})→(slot={},level={}) 不属于 同型升级/异型切换/重生复位 任一合法步",
-                e.f, e.before_slot, e.before_level, e.after_slot, e.after_level
+                "f{f}: (slot={bs},level={bl})→(slot={as_},level={al}) 不属于 同型升级/异型切换/重生复位 任一合法步"
+            ));
+        }
+    }
+    problems
+}
+
+/// bomb 转移合法性（t38 FA-3 断言源；口径按 t36/spec-writer 原地更正）：
+///
+/// **弹数($018F)与弹种($0190)是两个独立维度，不存在"同帧同步"**——t22"三方同步"系 60 帧
+/// probe 粒度的同簇观察；A 级反例链：f2174 弹数 3→4 → f2175 弹种 0→3 且弹数不变
+/// （同帧 $34 0→3）。因此：
+/// - 弹数递减 ⇒ 必须等于 R-fire-4 扣减（min(消耗表[idx], 弹药) 经 ED03 BCD 扣减）；
+/// - 弹数回满 ⇒ 必须回 **4**（R-respawn-4 / N-0017 init）；
+/// - 弹种切换 ⇒ 独立事件，如实入 golden（值域映射见 R-bomb-3，1=B/2=T 仍属推定不约束）。
+pub fn bomb_events_legal(events: &[TraceEvent]) -> Vec<String> {
+    use game_core::l2ports::{bcd_sub_ammo, CONSUMPTION_TABLE};
+    let mut problems = Vec::new();
+    for e in events {
+        let b = match e {
+            TraceEvent::Bomb(b) => *b,
+            TraceEvent::Weapon(_) => continue,
+        };
+        if b.after_ammo == b.before_ammo {
+            continue; // 弹种切换（或无事）：独立维度，不与弹数耦合断言
+        }
+        if b.after_ammo == 4 && b.after_ammo > b.before_ammo {
+            continue; // 回满：R-respawn-4 / init ⇒ 4
+        }
+        let idx = b.before_idx.min(3) as usize;
+        let cost = CONSUMPTION_TABLE[idx].min(b.before_ammo);
+        let (expect, _) = bcd_sub_ammo(b.before_ammo, cost);
+        if b.after_ammo != expect {
+            problems.push(format!(
+                "f{}: 弹数 {}→{} 不等于 R-fire-4 扣减（idx={} 消耗={} 期望 {}）",
+                b.f, b.before_ammo, b.after_ammo, b.before_idx, cost, expect
             ));
         }
     }

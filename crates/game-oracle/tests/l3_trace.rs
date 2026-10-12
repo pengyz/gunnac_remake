@@ -34,7 +34,7 @@ fn l3_golden_has_multiple_segments() {
     assert!(gaps >= 3, "分段数不足（期望 ≥3 个死亡/重生缺口）：{gaps}");
 }
 
-fn load_weapon_events() -> Vec<game_oracle::l3::WeaponEvent> {
+fn load_events() -> Vec<game_oracle::l3::TraceEvent> {
     let mut out = Vec::new();
     for scene in ["gameplay-stage1", "weapon-pickup"] {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -48,31 +48,55 @@ fn load_weapon_events() -> Vec<game_oracle::l3::WeaponEvent> {
 
 #[test]
 fn l3_weapon_events_all_legal() {
-    let events = load_weapon_events();
-    assert!(!events.is_empty(), "武器事件 golden 为空 = L3 回归空转");
-    let problems = game_oracle::l3::weapon_events_legal(&events);
-    assert!(problems.is_empty(), "武器转移非法：\n{}", problems.join("\n"));
+    let events = load_events();
+    assert!(!events.is_empty(), "事件 golden 为空 = L3 回归空转");
+    let mut problems = game_oracle::l3::weapon_events_legal(&events);
+    problems.extend(game_oracle::l3::bomb_events_legal(&events));
+    assert!(problems.is_empty(), "事件不合法：\n{}", problems.join("\n"));
 }
 
 #[test]
-fn l3_weapon_events_reject_illegal_steps() {
-    use game_oracle::l3::{weapon_events_legal, WeaponEvent};
-    let bad = [
-        // 等级倒退（非回卷：255→0C 才是回卷）
-        WeaponEvent { f: 1, before_slot: 0, before_level: 5, after_slot: 0, after_level: 3 },
-        // 跨两阶跳升
-        WeaponEvent { f: 2, before_slot: 1, before_level: 1, after_slot: 1, after_level: 4 },
-        // 切换同时改等级
-        WeaponEvent { f: 3, before_slot: 1, before_level: 2, after_slot: 3, after_level: 5 },
+fn l3_golden_contains_bomb_events() {
+    // FA-3 收口判据：golden 含 kind=bomb 事件（R-bomb-2 断言源）
+    let events = load_events();
+    let n_bomb = events
+        .iter()
+        .filter(|e| matches!(e, game_oracle::l3::TraceEvent::Bomb(_)))
+        .count();
+    assert!(n_bomb > 0, "kind=bomb 事件缺失 = R-bomb-2 无断言源");
+}
+
+#[test]
+fn l3_events_reject_illegal_steps() {
+    use game_oracle::l3::{bomb_events_legal, weapon_events_legal, BombEvent, TraceEvent, WeaponEvent};
+    let bad_weapon = [
+        TraceEvent::Weapon(WeaponEvent { f: 1, before_slot: 0, before_level: 5, after_slot: 0, after_level: 3 }),
+        TraceEvent::Weapon(WeaponEvent { f: 2, before_slot: 1, before_level: 1, after_slot: 1, after_level: 4 }),
+        TraceEvent::Weapon(WeaponEvent { f: 3, before_slot: 1, before_level: 2, after_slot: 3, after_level: 5 }),
     ];
-    let problems = weapon_events_legal(&bad);
-    assert_eq!(problems.len(), 3, "非法步必须全数检出：{problems:?}");
-    // 合法步：同型升级/溢出回卷/异型切换/重生复位
-    let good = [
-        WeaponEvent { f: 4, before_slot: 0, before_level: 5, after_slot: 0, after_level: 6 },
-        WeaponEvent { f: 5, before_slot: 0, before_level: 255, after_slot: 0, after_level: 12 },
-        WeaponEvent { f: 6, before_slot: 1, before_level: 2, after_slot: 3, after_level: 2 },
-        WeaponEvent { f: 7, before_slot: 3, before_level: 9, after_slot: 0, after_level: 0 },
+    assert_eq!(weapon_events_legal(&bad_weapon).len(), 3, "weapon 非法步必须全数检出");
+    let good_weapon = [
+        TraceEvent::Weapon(WeaponEvent { f: 4, before_slot: 0, before_level: 5, after_slot: 0, after_level: 6 }),
+        TraceEvent::Weapon(WeaponEvent { f: 5, before_slot: 0, before_level: 255, after_slot: 0, after_level: 12 }),
+        TraceEvent::Weapon(WeaponEvent { f: 6, before_slot: 1, before_level: 2, after_slot: 3, after_level: 2 }),
+        TraceEvent::Weapon(WeaponEvent { f: 7, before_slot: 3, before_level: 9, after_slot: 0, after_level: 0 }),
     ];
-    assert!(weapon_events_legal(&good).is_empty(), "合法步被误判");
+    assert!(weapon_events_legal(&good_weapon).is_empty(), "weapon 合法步被误判");
+    // bomb：R-fire-4 扣减不符（独立维度口径：弹种切换不与弹数耦合）
+    let bad_bomb = [
+        TraceEvent::Bomb(BombEvent { f: 61, before_type: 0, before_ammo: 4, before_idx: 0,
+                                     after_type: 0, after_ammo: 2, after_idx: 0 }), // 应扣 1 得 3
+    ];
+    let problems = bomb_events_legal(&bad_bomb);
+    assert_eq!(problems.len(), 1, "bomb 非法步必须检出：{problems:?}");
+    let good_bomb = [
+        TraceEvent::Bomb(BombEvent { f: 1, before_type: 0, before_ammo: 4, before_idx: 0,
+                                     after_type: 0, after_ammo: 3, after_idx: 0 }), // R-fire-4 扣 1
+        TraceEvent::Bomb(BombEvent { f: 2, before_type: 0, before_ammo: 1, before_idx: 0,
+                                     after_type: 0, after_ammo: 4, after_idx: 0 }), // R-respawn-4 回满
+        // 口径更正反例链同构：f2175 弹种 0→3 且弹数不变 = 独立维度切换，合法
+        TraceEvent::Bomb(BombEvent { f: 3, before_type: 0, before_ammo: 3, before_idx: 0,
+                                     after_type: 3, after_ammo: 3, after_idx: 0 }),
+    ];
+    assert!(bomb_events_legal(&good_bomb).is_empty(), "bomb 合法步被误判：{:?}", bomb_events_legal(&good_bomb));
 }

@@ -57,10 +57,13 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             };
-            let problems = game_oracle::l3::weapon_events_legal(&events);
+            let n_weapon = events.iter().filter(|e| matches!(e, game_oracle::l3::TraceEvent::Weapon(_))).count();
+            let n_bomb = events.len() - n_weapon;
+            let mut problems = game_oracle::l3::weapon_events_legal(&events);
+            problems.extend(game_oracle::l3::bomb_events_legal(&events));
             total += events.len();
             if problems.is_empty() {
-                println!("[ok]   {path}: {} 次武器状态转移全部为合法步（同型升级/异型切换/重生复位）", events.len());
+                println!("[ok]   {path}: {n_weapon} weapon + {n_bomb} bomb 转移全合法（武器：同型升级/异型切换/重生复位；弹药/弹种：R-fire-4 扣减·R-respawn-4 回满·独立维度切换）");
             } else {
                 failures += 1;
                 println!("[FAIL] {path}:");

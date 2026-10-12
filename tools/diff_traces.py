@@ -62,32 +62,52 @@ def fields_of(w: dict, kind: str) -> dict | None:
 
 
 def extract_weapon_events(scene: str) -> int:
-    """武器状态转移事件 golden（level/segment 转移合法性由 l3-diff 裁定）。"""
+    """武器/弹药事件 golden（kind=weapon: $34/$33 转移；kind=bomb: $0190/$018F 转移）。
+
+    R-bomb-2 断言源（t38 FA-3）：$0190 切换与 $018F 变化须同帧发生（三方同步的机器侧两变量）。
+    注意 $018F/$0190 在 $0100 页（栈页游戏变量区）——须场景 watch 显式覆盖，勿跨页误映射。
+    """
     src = ROOT / "analysis" / "traces" / f"{scene}.frames.jsonl"
     dst = ROOT / "oracle" / "traces" / f"{scene}.weapons.jsonl"
     if not src.is_file():
         print(f"oracle 全量 trace 缺失：{src}", file=sys.stderr)
         return 2
     events = []
-    prev = None
+    prev_wpn = None
+    prev_bomb = None
+    warned = False
     for line in src.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         rec = json.loads(line)
-        zp = bytes.fromhex(rec["w"]["zp"])
-        st = (zp[0x34], zp[0x33])  # (weapon_slot, weapon_level)
-        if prev is not None and st != prev:
-            events.append({
-                "f": rec["f"],
-                "before": {"slot": prev[0], "level": prev[1]},
-                "after": {"slot": st[0], "level": st[1]},
-            })
-        prev = st
+        w = rec["w"]
+        zp = bytes.fromhex(w["zp"])
+        wpn = (zp[0x34], zp[0x33])  # (weapon_slot, weapon_level) —— $0034/$0033 零页
+        if "bomb_ammo" in w and "bomb_type_index" in w:
+            bomb = (w["bomb_type_index"], w["bomb_ammo"], zp[0x3B])  # $0190/$018F（$0100 页）+ $3B 查表索引
+        else:
+            bomb = None
+            if not warned:
+                print(f"  注意：{scene} 缺 bomb_ammo/bomb_type_index watch（$0100 页），bomb 事件不入 golden")
+                warned = True
+        if prev_wpn is not None:
+            if wpn != prev_wpn:
+                events.append({"f": rec["f"], "kind": "weapon",
+                               "before": {"slot": prev_wpn[0], "level": prev_wpn[1]},
+                               "after": {"slot": wpn[0], "level": wpn[1]}})
+            if bomb is not None and prev_bomb is not None and bomb != prev_bomb:
+                events.append({"f": rec["f"], "kind": "bomb",
+                               "before": {"type": prev_bomb[0], "ammo": prev_bomb[1], "idx": prev_bomb[2]},
+                               "after": {"type": bomb[0], "ammo": bomb[1], "idx": bomb[2]}})
+        prev_wpn = wpn
+        if bomb is not None:
+            prev_bomb = bomb
     dst.parent.mkdir(parents=True, exist_ok=True)
     with open(dst, "w", encoding="utf-8") as f:
         for e in events:
             f.write(json.dumps(e) + "\n")
-    print(f"weapon 事件抽取：{scene} {len(events)} 事件 → {dst.relative_to(ROOT)}")
+    n_bomb = sum(1 for e in events if e["kind"] == "bomb")
+    print(f"武器事件抽取：{scene} 共 {len(events)} 事件（weapon {len(events) - n_bomb} / bomb {n_bomb}）→ {dst.relative_to(ROOT)}")
     return 0
 
 
