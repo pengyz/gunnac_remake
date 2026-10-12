@@ -97,3 +97,70 @@ pub fn diff_player_trace(frames: &[PlayerFrame]) -> Result<(usize, Vec<String>),
     }
     Ok((compared, problems))
 }
+
+/// 武器状态转移事件（L3 trace 对拍）：{f, before:{slot,level}, after:{slot,level}}。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WeaponEvent {
+    pub f: u32,
+    pub before_slot: u8,
+    pub before_level: u8,
+    pub after_slot: u8,
+    pub after_level: u8,
+}
+
+fn obj_num(obj: &[(String, Json)], key: &str) -> Result<i64, String> {
+    obj.iter()
+        .find(|(k, _)| k == key)
+        .and_then(|(_, v)| match v { Json::Num(n) => Some(*n as i64), _ => None })
+        .ok_or_else(|| format!("缺字段 {key}"))
+}
+
+/// 解析武器事件 golden JSONL。
+pub fn parse_weapon_events(jsonl: &str) -> Result<Vec<WeaponEvent>, String> {
+    let mut out = Vec::new();
+    for (lineno, line) in jsonl.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        let v = crate::l2::parse_json(line).map_err(|e| format!("第 {} 行: {e}", lineno + 1))?;
+        let obj = match v { Json::Obj(o) => o, _ => return Err(format!("第 {} 行非对象", lineno + 1)) };
+        let f = obj_num(&obj, "f")?;
+        let before = match obj.iter().find(|(k, _)| k == "before") {
+            Some((_, Json::Obj(o))) => o.clone(),
+            _ => return Err(format!("第 {} 行缺 before", lineno + 1)),
+        };
+        let after = match obj.iter().find(|(k, _)| k == "after") {
+            Some((_, Json::Obj(o))) => o.clone(),
+            _ => return Err(format!("第 {} 行缺 after", lineno + 1)),
+        };
+        out.push(WeaponEvent {
+            f: f as u32,
+            before_slot: obj_num(&before, "slot")? as u8,
+            before_level: obj_num(&before, "level")? as u8,
+            after_slot: obj_num(&after, "slot")? as u8,
+            after_level: obj_num(&after, "level")? as u8,
+        });
+    }
+    Ok(out)
+}
+
+/// 武器事件合法性：每个 trace 转移必须等于 pickup_handler 的某个合法步
+/// （同型升级含回卷 / 异型切换）或 respawn 复位（slot=0, level=0，R-respawn-*）。
+/// 返回违规明细（空=全合法）。
+pub fn weapon_events_legal(events: &[WeaponEvent]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for e in events {
+        let leveled = e.after_slot == e.before_slot
+            && (e.after_level == e.before_level.wrapping_add(1)
+                && !(e.before_level == 0xFF && e.after_level != 0x0C)
+                || (e.before_level == 0xFF && e.after_level == 0x0C));
+        let switched = e.after_slot != e.before_slot && e.after_level == e.before_level;
+        let respawned = e.after_slot == 0 && e.after_level == 0;
+        if !(leveled || switched || respawned) {
+            problems.push(format!(
+                "f{}: (slot={},level={})→(slot={},level={}) 不属于 同型升级/异型切换/重生复位 任一合法步",
+                e.f, e.before_slot, e.before_level, e.after_slot, e.after_level
+            ));
+        }
+    }
+    problems
+}
