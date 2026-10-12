@@ -432,3 +432,81 @@ pub fn lifetime_decrements_legal(frames: &[ShotFrame]) -> Vec<String> {
     }
     problems
 }
+
+/// 敌对象 churn 行（$1C 网格 28 槽快照；R-enemy-6 活动段）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnemyRow {
+    pub f: u32,
+    pub state: Vec<u8>, // $0400 类型/状态
+    pub x: Vec<u8>,     // $04E0 x 坐标
+    pub y: Vec<u8>,     // $04FC y 坐标
+}
+
+fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
+    if s.len() % 2 != 0 {
+        return Err("hex 串奇数长度".into());
+    }
+    (0..s.len() / 2)
+        .map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).map_err(|e| e.to_string()))
+        .collect()
+}
+
+/// 解析 enemy churn golden JSONL。
+pub fn parse_enemy_rows(jsonl: &str) -> Result<Vec<EnemyRow>, String> {
+    let mut out = Vec::new();
+    for (lineno, line) in jsonl.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let v = crate::l2::parse_json(line).map_err(|e| format!("第 {} 行: {e}", lineno + 1))?;
+        let obj = match v { Json::Obj(o) => o, _ => return Err(format!("第 {} 行非对象", lineno + 1)) };
+        let get = |k: &str| -> Result<Vec<u8>, String> {
+            match obj.iter().find(|(kk, _)| kk == k) {
+                Some((_, Json::Str(s))) => hex_bytes(s),
+                _ => Err(format!("缺字段 {k}")),
+            }
+        };
+        out.push(EnemyRow {
+            f: obj_num(&obj, "f")? as u32,
+            state: get("state")?,
+            x: get("x")?,
+            y: get("y")?,
+        });
+    }
+    if out.is_empty() {
+        return Err("enemy churn golden 为空".into());
+    }
+    Ok(out)
+}
+
+/// R-enemy-4 坐标钳断言（A 级，**限定写路径**）：槽 0=玩家（B3 绑定 + R-move-3/4 钳
+/// $0E-$F3/$14-$DF 双证）逐帧断言；其余槽的坐标写路径含 W12 未证桥（VM $A4 → $04xx
+/// 写链未考），实测存在界外放置/中间态（fire-hold f1304/f1368）——**不入断言面**
+/// （规则限定：钳仅作用于已证移动写路径；全槽断言待 W12 桥取证后升格，报 spec-writer）。
+/// 返回违规明细（空=全合法）。
+pub fn enemy_clamp_legal(rows: &[EnemyRow]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for r in rows {
+        if r.state.len() != 28 || r.x.len() != 28 || r.y.len() != 28 {
+            problems.push(format!("f{}: 网格行尺寸非 28 槽", r.f));
+            continue;
+        }
+        for s in 0..1usize {
+            if r.x[s] == 0 && r.y[s] == 0 {
+                continue;
+            }
+            if r.x[s] < 0x0E || r.x[s] > 0xF3 {
+                problems.push(format!("f{}: 槽{} x=${:02X} 越 R-enemy-4 钳 $0E-$F3", r.f, s, r.x[s]));
+            }
+            if r.y[s] < 0x14 || r.y[s] > 0xDF {
+                problems.push(format!("f{}: 槽{} y=${:02X} 越 R-enemy-4 钳 $14-$DF", r.f, s, r.y[s]));
+            }
+            if problems.len() >= 10 {
+                problems.push("…（截断）".to_string());
+                return problems;
+            }
+        }
+    }
+    problems
+}

@@ -9,6 +9,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod enemy;
 pub mod l2ports;
 pub mod player;
 pub mod shot;

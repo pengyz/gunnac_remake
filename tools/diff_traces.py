@@ -270,6 +270,47 @@ def extract_shot_trajectories(scene: str) -> int:
     return 0
 
 
+
+def extract_enemy_churn(scene: str) -> int:
+    """敌对象 churn golden（R-enemy-6 生成/活动段；$1C 网格 28 槽）。
+
+    采样口径（声明）：帧降采样 n=8，逐行 = {f, state[28], x[28], y[28]}（hex 串分列）。
+    比对面：R-enemy-4 坐标钳（活跃槽 x∈$0E-$F3 / y∈$14-$DF，A 级）+ churn 计数轨迹（快照）。
+    命中/清除段（H-16）未证不入面；双 SoA 桥（W12）未证——本 golden 以 $1C 网格观测为准。
+    """
+    src = ROOT / "analysis" / "traces" / f"{scene}.frames.jsonl"
+    dst = ROOT / "oracle" / "traces" / f"{scene}.enemy.jsonl"
+    if not src.is_file():
+        return 2
+    n = 0
+    wrote = False
+    with open(dst, "w", encoding="utf-8") as out:
+        for line in src.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            w = rec["w"]
+            blob_w = w.get("iram")
+            if blob_w is None:
+                if not wrote:
+                    print(f"  {scene} 无 iram watch——跳过 enemy churn 抽取")
+                return 0
+            if rec["f"] % 8 != 0 or rec["f"] < WINDOW_START:
+                continue  # 游戏段起（boot/菜单网格未初始化，钳规则证据域之外）
+            blob = bytes.fromhex(blob_w)
+            state = blob[0x100:0x100 + 28]   # $0400 状态字段
+            xs = blob[0x1E0:0x1E0 + 28]      # $04E0 x 坐标
+            ys = blob[0x1FC:0x1FC + 28]      # $04FC y 坐标
+            out.write(json.dumps({
+                "f": rec["f"],
+                "state": state.hex(), "x": xs.hex(), "y": ys.hex(),
+            }) + "\n")
+            wrote = True
+            n += 1
+    print(f"enemy churn 抽取：{scene} {n} 行（帧降采样 n=8，28 槽分列）→ {dst.relative_to(ROOT)}")
+    return 0
+
+
 def extract() -> int:
     rc = 0
     for scene, cfg in SCENES.items():
@@ -300,13 +341,15 @@ def extract() -> int:
         rc = rc or extract_weapon_events(scene)
     for scene in ("fire-hold", "gameplay-stage1", "weapon-pickup"):
         rc = rc or extract_shot_trajectories(scene)
+        rc = rc or extract_enemy_churn(scene)
     return rc
 
 
 def run_diff() -> int:
     goldens = (sorted((ROOT / "oracle" / "traces").glob("*.player.jsonl")) +
         sorted((ROOT / "oracle" / "traces").glob("*.weapons.jsonl")) +
-        sorted((ROOT / "oracle" / "traces").glob("*.shots.jsonl")))
+        sorted((ROOT / "oracle" / "traces").glob("*.shots.jsonl")) +
+        sorted((ROOT / "oracle" / "traces").glob("*.enemy.jsonl")))
     if not goldens:
         print(f"L3 golden 缺失（先 --extract）", file=sys.stderr)
         return 2

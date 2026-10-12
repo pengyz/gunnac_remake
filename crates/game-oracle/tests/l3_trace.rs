@@ -104,7 +104,7 @@ fn l3_events_reject_illegal_steps() {
 #[test]
 fn l3_shot_replay_machine_self_consistent() {
     // 轨迹重放机器自证：由 game-core::shot::tick 生成的轨迹必须被 diff_shot_trajectory 全等接受
-    use game_core::shot::{script_fetch, spawn_init, tick, ShotObject, ACTION_DURATIONS, ACTION_STREAM};
+    use game_core::shot::{script_fetch, spawn_init, tick, ACTION_DURATIONS, ACTION_STREAM};
     let mut obj = spawn_init(0, 2, 0, 100, 50, 0x0C);
     let mut frames = vec![game_oracle::l3::ShotFrame {
         f: 1, slot: 0x80, win: 1, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
@@ -199,4 +199,25 @@ fn l3_lifetime_negative_selfproof() {
                     pos_x: 0, pos_y: 0, motion_code: 0, shot_type: 0 },
     ];
     assert!(lifetime_decrements_legal(&ok).is_empty(), "合法递减/装载被误判");
+}
+
+#[test]
+fn l3_enemy_clamp_negative_selfproof() {
+    use game_oracle::l3::{enemy_clamp_legal, EnemyRow};
+    // 负向自证：槽 0 越钳必须检出
+    let bad = vec![EnemyRow {
+        f: 1,
+        state: vec![1; 28],
+        x: { let mut v = vec![0x80u8; 28]; v[0] = 0x05; v },
+        y: vec![0xA0; 28],
+    }];
+    assert!(!enemy_clamp_legal(&bad).is_empty(), "槽 0 越钳必须检出（负向自证）");
+    // 合法：界内 + 未放置模板槽（(0,0)）忽略
+    let ok = vec![EnemyRow {
+        f: 2,
+        state: vec![1; 28],
+        x: { let mut v = vec![0x80u8; 28]; v[5] = 0; v },
+        y: { let mut v = vec![0xA0u8; 28]; v[5] = 0; v },
+    }];
+    assert!(enemy_clamp_legal(&ok).is_empty(), "合法行被误判");
 }

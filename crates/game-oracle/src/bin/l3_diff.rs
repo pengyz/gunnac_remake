@@ -101,6 +101,26 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             }
+        } else if path.ends_with(".enemy.jsonl") {
+            let rows = match game_oracle::l3::parse_enemy_rows(&jsonl) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("{path}: golden 解析失败：{e}");
+                    return ExitCode::from(2);
+                }
+            };
+            let churn: usize = rows.iter().map(|r| r.state.iter().filter(|&&s| s != 0).count()).sum();
+            let problems = game_oracle::l3::enemy_clamp_legal(&rows);
+            total += rows.len();
+            if problems.is_empty() {
+                println!("[ok]   {path}: churn 快照 {} 行（活跃槽计 {churn}）R-enemy-4 钳全合法", rows.len());
+            } else {
+                failures += 1;
+                println!("[FAIL] {path}:");
+                for p in &problems {
+                    println!("         {p}");
+                }
+            }
         } else {
             eprintln!("{path}: 未知 golden 类型（*.player.jsonl / *.weapons.jsonl / *.shots.jsonl）");
             return ExitCode::from(2);
