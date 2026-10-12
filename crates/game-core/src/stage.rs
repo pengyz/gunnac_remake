@@ -61,3 +61,121 @@ impl UiScroll {
         (self.value, self.value)
     }
 }
+
+// ============ STG 内容集成（t84：关卡目录→生成记录→VM 脚本驱动） ============
+
+/// 关卡目录行（R-stage-dir-1，bank8:$A000 每关 8B×8）：
+/// `{root 流指针(2,LE), 图案表指针(2,LE), 参数对(2), 尾指针(2,LE)}`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StageDirEntry {
+    pub root_ptr: u16,
+    pub pattern_ptr: u16,
+    pub params: (u8, u8),
+    pub tail_ptr: u16,
+}
+
+/// 关卡目录表解析（bank8:$A000-$A040，8 关全表）。`$0180`=关号×8 索引（R-stage-dir-2）。
+pub fn parse_stage_dir(bank8: &[u8]) -> [StageDirEntry; 8] {
+    let mut out = [StageDirEntry { root_ptr: 0, pattern_ptr: 0, params: (0, 0), tail_ptr: 0 }; 8];
+    for (i, row) in out.iter_mut().enumerate() {
+        let b = &bank8[i * 8..i * 8 + 8];
+        *row = StageDirEntry {
+            root_ptr: u16::from_le_bytes([b[0], b[1]]),
+            pattern_ptr: u16::from_le_bytes([b[2], b[3]]),
+            params: (b[4], b[5]),
+            tail_ptr: u16::from_le_bytes([b[6], b[7]]),
+        };
+    }
+    out
+}
+
+/// 目录行索引（R-stage-dir-2）：`$0180` = 关号×8。
+pub fn stage_dir_index(stage_number: u8) -> u8 {
+    stage_number.wrapping_mul(8)
+}
+
+/// STG-01 生成记录（t79 §2，bank8:$ADD0 起 8×5B）：`{p0,p1,p2,行为脚本指针(2,LE)}`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpawnRecord {
+    /// X 坐标 = p0−$10（进位 quirk 同族，t79 表逐值 175/123/139/119/119/117/117/128）。
+    pub x: u8,
+    /// p1 原值（**W26 参数语义未证**——4B 装载机拆包为候选注记，不入结论）。
+    pub p1: u8,
+    /// p2 原值（W26 同）。
+    pub p2: u8,
+    /// 行为脚本指针（bank8 窗内：$B3E6/$B2B4/$B235/$B21D 四型）。
+    pub script_lo: u8,
+    pub script_hi: u8,
+}
+
+impl SpawnRecord {
+    pub fn script_ptr(&self) -> u16 {
+        u16::from_le_bytes([self.script_lo, self.script_hi])
+    }
+}
+
+/// 生成记录流解析（8×5B）。
+pub fn parse_spawn_records(region: &[u8]) -> Vec<SpawnRecord> {
+    region
+        .chunks_exact(5)
+        .take(8)
+        .map(|b| SpawnRecord {
+            x: b[0].wrapping_sub(0x10), // p0−$10 quirk（t79 实证）
+            p1: b[1],
+            p2: b[2],
+            script_lo: b[3],
+            script_hi: b[4],
+        })
+        .collect()
+}
+
+/// 波次调度（t79 §3：链 8 段 ↔ 记录 8 条 **1:1**；W28 帧换算未证——观测节律 8-10f
+/// **参数化**，t83 定谳后校准）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WaveSchedule {
+    /// 每段重复节律（帧），默认观测区间中值 9f（8-10f 参数，W28 注记）。
+    pub rhythm_frames: u8,
+}
+
+impl Default for WaveSchedule {
+    fn default() -> Self {
+        WaveSchedule { rhythm_frames: 9 }
+    }
+}
+
+impl WaveSchedule {
+    /// 第 `segment`（0..8）段的记录索引（1:1 驱动）。
+    pub fn record_index(&self, segment: usize) -> Option<usize> {
+        if segment < 8 {
+            Some(segment)
+        } else {
+            None // EN-9+/Boss 段 fail-closed（未证不发明）
+        }
+    }
+
+    /// 段内第 `repeat` 次重复的预计帧偏移（观测节律参数化——W28 换算未证）。
+    pub fn frame_offset(&self, repeat: u32) -> u32 {
+        repeat * self.rhythm_frames as u32
+    }
+}
+
+/// 行为脚本→VM 槽挂接（t71 归位注记：VM=**地形脚本机**，敌行为脚本是 VM 槽侧语义——
+/// 分层如实：生成记录只决定初始 PC/X，更新由 terrain VM 走字节码）。
+/// 返回初始化的 VM 槽（寿命/循环计数按 4B 装载机默认：计数 $10、寿命 0（待生成方写））。
+pub fn spawn_to_vm_slot(rec: &SpawnRecord) -> crate::terrain::TerrainSlot {
+    crate::terrain::TerrainSlot {
+        x: rec.x,
+        param: 0,
+        sub_lo: 0,
+        sub_hi: 0,
+        loop_cnt: 0x10,
+        opcode: 0,
+        pc_lo: rec.script_lo,
+        pc_hi: rec.script_hi,
+    }
+}
+
+/// Boss / EN-9+ 段：**fail-closed**（未证不发明）。
+pub fn boss_segment_unproven() -> Result<(), String> {
+    Err("Boss/EN-9+ 段未证（t79 约束①：BOSS 子格不在本批）——不发明".to_string())
+}

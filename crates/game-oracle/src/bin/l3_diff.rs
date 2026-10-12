@@ -14,6 +14,7 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
     let mut total = 0usize;
+    let mut total_events = 0usize;
     let mut failures = 0usize;
     for path in &paths {
         let jsonl = match std::fs::read_to_string(path) {
@@ -185,6 +186,25 @@ fn main() -> ExitCode {
                     println!("         {p}");
                 }
             }
+        } else if path.ends_with(".stage-appear.jsonl") {
+            let rows = match game_oracle::l3::parse_appear_rows(&jsonl) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("{path}: golden 解析失败：{e}");
+                    return ExitCode::from(2);
+                }
+            };
+            let (problems, match_n, total) = game_oracle::l3::appear_records_check(&rows);
+            total_events += rows.len();
+            if problems.is_empty() {
+                println!("[ok]   {path}: 敌出现 {total} 事件网格域全合法；记录集 x 命中 {match_n}/{total}（W12/W28 注记观测面）");
+            } else {
+                failures += 1;
+                println!("[FAIL] {path}:");
+                for p in &problems {
+                    println!("         {p}");
+                }
+            }
         } else {
             eprintln!("{path}: 未知 golden 类型（*.player.jsonl / *.weapons.jsonl / *.shots.jsonl）");
             return ExitCode::from(2);
@@ -194,7 +214,7 @@ fn main() -> ExitCode {
         println!("L3-DIFF: 失配（{failures} 个 golden，详见上；禁止调阈值放水）");
         ExitCode::from(1)
     } else {
-        println!("L3-DIFF: 全绿（{total} 项比对）");
+        println!("L3-DIFF: 全绿（{total} 项比对 + 敌出现观测 {total_events} 事件）");
         ExitCode::SUCCESS
     }
 }
