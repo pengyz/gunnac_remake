@@ -92,3 +92,35 @@ fn r_stage_tick_rules_and_negatives() {
     assert_ne!(ws.interval_at(2300), Some(15), "段F 是 8f 非 15f");
     assert!(!ws.is_tick_frame(1350), "1350 非 10f 网格（1341+9k≠）必红");
 }
+
+#[test]
+fn terrain_vm_executes_real_stream() {
+    // t90 ③：执行环跑真脚本流（STG-1 $B2B4 族）——单帧单指令推进不 panic/不 fail-closed
+    use game_core::terrain::{vm_run_frame, TerrainSlot};
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    let bank8 = &rom[0x10 + 8 * 0x2000..0x10 + 9 * 0x2000];
+    let mem = |addr: u16| -> u8 {
+        let off = (addr.wrapping_sub(0xA000)) as usize;
+        *bank8.get(off).unwrap_or(&0)
+    };
+    let mut slots = [TerrainSlot {
+        x: 0x80, param: 0, sub_lo: 0, sub_hi: 0, loop_cnt: 2, opcode: 0,
+        pc_lo: 0xB4, pc_hi: 0xB2,
+    }];
+    let mut active_steps = 0;
+    for _ in 0..50 {
+        if slots[0].active() {
+            active_steps += 1;
+        }
+        vm_run_frame(&mut slots, &mem).expect("已证操作码子集执行不得 fail-closed");
+    }
+    assert!(active_steps > 5, "执行环必须实际推进（active_steps={active_steps}）");
+    // 流可自然结束（循环计数耗尽→$00 退槽）或保持活动——两者皆合法，状态须自洽
+    if slots[0].active() {
+        assert!((0x20..=0xE0).contains(&slots[0].x), "X 界外=执行环状态不自洽");
+    }
+    // 负向自证：未证操作码 fail-closed（$01 非法）
+    let mut bad = [TerrainSlot { x: 0, param: 0, sub_lo: 0, sub_hi: 0, loop_cnt: 1, opcode: 0, pc_lo: 0, pc_hi: 0xB2 }];
+    let mem_bad = |_a: u16| 0x01u8;
+    assert!(vm_run_frame(&mut bad, &mem_bad).is_err(), "未证操作码必须 fail-closed");
+}

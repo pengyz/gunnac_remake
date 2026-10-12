@@ -103,11 +103,9 @@ impl game_platform::Renderer for Canvas {
         self.clear([0, 0, 0, 255]);
     }
     fn draw_tile(&mut self, tile: u8, x: u8, y: u8, palette: u8) {
-        let pal = GREY4; // 占位：palette 参数语义未证，暂以灰阶 + palette 变体偏移
-        let mut shifted = pal;
-        let _ = palette;
+        let _ = palette; // 占位：palette 参数语义未证（待 L4 对拍）
         let blank = [[tile & 3; 8]; 8];
-        self.draw_tile8(&blank, x as i32, y as i32, &shifted);
+        self.draw_tile8(&blank, x as i32, y as i32, &GREY4);
     }
     fn present(&mut self) {}
 }
@@ -194,4 +192,35 @@ fn crc32(tag: &[u8], data: &[u8]) -> u32 {
         }
     }
     !c
+}
+
+// ============ BG 渲染链（t90：桥缓冲→tile 网格→背景层，投影口径） ============
+
+/// BG 投影渲染（t90 ②④，**B 级结构推断 + 灰阶口径声明**）：
+/// 每 BG 记录 4 字段 = 2×2 tile 块（$130/$131=上排、$140/$141=下排——缓冲族分立结构推断），
+/// 16 槽横向条带按 stage 卷轴 ($1C/$1D) 偏移平铺（mod 256 回绕）。**真值映射待 L4 对拍**——
+/// 本函数为 visual-diff 前置侦察样张口径（调色板未证=GREY4）。
+pub fn render_bg_projection(
+    canvas: &mut Canvas,
+    chr_rom: &[u8],
+    b130: &[u8; 16],
+    b131: &[u8; 16],
+    b140: &[u8; 16],
+    b141: &[u8; 16],
+    scroll_x: u8,
+    scroll_y: u8,
+) {
+    let sx = scroll_x as i32;
+    let sy = scroll_y as i32;
+    for slot in 0..16usize {
+        let tiles = [b130[slot], b131[slot], b140[slot], b141[slot]];
+        for (k, &tile) in tiles.iter().enumerate() {
+            let col = slot * 2 + (k % 2);
+            let row = k / 2;
+            let px = col as i32 * 8 - sx;
+            let py = row as i32 * 8 - sy;
+            // CHR tile 直绘（字模区 bank124 起，tile 索引 mod 64——投影口径）
+            canvas.draw_chr(chr_rom, game_data::chr::FONT_BANK_START, (tile % 64) as usize, px, py, &GREY4);
+        }
+    }
 }

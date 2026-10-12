@@ -71,3 +71,106 @@ fn tile_draw_pixels() {
     assert_eq!(canvas.pixel(3, 4), [0, 0, 0, 0], "边界外不落笔");
     assert_eq!(canvas.pixel(12, 12), [0, 0, 0, 0]);
 }
+
+// ============ t90：W12 桥 + BG 投影 ============
+
+#[test]
+fn bg_bridge_record_addressing_vx5_quirk() {
+    use game_core::terrain::{bg_record_at, BgRecord};
+    // v×5 quirk（t70 更正 N-0088）：索引 2 → 偏移 10
+    let pattern: Vec<u8> = (0..40u8).collect();
+    let r = bg_record_at(&pattern, 2);
+    assert_eq!(r, BgRecord { f1: 10, f2: 11, f3: 12, f4: 13, flag: 14 });
+    assert_ne!(bg_record_at(&pattern, 2), BgRecord { f1: 6, f2: 7, f3: 8, f4: 9, flag: 10 }, "×3 旧值必红");
+}
+
+#[test]
+fn bg_bridge_commit_fields_and_flag() {
+    use game_core::terrain::{bridge_output_commit, BgBuffers, BgRecord};
+    let mut bufs = BgBuffers::default();
+    let rec = BgRecord { f1: 1, f2: 2, f3: 3, f4: 4, flag: 0x0A };
+    assert!(bridge_output_commit(rec, 5, &mut bufs).is_some());
+    assert_eq!((bufs.b130[5], bufs.b131[5], bufs.b140[5], bufs.b141[5]), (1, 2, 3, 4), "4 字段映射");
+    assert_eq!(bufs.flag, 0x02, "标志&7");
+    // 表界 fail-closed（CPX #$10）
+    assert!(bridge_output_commit(rec, 16, &mut bufs).is_none(), "槽 16 越界必拒");
+}
+
+#[test]
+fn bg_projection_renders_without_panic() {
+    use game_desktop::render_bg_projection;
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").unwrap_or_default();
+    if rom.is_empty() {
+        return;
+    }
+    let mut canvas = Canvas::new();
+    let b130 = [0u8; 16];
+    let b131 = [1u8; 16];
+    let b140 = [2u8; 16];
+    let b141 = [3u8; 16];
+    render_bg_projection(&mut canvas, &rom, &b130, &b131, &b140, &b141, 8, 8);
+    // 投影必落笔（tile 0 可能全透明——断言画布被写过用非零 tile 检）
+    let mut canvas2 = Canvas::new();
+    let b131b = [2u8; 16];
+    render_bg_projection(&mut canvas2, &rom, &b130, &b131b, &b140, &b141, 0, 0);
+    assert!(canvas2.pixels.iter().any(|&p| p != 0), "投影必须落笔（负向哨兵）");
+}
+
+#[test]
+fn bg_negative_selfproof() {
+    use game_core::terrain::{bridge_output_commit, BgBuffers, BgRecord, ATTR_MASKS};
+    // 负向：位属性掩码哨兵（错掩码必红）
+    assert_eq!(ATTR_MASKS, [0xFF, 0xF9, 0xF0], "掩码 ROM 逐字节");
+    let mut bufs = BgBuffers::default();
+    bufs.attr[0] = 0x0F;
+    bridge_output_commit(BgRecord { f1: 0, f2: 0, f3: 0, f4: 0, flag: 0x07 }, 0, &mut bufs);
+    assert_eq!(bufs.attr[0], 0x0F, "(旧&FF)|标志 = 0x0F|7=0x0F——合成公式哨兵（OR 口径，掩码尾段未全证注记）");
+}
+
+#[test]
+fn bg_visual_scout_sample_export() {
+    // t90 ④ visual-diff 前置侦察样张（灰阶口径声明；真值映射未证——不比对只留样）
+    use game_core::terrain::bg_record_at;
+    use game_desktop::render_bg_projection;
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM 可读");
+    // 取 f1500 帧实测滚动（zp $1C/$1D）+ STG-1 图案表（$BCFA，bank8:$A000 窗）
+    let trace = std::fs::read_to_string("../../analysis/traces/gameplay-stage1.frames.jsonl");
+    let (mut sx, mut sy) = (0u8, 0u8);
+    if let Ok(text) = trace {
+        for line in text.lines() {
+            if line.contains("\"f\":1500,") || line.contains("\"f\": 1500,") {
+                if let Some(i) = line.find("\"zp\":\"") {
+                    let rest = &line[i + 7..];
+                    let hex = &rest[..rest.find('"').unwrap()];
+                    let zp = hex_decode(hex);
+                    sx = zp[0x1C];
+                    sy = zp[0x1D];
+                    break;
+                }
+            }
+        }
+    }
+    let bank8 = &rom[0x10 + 8 * 0x2000..0x10 + 9 * 0x2000];
+    let pattern = &bank8[0x1CFA..]; // 图案表 $BCFA → bank8:$A000 窗内偏移 0x1CFA
+    let (mut b130, mut b131, mut b140, mut b141) = ([0u8; 16], [0u8; 16], [0u8; 16], [0u8; 16]);
+    for i in 0..16usize {
+        let r = bg_record_at(pattern, i as u8);
+        b130[i] = r.f1;
+        b131[i] = r.f2;
+        b140[i] = r.f3;
+        b141[i] = r.f4;
+    }
+    let mut canvas = Canvas::new();
+    render_bg_projection(&mut canvas, &rom, &b130, &b131, &b140, &b141, sx, sy);
+    let dir = std::path::Path::new("../../analysis/visual-scout");
+    std::fs::create_dir_all(dir).unwrap();
+    let out = dir.join("bg_projection_f1500.png");
+    canvas.export_png(&out).expect("导出样张");
+    assert!(out.exists(), "样张必须落盘");
+    let bytes = std::fs::read(&out).unwrap();
+    assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+}
+
+fn hex_decode(s: &str) -> Vec<u8> {
+    (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect()
+}
