@@ -1,0 +1,35 @@
+# 场景：武器拾取/升级（t25 · H-01/H-02）
+# 证据注记（假设区）：
+#   - t22 实测：移动段自然拾取字母圈『W』→ $0190 0→3 + HUD F→W + $018F 3→4
+#   - 本场景用 Z 字形移动最大化拾取编号圈：观察 $33/$34、等级 var（HUD『A0』数字）、$072E,X 弹型计数变化
+#   - H-02 两说（Power P 升级 vs 连收同型圈升级）以拾取序列差分定谳：同型连收是否升级、异型是否只切换
+name weapon-pickup
+frames 2350
+press_len 4
+
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+
+# Z 字形巡场拾取（对照 t22 的 W 拾取段）
+hold 1300-1500 right
+hold 1520-1700 left
+hold 1720-1900 down
+hold 1920-2100 up
+hold 2120-2320 right
+
+capture_every 30 probe
+capture 1260 combat-start
+capture 2320 end
+
+watch_range 0000-00ff zp
+watch 0320
+watch_range 0300-07ff iram
+watch_range 6000-7fff wram

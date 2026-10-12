@@ -1,0 +1,473 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""tools/scenario_run.py —— S2 oracle 场景采集框架（驱动 + DSL 唯一解析器）。
+
+职责：
+1. 解析场景 DSL（oracle/scenarios/*.txt）——**DSL 语义只在本文件解析**（无第二套解析器）；
+2. 生成 analysis/_gen/<name>.lua = PLAN 表字面量 + tools/scenario_capture.lua 执行器；
+3. 驱动 Mesen2 2.1.1 采集：xvfb-run -a tools/mesen2/Mesen rom/gunnac_cn.nes <lua> /DoNotSaveSettings
+   （装载用法已验证；emu.stop 不退进程 ⇒ 驱动等 DONE 标记后 SIGTERM 收尾）；
+4. 校验产物并落 run 清单（可复现证据）。
+
+用法：
+    python3 tools/scenario_run.py list
+    python3 tools/scenario_run.py gen <name>            # 只生成 lua（调试）
+    python3 tools/scenario_run.py run <name|路径> [--timeout 秒]
+    python3 tools/scenario_run.py run-all [--timeout 秒]
+
+帧计数约定（与 tools/scenario_capture.lua 一致，差分复现靠它锁死）：
+- frame 在 inputPolled 回调递增：第 N 次 poll = 帧 N，schedule[N] 的按键在该帧注入；
+- press <f> <btn> = 帧 f..f+press_len-1 按住（press_len 默认 2），之后释放；
+- hold <a-b> <btn> = 帧 a..b（含）按住，帧 b+1 释放；
+- endFrame（帧 N 渲染完成后）写 trace 行 / 截图 / RAM dump；frame == frames 时写 DONE 并停机。
+
+输出（均可用 --out/--shots 覆盖，默认 analysis/ 与 shots/）：
+    analysis/traces/<name>.frames.jsonl    逐帧状态向量（w=watch 字节/range hex，可选 ram 全量）
+    analysis/traces/<name>.captures.jsonl  采集点索引（截图路径 + RAM hex 文件 + cpu 寄存器）
+    analysis/traces/<name>_fNNNNN_<tag>.ram.hex  采集点全量 2KB RAM（hex，4096 字符）
+    shots/<name>_fNNNNN_<tag>.png          截图（emu.takeScreenshot）
+    analysis/traces/<name>.run.json        运行清单（sha256 + 计数 + 路径）
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+MESEN = ROOT / "tools" / "mesen2" / "Mesen"
+ROM = ROOT / "rom" / "gunnac_cn.nes"
+HARNESS = ROOT / "tools" / "scenario_capture.lua"
+SCENARIO_DIR = ROOT / "oracle" / "scenarios"
+GEN_DIR = ROOT / "analysis" / "_gen"
+
+BUTTONS = {"a", "b", "start", "select", "up", "down", "left", "right"}
+PRESS_LEN_DEFAULT = 2
+
+
+class ScenarioError(Exception):
+    """DSL 解析/校验错误（带 文件:行号）。"""
+
+
+def pick_display() -> str:
+    """选空闲 X display（:99 起，按锁文件/socket 跳过占用）。"""
+    for n in range(99, 200):
+        if not Path(f"/tmp/.X{n}-lock").exists() and not Path(f"/tmp/.X11-unix/X{n}").exists():
+            return f":{n}"
+    raise ScenarioError("无空闲 X display（/tmp/.X11-unix 全占）")
+
+
+def wait_for_x(display: str, xvfb: subprocess.Popen, timeout_s: float = 10.0) -> None:
+    """等 X socket 就绪；Xvfb 起不来即报错（fail-closed）。"""
+    sock = Path(f"/tmp/.X11-unix/X{display.lstrip(':')}")
+    t0 = time.time()
+    while not sock.exists():
+        if xvfb.poll() is not None:
+            raise ScenarioError(f"Xvfb {display} 启动失败（exit {xvfb.returncode}）")
+        if time.time() - t0 > timeout_s:
+            raise ScenarioError(f"Xvfb {display} socket 超时未就绪")
+        time.sleep(0.1)
+
+
+def relp(path: Path) -> str:
+    """ROOT 内路径显示为相对 POSIX；ROOT 外（如 /tmp 探索场景）原样显示。"""
+    try:
+        return Path(path).resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+# ---------------------------------------------------------------- DSL 解析
+
+def parse_scenario(path: Path) -> dict:
+    """解析场景 DSL → PLAN dict。所有语义判定唯一入口。"""
+    path = Path(path)
+    plan: dict = {
+        "name": path.stem,
+        "frames": None,
+        "press_len": PRESS_LEN_DEFAULT,
+        "presses": [],
+        "holds": [],
+        "captures": [],
+        "capture_every": None,
+        "watch": [],
+        "watch_ranges": [],
+        "ramframe": False,
+    }
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        toks = line.split()
+        op, args = toks[0], toks[1:]
+
+        def err(msg: str) -> ScenarioError:
+            return ScenarioError(f"{path}:{lineno}: {msg}（行: {raw.strip()!r}）")
+
+        if op == "name":
+            if len(args) != 1:
+                raise err("name 需要 1 个参数")
+            plan["name"] = args[0]
+        elif op == "frames":
+            if len(args) != 1 or not args[0].isdigit() or int(args[0]) <= 0:
+                raise err("frames 需要正整数")
+            plan["frames"] = int(args[0])
+        elif op == "press_len":
+            if len(args) != 1 or not args[0].isdigit() or int(args[0]) <= 0:
+                raise err("press_len 需要正整数")
+            plan["press_len"] = int(args[0])
+        elif op == "press":
+            if len(args) < 2 or not args[0].isdigit():
+                raise err("press 用法: press <帧号> <按钮...>")
+            btns = [b.lower() for b in args[1:]]
+            for b in btns:
+                if b not in BUTTONS:
+                    raise err(f"未知按钮 {b!r}（可选: {sorted(BUTTONS)}）")
+            plan["presses"].append({"frame": int(args[0]), "buttons": btns})
+        elif op == "press_every":
+            # press_every <N> <起>-<止> <按钮...>：每 N 帧点按一次（解析期展开为 presses，无新执行语义）
+            if len(args) < 3 or not args[0].isdigit() or int(args[0]) <= 0 or "-" not in args[1]:
+                raise err("press_every 用法: press_every <N> <起>-<止> <按钮...>")
+            a_s, b_s = args[1].split("-", 1)
+            if not (a_s.isdigit() and b_s.isdigit()) or int(a_s) > int(b_s):
+                raise err("press_every 区间必须是 起<=止 的非负整数")
+            btns = [b.lower() for b in args[2:]]
+            for b in btns:
+                if b not in BUTTONS:
+                    raise err(f"未知按钮 {b!r}（可选: {sorted(BUTTONS)}）")
+            for f in range(int(a_s), int(b_s) + 1, int(args[0])):
+                plan["presses"].append({"frame": f, "buttons": btns})
+        elif op == "hold":
+            if len(args) < 2 or "-" not in args[0]:
+                raise err("hold 用法: hold <起>-<止> <按钮...>")
+            a_s, b_s = args[0].split("-", 1)
+            if not (a_s.isdigit() and b_s.isdigit()) or int(a_s) > int(b_s):
+                raise err("hold 区间必须是 起<=止 的非负整数")
+            btns = [b.lower() for b in args[1:]]
+            for b in btns:
+                if b not in BUTTONS:
+                    raise err(f"未知按钮 {b!r}（可选: {sorted(BUTTONS)}）")
+            plan["holds"].append({"from": int(a_s), "to": int(b_s), "buttons": btns})
+        elif op == "capture":
+            if len(args) != 2 or not args[0].isdigit():
+                raise err("capture 用法: capture <帧号> <tag>")
+            plan["captures"].append({"frame": int(args[0]), "tag": args[1]})
+        elif op == "capture_every":
+            if len(args) != 2 or not args[0].isdigit() or int(args[0]) <= 0:
+                raise err("capture_every 用法: capture_every <N> <tag>")
+            plan["capture_every"] = {"n": int(args[0]), "tag": args[1]}
+        elif op == "watch":
+            # watch <hex 地址> [标签] —— 标签缺省=地址本身（语义命名必须有台账证据，见 AGENTS.md §3）
+            if len(args) not in (1, 2):
+                raise err("watch 用法: watch <hex 地址> [标签]")
+            addr = args[0].lower()
+            if len(addr) != 4 or any(c not in "0123456789abcdef" for c in addr):
+                raise err(f"地址须为 4 位 hex（如 0320），实际 {args[0]!r}")
+            plan["watch"].append({"addr": addr, "label": args[1] if len(args) == 2 else addr})
+        elif op == "watch_range":
+            # watch_range <hex 起>-<hex 止> [标签]
+            if len(args) not in (1, 2) or "-" not in args[0]:
+                raise err("watch_range 用法: watch_range <hex起>-<hex止> [标签]")
+            a_s, b_s = (s.lower() for s in args[0].split("-", 1))
+            if not (len(a_s) == 4 and len(b_s) == 4):
+                raise err("watch_range 地址须为 4 位 hex")
+            if int(a_s, 16) > int(b_s, 16):
+                raise err("watch_range 起点必须 <= 止点")
+            label = args[1] if len(args) == 2 else f"{a_s}-{b_s}"
+            plan["watch_ranges"].append({"from": a_s, "to": b_s, "label": label})
+        elif op == "ramframe":
+            if len(args) != 1 or args[0] not in ("on", "off"):
+                raise err("ramframe 用法: ramframe on|off")
+            plan["ramframe"] = args[0] == "on"
+        else:
+            raise err(f"未知 DSL 指令 {op!r}")
+
+    if plan["frames"] is None:
+        raise ScenarioError(f"{path}: 缺 frames 指令")
+    frames = plan["frames"]
+    seen = set()
+    for e in plan["presses"]:
+        if not 1 <= e["frame"] <= frames:
+            raise ScenarioError(f"{path}: press 帧 {e['frame']} 超出 1..{frames}")
+        key = (e["frame"], tuple(e["buttons"]))
+        if key in seen:
+            raise ScenarioError(f"{path}: 重复 press {key}")
+        seen.add(key)
+    for e in plan["holds"]:
+        if not 1 <= e["from"] <= e["to"] <= frames:
+            raise ScenarioError(f"{path}: hold 区间 {e['from']}-{e['to']} 超出 1..{frames}")
+    for e in plan["captures"]:
+        if not 1 <= e["frame"] <= frames:
+            raise ScenarioError(f"{path}: capture 帧 {e['frame']} 超出 1..{frames}")
+    return plan
+
+
+# ---------------------------------------------------------------- Lua 生成
+
+def lua_str(s: str) -> str:
+    out = s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+    return f'"{out}"'
+
+
+def to_lua(v) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, str):
+        return lua_str(v)
+    if isinstance(v, list):
+        return "{" + ",".join(to_lua(x) for x in v) + "}"
+    if isinstance(v, dict):
+        return "{" + ",".join(f"[{lua_str(k)}]={to_lua(val)}" for k, val in v.items()) + "}"
+    raise TypeError(f"不可序列化为 Lua: {v!r}")
+
+
+def generate_lua(plan: dict, scenario_path: Path) -> tuple[str, str]:
+    """返回 (lua 源码, lua sha256)。PLAN 前置 + 执行器整拼（无 dofile 依赖）。"""
+    plan_lua = dict(plan)
+    plan_lua["out_dir"] = str((ROOT / "analysis" / "traces").resolve())
+    plan_lua["shots_dir"] = str((ROOT / "shots").resolve())
+    harness = HARNESS.read_text(encoding="utf-8")
+    src = (
+        f"-- 生成文件：勿手改。来源 {relp(scenario_path)}"
+        f"（由 tools/scenario_run.py 生成）\n"
+        f"local PLAN = {to_lua(plan_lua)}\n"
+        + harness
+    )
+    return src, hashlib.sha256(src.encode("utf-8")).hexdigest()
+
+
+# ---------------------------------------------------------------- 运行
+
+def scenario_path_of(name_or_path: str) -> Path:
+    p = Path(name_or_path)
+    if p.is_file():
+        return p
+    cand = SCENARIO_DIR / f"{name_or_path}.txt"
+    if cand.is_file():
+        return cand
+    raise ScenarioError(f"找不到场景 {name_or_path!r}（试过 {p} 与 {cand}）")
+
+
+def archive_existing(name: str) -> str | None:
+    """产物已存在 ⇒ 按时间戳归档（t24 事故：重跑踩踏他人在用的 trace；归档=run 隔离）。"""
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    dst = ROOT / "analysis" / "traces" / ".archive" / f"{name}-{stamp}"
+    moved = False
+    for pat in (f"{name}.frames.jsonl", f"{name}.captures.jsonl", f"{name}.done",
+                f"{name}.run.json", f"{name}.lua.log", f"{name}.mesen.log"):
+        src = ROOT / "analysis" / "traces" / pat
+        if src.exists():
+            dst.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src), str(dst / pat))
+            moved = True
+    for src in (ROOT / "analysis" / "traces").glob(f"{name}_f*.ram.hex"):
+        dst.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst / src.name))
+        moved = True
+    for src in (ROOT / "shots").glob(f"{name}_f*.png"):
+        shots_dst = dst / "shots"
+        shots_dst.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(shots_dst / src.name))
+        moved = True
+    return str(dst.relative_to(ROOT)) if moved else None
+
+
+def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = True) -> dict:
+    spath = scenario_path_of(name_or_path)
+    plan = parse_scenario(spath)
+    name = plan["name"]
+    # 串行锁（t24 事故）：同一时刻只允许一个 Mesen 场景运行
+    lock_f = open(ROOT / "analysis" / ".scenario.lock", "w")
+    try:
+        fcntl.flock(lock_f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        raise ScenarioError("另一场景运行中（串行纪律）：analysis/.scenario.lock 被占用")
+    archived = archive_existing(name)
+    (ROOT / "analysis" / "traces").mkdir(parents=True, exist_ok=True)
+    (ROOT / "shots").mkdir(parents=True, exist_ok=True)
+    GEN_DIR.mkdir(parents=True, exist_ok=True)
+    lua_src, lua_sha = generate_lua(plan, spath)
+    lua_path = GEN_DIR / f"{name}.lua"
+    lua_path.write_text(lua_src, encoding="utf-8")
+
+    done_path = ROOT / "analysis" / "traces" / f"{name}.done"
+    trace_path = ROOT / "analysis" / "traces" / f"{name}.frames.jsonl"
+    if done_path.exists():
+        done_path.unlink()
+
+    t0 = time.time()
+    mesen_log = open(ROOT / "analysis" / "traces" / f"{name}.mesen.log", "w", encoding="utf-8")
+    # 自管 Xvfb（t24 实测：xvfb-run 包装层偶发提前退出 → Xvfb 随之死 → Mesen 冻在中途帧、
+    # DONE 不落）。直接拉 Xvfb + DISPLAY 注入，Mesen 为直接子进程；进程组清理见 finally。
+    # 场景仍必须**串行**运行（run-all 已是串行；勿并行多个 Mesen）。
+    display = pick_display()
+    xvfb = subprocess.Popen(
+        ["Xvfb", display, "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+    )
+    wait_for_x(display, xvfb)
+    env = dict(os.environ)
+    env["DISPLAY"] = display
+    proc = subprocess.Popen(
+        [str(MESEN), str(ROM), str(lua_path), "/DoNotSaveSettings"],
+        cwd=ROOT, stdout=mesen_log, stderr=subprocess.STDOUT, text=True,
+        start_new_session=True, env=env,
+    )
+    timed_out = False
+    dead_since: float | None = None
+    try:
+        while not done_path.exists():
+            now = time.time()
+            if now - t0 > timeout_s:
+                timed_out = True
+                break
+            if proc.poll() is not None:
+                # 包装层退出 ≠ 采集完成（孤儿 Mesen 可能仍在写盘）；给 20s 宽限等 DONE
+                if dead_since is None:
+                    dead_since = now
+                elif now - dead_since > 20:
+                    break
+            time.sleep(0.5)
+    finally:
+        def kill_group(sig) -> None:
+            try:
+                os.killpg(os.getpgid(proc.pid), sig)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+
+        if proc.poll() is None or not done_path.exists():
+            kill_group(signal.SIGTERM)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            kill_group(signal.SIGKILL)
+            proc.wait(timeout=10)
+        mesen_log.close()
+        try:
+            xvfb.terminate()
+            xvfb.wait(timeout=5)
+        except Exception:
+            try:
+                xvfb.kill()
+            except Exception:
+                pass
+    wall = round(time.time() - t0, 1)
+
+    done_info = None
+    if done_path.exists():
+        done_info = json.loads(done_path.read_text(encoding="utf-8").strip().splitlines()[-1])
+    n_lines = 0
+    if trace_path.exists():
+        with open(trace_path, encoding="utf-8") as f:
+            n_lines = sum(1 for _ in f)
+    shots = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "shots").glob(f"{name}_f*.png"))
+    rams = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "analysis" / "traces").glob(f"{name}_f*.ram.hex"))
+
+    manifest = {
+        "scenario": relp(spath),
+        "scenario_sha256": hashlib.sha256(spath.read_bytes()).hexdigest(),
+        "generated_lua": lua_path.relative_to(ROOT).as_posix() if keep_gen else None,
+        "generated_lua_sha256": lua_sha,
+        "frames": plan["frames"],
+        "trace_lines": n_lines,
+        "done": done_info,
+        "timed_out": timed_out,
+        "wall_s": wall,
+        "outputs": {
+            "trace": str(trace_path.relative_to(ROOT)),
+            "captures": f"analysis/traces/{name}.captures.jsonl",
+            "shots": shots,
+            "ram_dumps": rams,
+        },
+    }
+    mpath = ROOT / "analysis" / "traces" / f"{name}.run.json"
+    mpath.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    fcntl.flock(lock_f, fcntl.LOCK_UN)
+    lock_f.close()
+    if archived:
+        print(f"  已归档旧产物: {archived}（run 隔离，防踩踏）")
+    ok = done_info is not None and not timed_out and n_lines > 0
+    print(f"== scenario run: {name} ==")
+    print(f"  DSL: {manifest['scenario']} sha256={manifest['scenario_sha256'][:16]}…")
+    print(f"  frames: {plan['frames']} trace_lines: {n_lines} captures: {len(rams)} shots: {len(shots)} wall: {wall}s")
+    if done_info:
+        print(f"  DONE: {json.dumps(done_info, ensure_ascii=False)}")
+    print(f"  trace: {manifest['outputs']['trace']}")
+    print(f"  run清单: {mpath.relative_to(ROOT)}")
+    if not ok:
+        print(f"  !! 未完成（timed_out={timed_out}, done={done_info is not None}, trace_lines={n_lines}）")
+    return manifest
+
+
+def cmd_list(_args) -> int:
+    rows = []
+    for p in sorted(SCENARIO_DIR.glob("*.txt")):
+        try:
+            plan = parse_scenario(p)
+            rows.append((plan["name"], plan["frames"], len(plan["presses"]), len(plan["holds"]), len(plan["captures"])))
+        except ScenarioError as exc:
+            rows.append((p.name, "解析失败", str(exc), "", ""))
+    print(f"{'场景':<24} {'帧数':>6} {'press':>6} {'hold':>5} {'capture':>8}")
+    for r in rows:
+        print(f"{r[0]:<24} {str(r[1]):>6} {str(r[2]):>6} {str(r[3]):>5} {str(r[4]):>8}")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="tools/scenario_run.py", description="S2 oracle 场景采集驱动（DSL 唯一解析器）")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("list", help="列出 oracle/scenarios/ 场景")
+    p_gen = sub.add_parser("gen", help="只生成 lua（调试）")
+    p_gen.add_argument("scenario")
+    p_run = sub.add_parser("run", help="运行单个场景")
+    p_run.add_argument("scenario")
+    p_run.add_argument("--timeout", type=float, default=1800.0)
+    p_all = sub.add_parser("run-all", help="顺序运行全部场景")
+    p_all.add_argument("--timeout", type=float, default=1800.0)
+    args = ap.parse_args()
+
+    try:
+        if args.cmd == "list":
+            return cmd_list(args)
+        if args.cmd == "gen":
+            spath = scenario_path_of(args.scenario)
+            plan = parse_scenario(spath)
+            GEN_DIR.mkdir(parents=True, exist_ok=True)
+            src, sha = generate_lua(plan, spath)
+            out = GEN_DIR / f"{plan['name']}.lua"
+            out.write_text(src, encoding="utf-8")
+            print(f"生成 {out.relative_to(ROOT)} sha256={sha}")
+            return 0
+        if args.cmd == "run":
+            run_scenario(args.scenario, args.timeout)
+            return 0
+        if args.cmd == "run-all":
+            failed = []
+            for p in sorted(SCENARIO_DIR.glob("*.txt")):
+                m = run_scenario(p, args.timeout)
+                if not (m["done"] and not m["timed_out"]):
+                    failed.append(m["scenario"])
+            if failed:
+                print(f"RUN-ALL: 未完成 {failed}")
+                return 1
+            print("RUN-ALL: 全部场景完成")
+            return 0
+    except ScenarioError as exc:
+        print(f"场景错误: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

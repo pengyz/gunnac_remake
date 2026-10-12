@@ -1,0 +1,30 @@
+# 场景：受击/残机（t25 · W3 + E-W05 翼装）
+# 证据注记（假设区）：
+#   - 静止不动段让敌弹/撞击命中：残机计数 var（HUD『1』行）与死亡/重生状态帧间 diff
+#   - $0401 值域采样（H-15：受击/死亡态是否出现新值）
+#   - E-W05（翼装=可多挨一击）：若本局拾到 wing 道具可对比受击次数；未拾到则留假设
+name hit-test
+frames 2350
+press_len 4
+
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+
+# 1260-2320 静止不动（不躲弹）：受击观察段
+
+capture_every 30 probe
+capture 1260 combat-start
+capture 2320 end
+
+watch_range 0000-00ff zp
+watch 0320
+watch_range 0300-07ff iram
+watch_range 6000-7fff wram
