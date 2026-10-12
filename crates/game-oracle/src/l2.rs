@@ -444,19 +444,44 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
             let mut st = game_core::weapons::WeaponState {
                 slot: ram(0x0034), level: ram(0x0033), bomb_ammo: ram(0x018F),
             };
+            let mut ctx = game_core::weapons::PickupContext {
+                threshold: ram(0x018C),
+                consecutive: ram(0x018A),
+                flags: ram(0x0032),
+                reward_pending: false,
+            };
             let before = st.level;
-            match game_core::weapons::pickup_handler(&mut st, a_in) {
-                game_core::weapons::PickupOutcome::Leveled { level } => {
+            match game_core::weapons::pickup_handler(&mut st, a_in, &mut ctx) {
+                game_core::weapons::PickupOutcome::KernelLevel { level } => {
                     writes.insert(0x0033, level);
-                    // 退出寄存器 = ROM 副产物：INC 溢出回卷路径 A=$0C（LDA #$0C），否则 A=$32 入参
+                    if ctx.consecutive != ram(0x018A) {
+                        writes.insert(0x018A, ctx.consecutive); // 回 kernel 前的连收计数写入
+                    }
+                    // 退出寄存器 = ROM 副产物：kernel 回卷路径 A=$0C，否则 A=$32 入参
                     let a_out = if before == 0xFF { 0x0C } else { ram(0x0032) };
-                    (a_out, x_in, y_in)
+                    (a_out, x_in, a_in) // 同型路径经 TAY ⇒ Y=拾取值
+                }
+                game_core::weapons::PickupOutcome::DeepLevel { level } => {
+                    writes.insert(0x0033, level);
+                    (ram(0x0032) & 0x04, x_in, a_in) // 收尾 LDA $32/AND #$04
+                }
+                game_core::weapons::PickupOutcome::Consecutive { consecutive, .. } => {
+                    writes.insert(0x018A, consecutive);
+                    (ctx.threshold, x_in, a_in) // 退出前 LDA $018C
                 }
                 game_core::weapons::PickupOutcome::Switched { slot } => {
                     writes.insert(0x0034, slot);
-                    (slot, x_in, y_in) // A=拾取物 type（STA $34 不改 A）
+                    // 异型分支不走 TAY（$922D 直跳 $9248）⇒ Y=入参 Y；STA $34 不改 A
+                    (slot, x_in, y_in)
                 }
             }
+        }
+        "level_config_index" => {
+            let level = ram(0x0033);
+            let idx = game_core::weapons::config_index_for_level(level);
+            let off = game_core::weapons::CONFIG_OFFSETS[idx as usize];
+            // 退出寄存器 = ROM 副产物：A=Y=索引，X=表值；STX $04 为暂存（scratch 过滤）
+            (idx, off, idx)
         }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),
     };

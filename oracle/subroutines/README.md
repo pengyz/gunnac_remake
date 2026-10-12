@@ -26,7 +26,7 @@ cargo test -p game-oracle --test l2_cases  # 同一差分引擎（rust-tests 门
   （可见的比对面裁剪；栈压入/弹出恒不入写集——但栈页里的**游戏变量**照常记录，如 $018E/$018F）。
 - 差分面 = regs{a,x,y} + 写集；P 为执行副产物不入比对面（输入 P 影响分支，仍进 `in`）。
 
-## 用例覆盖（54 条，先写用例再实现）
+## 用例覆盖（63 条，先写用例再实现）
 
 | 子程序 | ROM 位置 | 证据 | 用例 |
 |---|---|---|---|
@@ -36,7 +36,8 @@ cargo test -p game-oracle --test l2_cases  # 同一差分引擎（rust-tests 门
 | consumption_lookup | bank03:A2C4-A2CF | R-fire-3 回退档（消耗表 [1,2,3,2]） | cons-1..7 |
 | bomb_drop（R-fire-2/3/4 全链） | bank03:A2B4-A2FA + JSR $ED03 | N-0017、R-fire-2/3/4、C-bomb-consume/C-bomb-type-tbl | bd-1..9 |
 | movement_tick（R-move-5/6 积分+钳制） | bank03:A08D-A0EB | N-0011..0016、R-move-1..6（含 Y 溢出 quirk） | mt-01..14 |
-| pickup_handler（同型升级/异型切换/回卷） | bank2:$922B-$9258 | N-0032/33、R-fire 系（含 $0C 非上限 quirk） | pk-1..7 |
+| pickup_handler（kernel/深路径三态/异型切换） | bank2:$922B-$92C5 | N-0032/33/48、H-02 定谳（kernel FF→0C vs 深路径 FF→00 分歧；连收 $018A；$33≥8&&$34==0 回 kernel） | pk-1..12 |
+| level_config_index（H-A 索引变换） | bank2:$9368-$937A | H-A 定谳：4+((级-4)&7)（ADC 进位）∈[4,11] 无越界；findings `3+` 漏进位待勘误 | ha-1..4 |
 
 数值表（A 级，`docs/spec/constants.md` v2）：消耗量 `$A336-$A339`=[1,2,3,2]、
 类型 `$A33A-$A33D`=[2,3,4,4]（**登记不解释**，语义=H-11 待证）；`$018F` 为压缩 BCD，
