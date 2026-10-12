@@ -10,13 +10,13 @@
     "l3_align": "state(N)=tick(state(N-1),held(N))"
   },
   "stats": {
-    "rules_total": 42,
-    "covered": 12,
+    "rules_total": 44,
+    "covered": 14,
     "partial": 7,
     "uncovered": 23,
     "l2_cases": 54,
     "l2_subroutines": 9,
-    "l2_cases_without_rule": 7,
+    "l2_cases_without_rule": 0,
     "l3_frames": 1848,
     "l3_segments": 7,
     "l3_weapon_events": {
@@ -427,7 +427,7 @@
       ],
       "l3_evidence": "无",
       "gap_grade": "纯函数可 L2",
-      "note": "digit-* 仅覆盖『取位一步』（bank00:9DE8）；7 位布局与前导零抑制未断言（FA-5）"
+      "note": "digit-* 仅覆盖『取位一步』（bank00:9DE8）；7 位布局与前导零抑制未断言（FA-5）；FA-5（t37 如实现状登记）：digit-1..5 仅覆盖『取位一步』，BCD 显示链其余环节未覆盖，维持 partial"
     },
     {
       "id": "R-money-5",
@@ -461,6 +461,37 @@
       "l3_evidence": "无（weapons 事件 golden 不含弹药字段）",
       "gap_grade": "需新场景",
       "note": "可先以 L2 常量断言补上限值，再以 shop/信息页场景证显示"
+    },
+    {
+      "id": "R-item-2",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 114,
+      "summary": "同型圈连收升级：$33 +1 递增；溢出 255 回卷 12（$0C=回卷目标非上限）",
+      "status": "covered",
+      "l2_cases": [
+        "pk-1-same-0to1",
+        "pk-2-same-5to6",
+        "pk-3-same-b2c",
+        "pk-4-wrap-ffto0c",
+        "pk-5-same-0cto0d"
+      ],
+      "l3_evidence": "无（weapons 事件 golden 仅 slot/type）",
+      "gap_grade": "已 L2 实证",
+      "note": "t37 FA-1 补规则；深路径 pk-8/9（$925F）另挂 R-shot-level-4 待证"
+    },
+    {
+      "id": "R-item-3",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 124,
+      "summary": "异型圈切换：$34 写为新拾取值（直接切换）",
+      "status": "covered",
+      "l2_cases": [
+        "pk-6-switch-1to3",
+        "pk-7-switch-0to5"
+      ],
+      "l3_evidence": "gameplay-stage1.weapons.jsonl f2175 slot 0→3 事件旁证",
+      "gap_grade": "已 L2 实证",
+      "note": "t37 FA-1 补规则"
     },
     {
       "id": "R-bomb-1",
@@ -1009,44 +1040,58 @@
     {
       "id": "pk-1-same-0to1",
       "subroutine": "pickup_handler",
-      "rules": [],
-      "rule_gap": true
+      "rules": [
+        "R-item-2"
+      ],
+      "rule_gap": false
     },
     {
       "id": "pk-2-same-5to6",
       "subroutine": "pickup_handler",
-      "rules": [],
-      "rule_gap": true
+      "rules": [
+        "R-item-2"
+      ],
+      "rule_gap": false
     },
     {
       "id": "pk-3-same-b2c",
       "subroutine": "pickup_handler",
-      "rules": [],
-      "rule_gap": true
+      "rules": [
+        "R-item-2"
+      ],
+      "rule_gap": false
     },
     {
       "id": "pk-4-wrap-ffto0c",
       "subroutine": "pickup_handler",
-      "rules": [],
-      "rule_gap": true
+      "rules": [
+        "R-item-2"
+      ],
+      "rule_gap": false
     },
     {
       "id": "pk-5-same-0cto0d",
       "subroutine": "pickup_handler",
-      "rules": [],
-      "rule_gap": true
+      "rules": [
+        "R-item-2"
+      ],
+      "rule_gap": false
     },
     {
       "id": "pk-6-switch-1to3",
       "subroutine": "pickup_handler",
-      "rules": [],
-      "rule_gap": true
+      "rules": [
+        "R-item-3"
+      ],
+      "rule_gap": false
     },
     {
       "id": "pk-7-switch-0to5",
       "subroutine": "pickup_handler",
-      "rules": [],
-      "rule_gap": true
+      "rules": [
+        "R-item-3"
+      ],
+      "rule_gap": false
     }
   ],
   "findings": [
