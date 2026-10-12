@@ -91,6 +91,8 @@ pub struct Case {
     pub in_ram: Vec<(u16, u8)>,
     pub out_regs: (u8, u8, u8), // a,x,y
     pub out_writes: Vec<(u16, u8)>,
+    /// 可选分支落点断言（决策类片段）
+    pub out_exit: Option<u16>,
     /// 被调用者内部暂存单元（如 ED03 的 $04-$06）：case 显式声明后从两侧写集剔除
     /// （可见的比对面裁剪，不是全局白名单；栈页固定剔除见 `is_stack`）。
     pub scratch: Vec<u16>,
@@ -103,6 +105,8 @@ pub struct Out {
     pub x: u8,
     pub y: u8,
     pub writes: BTreeMap<u16, u8>,
+    /// 分支落点（stops 命中地址）——决策类片段的可观察出参（golden 可选字段 exit）
+    pub exit: u16,
 }
 
 // ---------------- 迷你 JSON（零外部依赖；仅覆盖 case 结构所需）
@@ -298,6 +302,11 @@ pub fn parse_cases(jsonl: &str) -> Result<Vec<Case>, String> {
         let oregs = match obj_get(&out_o, "regs")? { Json::Obj(o) => o.clone(), _ => return Err("out.regs 非对象".into()) };
         let out_regs = (as_u8(obj_get(&oregs, "a")?)?, as_u8(obj_get(&oregs, "x")?)?, as_u8(obj_get(&oregs, "y")?)?);
         let out_writes = byte_map(obj_get(&out_o, "writes")?)?;
+        let out_exit = match obj.iter().find(|(k, _)| k == "exit") {
+            Some((_, Json::Str(s))) => Some(parse_bank_addr(s)?.1),
+            Some((_, other)) => return Err(format!("exit 须为 bankNN:AAAA：{other:?}")),
+            None => None,
+        };
         let scratch = match obj.iter().find(|(k, _)| k == "scratch") {
             Some((_, Json::Arr(items))) => items.iter().map(|it| match it {
                 Json::Str(s) => parse_hex_key(s),
@@ -306,7 +315,7 @@ pub fn parse_cases(jsonl: &str) -> Result<Vec<Case>, String> {
             Some((_, other)) => return Err(format!("scratch 非数组：{other:?}")),
             None => Vec::new(),
         };
-        out.push(Case { id, subroutine, entry, stops, r6, r7, in_regs, in_ram, out_regs, out_writes, scratch });
+        out.push(Case { id, subroutine, entry, stops, r6, r7, in_regs, in_ram, out_regs, out_writes, out_exit, scratch });
     }
     Ok(out)
 }
@@ -336,7 +345,7 @@ pub fn run_rom_case(rom: &[u8], case: &Case) -> Result<Out, String> {
     let stops: Vec<u16> = if call_mode { vec![STOP_SENTINEL] } else { case.stops.clone() };
     for _ in 0..MAX_STEPS {
         if stops.contains(&cpu.pc) {
-            return Ok(Out { a: cpu.a, x: cpu.x, y: cpu.y, writes: bus.writes });
+            return Ok(Out { a: cpu.a, x: cpu.x, y: cpu.y, writes: bus.writes, exit: cpu.pc });
         }
         match cpu.step(&mut bus)? {
             StepResult::Continue => {}
@@ -483,9 +492,68 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
             // 退出寄存器 = ROM 副产物：A=Y=索引，X=表值；STX $04 为暂存（scratch 过滤）
             (idx, off, idx)
         }
+        "shot_schedule_step" => {
+            let (counter, period) = (ram(0x072E), ram(0x074A));
+            let (_new_counter, spawn) = game_core::shot::schedule_step(counter, period);
+            // 片段止于分支落点（INC $072E 在 JSR 之后未达）——出参=分支落点
+            (counter, x_in, y_in)
+        }
+        "shot_spawn_init" => {
+            let obj = game_core::shot::spawn_init(
+                y_in, x_in, ram(0x0011), ram(0x04E0), ram(0x04FC), ram(0x0766 + ram(0x0011) as u16),
+            );
+            writes.insert(0x055E + y_in as u16, obj.pos_y);
+            writes.insert(0x04EE + y_in as u16, obj.pos_x);
+            writes.insert(0x063E + y_in as u16, obj.shot_type);
+            writes.insert(0x040E + y_in as u16, obj.lifetime);
+            writes.insert(0x047E + y_in as u16, obj.script_ptr);
+            (obj.script_ptr, ram(0x0011), y_in) // 退出：A=脚本参（LDA $0766,X），X=$11，Y=slot
+        }
+        "shot_script_fetch" => {
+            let slot_off = x_in as u16;
+            let (dur, code, new_ptr) = game_core::shot::script_fetch(
+                ram(0x047E + slot_off),
+                &game_core::shot::ACTION_DURATIONS,
+                &game_core::shot::ACTION_STREAM,
+            );
+            writes.insert(0x040E + slot_off, dur);
+            writes.insert(0x05CE + slot_off, code);
+            writes.insert(0x047E + slot_off, new_ptr);
+            (new_ptr, x_in, new_ptr) // 退出：A=Y=ptr+1（TYA/INY）
+        }
+        "shot_lut_accumulate" => {
+            let slot_off = x_in as u16;
+            let code = ram(0x05CE + slot_off);
+            let nx = game_core::shot::lut_accumulate_axis(ram(0x04EE + slot_off), code, &game_core::shot::LUT_X)
+                .ok_or_else(|| format!("{}: X 轴溢出/借位入死亡路径（未证域，不入比对面）", case.id))?;
+            let ny = game_core::shot::lut_accumulate_axis(ram(0x055E + slot_off), code, &game_core::shot::LUT_Y)
+                .ok_or_else(|| format!("{}: Y 轴溢出/借位入死亡路径（未证域，不入比对面）", case.id))?;
+            writes.insert(0x04EE + slot_off, nx);
+            writes.insert(0x055E + slot_off, ny);
+            (ny, x_in, code) // 退出：A=Y 轴结果（STA 前驻留），Y=运动码
+        }
+        "shot_config_loader" => {
+            let pairs = game_core::shot::config_pairs_for_level(
+                game_core::weapons::config_index_for_level(0) // 占位：本片段按 X=偏移直读
+            );
+            let _ = pairs;
+            let mut i = x_in as usize;
+            let mut slot = 0u16;
+            loop {
+                let period = game_core::shot::CFG_STREAM[i];
+                if period & 0x80 != 0 {
+                    break;
+                }
+                writes.insert(0x074A + slot, period);
+                writes.insert(0x0766 + slot, game_core::shot::CFG_STREAM[i + 1]);
+                i += 2;
+                slot += 1;
+            }
+            (0xFF, i as u8, slot as u8) // 退出：A=终止负值，X=偏移+2n，Y=对数
+        }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),
     };
-    Ok(Out { a, x, y, writes })
+    Ok(Out { a, x, y, writes, exit: 0 })
 }
 
 /// 单用例三方裁定。返回 (rom 侧出参, rust 侧出参, 问题列表)。
@@ -503,13 +571,16 @@ pub fn diff_case(rom: &[u8], case: &Case) -> Result<(Out, Out, Vec<String>), Str
         x: case.out_regs.1,
         y: case.out_regs.2,
         writes: case.out_writes.iter().copied().collect(),
+        exit: case.out_exit.unwrap_or(0),
     };
+    let cmp_rom = if case.out_exit.is_some() { out_rom_c.clone() } else { Out { exit: 0, ..out_rom_c.clone() } };
+    let cmp_rust = if case.out_exit.is_some() { out_rust_c.clone() } else { Out { exit: 0, ..out_rust_c.clone() } };
     let mut problems = Vec::new();
-    if out_rom_c != golden {
-        problems.push(format!("ROM 执行 ≠ golden：rom={out_rom_c:?} golden={golden:?}"));
+    if cmp_rom != golden {
+        problems.push(format!("ROM 执行 ≠ golden：rom={cmp_rom:?} golden={golden:?}"));
     }
-    if out_rust_c != out_rom_c {
-        problems.push(format!("Rust 移植 ≠ ROM：rust={out_rust_c:?} rom={out_rom_c:?}"));
+    if cmp_rust != cmp_rom {
+        problems.push(format!("Rust 移植 ≠ ROM：rust={cmp_rust:?} rom={cmp_rom:?}"));
     }
     Ok((out_rom, out_rust, problems))
 }

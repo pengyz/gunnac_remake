@@ -11,3 +11,13 @@
   差分端按段重播种。相关遗留：W5『up 段后 Y 回中』观测即落此窗口，已定性为死亡/重生。
 
 改 golden = 改证据轨道：单独 commit + Evidence/Confidence（AGENTS.md §9）。
+
+## t45 发现（弹轨迹 L3 暂缓）：弹对象槽位几何未证
+
+`gameplay-stage1` 已采 `shot_objs` watch（$0400-$06FF，captain 批准），但**槽位索引几何未证**：
+t32/t29 的"$70 间距"只锚定六个字段基址（$040E/$047E/$04EE/$055E/$05CE/$063E），槽位步长/
+容量/分配器（`JSR $888D`）语义属 B5/A5 未证域——按 stride-1 解析 trace 会跨系统串扰（$1C 网格
+敌/关卡对象区同址），五字段同帧写入签名仅 18 例且含矛盾值（槽位越出字段容量）。**未证不发明**：
+`tools/diff_traces.py --shots-extract` 保留实验入口，默认抽取链不产出 shots golden；
+L3 弹轨迹对拍的机器侧（tick 重放 = 脚本机+LUT，L2 74/73 已证片段组合）已就绪并有自证单测。
+**路由**：decomp-analyst 取证槽位几何/分配器（$888D）后即可启用抽取入 golden。
