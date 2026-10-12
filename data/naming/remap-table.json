@@ -7649,6 +7649,26 @@
   ],
   "known_data_candidates": [
     {
+      "name": "enemy_spawn_records=t_005（t32）",
+      "prg": "0x10DD0-0x12DFF",
+      "evidence": "docs/findings/enemy-dataface.md §1.1（5 字节 {参数×3, 行为脚本指针}）"
+    },
+    {
+      "name": "obj_ram_bind_stream=t_001（t32）",
+      "prg": "0x03294-0x03E00",
+      "evidence": "docs/findings/enemy-dataface.md §1.2（变长 {参数, RAM 槽指针}）"
+    },
+    {
+      "name": "enemy_script_stream（t32）",
+      "prg": "0x112B4-0x12DFF",
+      "evidence": "docs/findings/enemy-dataface.md §3（bank8 行为脚本流，嵌套指针）"
+    },
+    {
+      "name": "wave_script_chain（t32 候选）",
+      "prg": "0x10DE0-0x10EBF",
+      "evidence": "docs/findings/enemy-dataface.md §3（指针对记录，语义假设 B6）"
+    },
+    {
       "name": "level_config_offsets（t29）",
       "prg": "0x05457-0x05462",
       "evidence": "docs/findings/shot-behavior.md §1.2（12 级→配置流偏移）"
