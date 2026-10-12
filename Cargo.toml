@@ -1,0 +1,20 @@
+# Gun-Nac 重制 —— cargo workspace（AGENTS.md §2 红线为架构合同）
+[workspace]
+resolver = "2"
+members = [
+    "crates/game-data",
+    "crates/game-core",
+    "crates/game-platform",
+    "crates/game-oracle",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+
+# 依赖政策：game-core 只允许依赖 game-platform（纯 trait 缝）；平台 crate
+# （winit/sdl/tokio/rand…）禁止进入 game-core/game-data/game-platform —— 由
+# crates/game-core/tests/contract.rs 机器把关。
+[workspace.dependencies]
+game-platform = { path = "crates/game-platform" }
