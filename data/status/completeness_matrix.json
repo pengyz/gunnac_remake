@@ -1,0 +1,727 @@
+{
+  "schema_version": 1,
+  "source_of_truth": "docs/spec/completeness.md（本文件由 tools/matrix_sync.py --export 生成后人工核）",
+  "id_rule": "B=行为面 / S=符号面 / D=数据面 / R=规则面；格 ID 一经入分母永不复用（completeness.md §0）",
+  "strength_scale": "L0-L4 矩阵轴（completeness.md §6.1）；与差分金字塔 L1-L5 是两条轴，勿混淆",
+  "covered_rule": "covered ⇔ strength >= L1（带证据指针的分子登记；L0=入分母未验证）",
+  "cell_schema": [
+    "id",
+    "face",
+    "content",
+    "evidence",
+    "strength",
+    "bindings{scenario,trace,rule}",
+    "covered"
+  ],
+  "faces": {
+    "behavior": {
+      "denominator": 44,
+      "covered": 4
+    },
+    "rule": {
+      "denominator": 44,
+      "covered_cells": 4,
+      "rule_entries": 21,
+      "note": "规则面分母=行为格数×1 下限；条目数为 shop-economy 13 + ui-flow 8（completeness.md §5）"
+    },
+    "symbol": {
+      "status": "S1 机械导出已建立（2026-10-12 t7，completeness.md §3）",
+      "counts": {
+        "subroutines": 276,
+        "irq_vectors": 3,
+        "farcall_trampoline_sites": 18,
+        "bank11_entry_table": 7,
+        "ram_dp_symbols": 560,
+        "mmio_symbols": 414,
+        "byte_coverage": "131072/131072"
+      }
+    },
+    "data": {
+      "status": "S1 机械导出已建立（2026-10-12 t7，completeness.md §4）",
+      "counts": {
+        "data_tables": 8,
+        "known_anchors_not_denominator": 7,
+        "chr_banks_1k": 128
+      }
+    }
+  },
+  "cells": {
+    "B-WPN-01-LV1": {
+      "id": "B-WPN-01-LV1",
+      "face": "behavior",
+      "content": "武器槽#1 · 等级 1",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-01-LV2": {
+      "id": "B-WPN-01-LV2",
+      "face": "behavior",
+      "content": "武器槽#1 · 等级 2",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-01-LV3": {
+      "id": "B-WPN-01-LV3",
+      "face": "behavior",
+      "content": "武器槽#1 · 等级 3",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-01-LV4": {
+      "id": "B-WPN-01-LV4",
+      "face": "behavior",
+      "content": "武器槽#1 · 等级 4",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-01-LV5": {
+      "id": "B-WPN-01-LV5",
+      "face": "behavior",
+      "content": "武器槽#1 · 等级 5",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-02-LV1": {
+      "id": "B-WPN-02-LV1",
+      "face": "behavior",
+      "content": "武器槽#2 · 等级 1",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-02-LV2": {
+      "id": "B-WPN-02-LV2",
+      "face": "behavior",
+      "content": "武器槽#2 · 等级 2",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-02-LV3": {
+      "id": "B-WPN-02-LV3",
+      "face": "behavior",
+      "content": "武器槽#2 · 等级 3",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-02-LV4": {
+      "id": "B-WPN-02-LV4",
+      "face": "behavior",
+      "content": "武器槽#2 · 等级 4",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-02-LV5": {
+      "id": "B-WPN-02-LV5",
+      "face": "behavior",
+      "content": "武器槽#2 · 等级 5",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-03-LV1": {
+      "id": "B-WPN-03-LV1",
+      "face": "behavior",
+      "content": "武器槽#3 · 等级 1",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-03-LV2": {
+      "id": "B-WPN-03-LV2",
+      "face": "behavior",
+      "content": "武器槽#3 · 等级 2",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-03-LV3": {
+      "id": "B-WPN-03-LV3",
+      "face": "behavior",
+      "content": "武器槽#3 · 等级 3",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-03-LV4": {
+      "id": "B-WPN-03-LV4",
+      "face": "behavior",
+      "content": "武器槽#3 · 等级 4",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-03-LV5": {
+      "id": "B-WPN-03-LV5",
+      "face": "behavior",
+      "content": "武器槽#3 · 等级 5",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-04-LV1": {
+      "id": "B-WPN-04-LV1",
+      "face": "behavior",
+      "content": "武器槽#4 · 等级 1",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-04-LV2": {
+      "id": "B-WPN-04-LV2",
+      "face": "behavior",
+      "content": "武器槽#4 · 等级 2",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-04-LV3": {
+      "id": "B-WPN-04-LV3",
+      "face": "behavior",
+      "content": "武器槽#4 · 等级 3",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-04-LV4": {
+      "id": "B-WPN-04-LV4",
+      "face": "behavior",
+      "content": "武器槽#4 · 等级 4",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-04-LV5": {
+      "id": "B-WPN-04-LV5",
+      "face": "behavior",
+      "content": "武器槽#4 · 等级 5",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-05-LV1": {
+      "id": "B-WPN-05-LV1",
+      "face": "behavior",
+      "content": "武器槽#5 · 等级 1",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-05-LV2": {
+      "id": "B-WPN-05-LV2",
+      "face": "behavior",
+      "content": "武器槽#5 · 等级 2",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-05-LV3": {
+      "id": "B-WPN-05-LV3",
+      "face": "behavior",
+      "content": "武器槽#5 · 等级 3",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-05-LV4": {
+      "id": "B-WPN-05-LV4",
+      "face": "behavior",
+      "content": "武器槽#5 · 等级 4",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-WPN-05-LV5": {
+      "id": "B-WPN-05-LV5",
+      "face": "behavior",
+      "content": "武器槽#5 · 等级 5",
+      "evidence": [
+        "E-R03",
+        "E-R06",
+        "E-S02",
+        "E-W02",
+        "E-W03"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-BMB-F": {
+      "id": "B-BMB-F",
+      "face": "behavior",
+      "content": "炸弹\"F\"（语义名待证 → H-01）：获取/存量上限/发射/威力/升级翻倍",
+      "evidence": [
+        "E-R08",
+        "E-W02",
+        "E-W04"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-BMB-B": {
+      "id": "B-BMB-B",
+      "face": "behavior",
+      "content": "炸弹\"B\"（同上）",
+      "evidence": [
+        "E-R08",
+        "E-W02",
+        "E-W04"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-BMB-T": {
+      "id": "B-BMB-T",
+      "face": "behavior",
+      "content": "炸弹\"T\"（同上）",
+      "evidence": [
+        "E-R08",
+        "E-W02",
+        "E-W04"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-BMB-W": {
+      "id": "B-BMB-W",
+      "face": "behavior",
+      "content": "炸弹\"W\"（同上）",
+      "evidence": [
+        "E-R08",
+        "E-W02",
+        "E-W04"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-STG-01": {
+      "id": "B-STG-01",
+      "face": "behavior",
+      "content": "第 1 区域：进场/时间线/敌人/地形/出口（子格见下）",
+      "evidence": [
+        "E-R07",
+        "E-R09",
+        "E-W01"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-STG-02": {
+      "id": "B-STG-02",
+      "face": "behavior",
+      "content": "第 2 区域（同上）",
+      "evidence": [
+        "E-R07",
+        "E-R09",
+        "E-W01"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-STG-03": {
+      "id": "B-STG-03",
+      "face": "behavior",
+      "content": "第 3 区域（同上）",
+      "evidence": [
+        "E-R07",
+        "E-R09",
+        "E-W01"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-STG-04": {
+      "id": "B-STG-04",
+      "face": "behavior",
+      "content": "第 4 区域（同上）",
+      "evidence": [
+        "E-R07",
+        "E-R09",
+        "E-W01"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-STG-05": {
+      "id": "B-STG-05",
+      "face": "behavior",
+      "content": "第 5 区域（同上）",
+      "evidence": [
+        "E-R07",
+        "E-R09",
+        "E-W01"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-STG-06": {
+      "id": "B-STG-06",
+      "face": "behavior",
+      "content": "第 6 区域（同上）",
+      "evidence": [
+        "E-R07",
+        "E-R09",
+        "E-W01"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-STG-07": {
+      "id": "B-STG-07",
+      "face": "behavior",
+      "content": "第 7 区域（同上）",
+      "evidence": [
+        "E-R07",
+        "E-R09",
+        "E-W01"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-STG-08": {
+      "id": "B-STG-08",
+      "face": "behavior",
+      "content": "第 8 区域（同上；疑含最终 Boss → H-06）",
+      "evidence": [
+        "E-R07",
+        "E-R09",
+        "E-W01",
+        "E-W07"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-SYS-SHOP": {
+      "id": "B-SYS-SHOP",
+      "face": "behavior",
+      "content": "商店系统：进出时机（关间）、货架商品、价目、购买流程、按键切换",
+      "evidence": [
+        "E-R04",
+        "E-R05",
+        "E-S02",
+        "E-W06"
+      ],
+      "strength": "L2",
+      "bindings": {
+        "scenario": [
+          "scenario:analysis/traces/exp-shop-b",
+          "scenario:analysis/traces/exp-shop-start",
+          "scenario:analysis/traces/gameplay-stage1",
+          "scenario:analysis/traces/shop"
+        ],
+        "trace": [
+          "trace:analysis/traces/gameplay-stage1#f1200/f1260",
+          "trace:analysis/traces/shop#f1080/f1140"
+        ],
+        "rule": [
+          "R-shop-5..8"
+        ]
+      },
+      "covered": true
+    },
+    "B-SYS-MONEY": {
+      "id": "B-SYS-MONEY",
+      "face": "behavior",
+      "content": "金钱系统：获取/显示/累计/上限/消费",
+      "evidence": [
+        "E-R02",
+        "E-R04",
+        "E-R05",
+        "E-S02",
+        "E-W06"
+      ],
+      "strength": "L2",
+      "bindings": {
+        "scenario": [
+          "scenario:analysis/traces/shop"
+        ],
+        "trace": [
+          "trace:analysis/traces/shop#f1140"
+        ],
+        "rule": [
+          "R-money-1..4"
+        ]
+      },
+      "covered": true
+    },
+    "B-SYS-ITEM": {
+      "id": "B-SYS-ITEM",
+      "face": "behavior",
+      "content": "道具系统：编号圈（换武器）、字母圈（换炸弹）、升级圈、翼装 wing（E-W05：多挨一击+武器可继续升级）",
+      "evidence": [
+        "E-S02",
+        "E-W02",
+        "E-W03",
+        "E-W04",
+        "E-W05"
+      ],
+      "strength": "L2",
+      "bindings": {
+        "scenario": [
+          "scenario:analysis/traces/gameplay-stage1",
+          "scenario:analysis/traces/shop"
+        ],
+        "trace": [
+          "trace:analysis/traces/gameplay-stage1#f1260/f1500/f2349",
+          "trace:analysis/traces/shop#f1140"
+        ],
+        "rule": [
+          "R-item-1",
+          "R-ui-8"
+        ]
+      },
+      "covered": true
+    },
+    "B-SYS-DROP": {
+      "id": "B-SYS-DROP",
+      "face": "behavior",
+      "content": "掉落系统：关内随机浮动金钱、被毁对象/敌人掉钱、道具掉落",
+      "evidence": [
+        "E-W02",
+        "E-W06"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-SYS-BOSS": {
+      "id": "B-SYS-BOSS",
+      "face": "behavior",
+      "content": "Boss 系统：最终 Boss 多相（E-W07 \"first phase of the last boss\"）；各关 Boss 子格按 §2.3 规则登记",
+      "evidence": [
+        "E-R09",
+        "E-W07"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    },
+    "B-SYS-UI": {
+      "id": "B-SYS-UI",
+      "face": "behavior",
+      "content": "流程系统：标题/菜单（开始·设置）/DEMO/GAME OVER/CONTINUE/结局文本",
+      "evidence": [
+        "E-R01",
+        "E-R10",
+        "E-R11",
+        "E-S01",
+        "E-S03"
+      ],
+      "strength": "L2",
+      "bindings": {
+        "scenario": [
+          "scenario:analysis/traces/gameplay-stage1",
+          "scenario:analysis/traces/shop",
+          "scenario:analysis/traces/title-menu"
+        ],
+        "trace": [
+          "trace:analysis/traces/gameplay-stage1#f1080/f1200/f1260/f1500/f2349",
+          "trace:analysis/traces/title-menu#f180/f360/f540/f1079"
+        ],
+        "rule": [
+          "R-ui-6..8"
+        ]
+      },
+      "covered": true
+    },
+    "B-SYS-SCORE": {
+      "id": "B-SYS-SCORE",
+      "face": "behavior",
+      "content": "计分/最高分系统（`HI SCORE`/`SCORE` 显示）",
+      "evidence": [
+        "E-R01",
+        "E-S01"
+      ],
+      "strength": "L0",
+      "bindings": {},
+      "covered": false
+    }
+  }
+}
