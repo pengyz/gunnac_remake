@@ -221,3 +221,21 @@ fn l3_enemy_clamp_negative_selfproof() {
     }];
     assert!(enemy_clamp_legal(&ok).is_empty(), "合法行被误判");
 }
+
+#[test]
+fn l3_money_events_negative_selfproof() {
+    use game_oracle::l3::{money_events_legal, MoneyEvent};
+    // 负向自证：不可分解 delta / 负 delta 必红
+    let bad = vec![
+        MoneyEvent { f: 1, before: vec![0; 7], after: vec![0, 0, 0, 0, 0, 1, 5] }, // delta=15
+        MoneyEvent { f: 2, before: vec![0, 0, 1, 0, 0, 0, 0], after: vec![0, 0, 0, 5, 0, 0, 0] }, // 负
+    ];
+    assert_eq!(money_events_legal(&bad).len(), 2, "非法金钱事件必须全数检出");
+    // 合法：单加数 + 捆绑（200=100+100）+ 封顶
+    let good = vec![
+        MoneyEvent { f: 3, before: vec![0; 7], after: vec![0, 0, 0, 0, 1, 0, 0] }, // +100
+        MoneyEvent { f: 4, before: vec![0; 7], after: vec![0, 0, 0, 2, 0, 0, 0] }, // +200 捆绑
+        MoneyEvent { f: 5, before: vec![0; 7], after: vec![9, 9, 9, 9, 9, 9, 0] }, // 封顶
+    ];
+    assert!(money_events_legal(&good).is_empty(), "合法事件被误判");
+}

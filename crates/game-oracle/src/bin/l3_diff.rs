@@ -147,6 +147,25 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             }
+        } else if path.ends_with(".money.jsonl") {
+            let events = match game_oracle::l3::parse_money_events(&jsonl) {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("{path}: golden 解析失败：{e}");
+                    return ExitCode::from(2);
+                }
+            };
+            let problems = game_oracle::l3::money_events_legal(&events);
+            total += events.len();
+            if problems.is_empty() {
+                println!("[ok]   {path}: 金钱事件 {} 个全合法（R-money-5 加数表/封顶）", events.len());
+            } else {
+                failures += 1;
+                println!("[FAIL] {path}:");
+                for p in &problems {
+                    println!("         {p}");
+                }
+            }
         } else {
             eprintln!("{path}: 未知 golden 类型（*.player.jsonl / *.weapons.jsonl / *.shots.jsonl）");
             return ExitCode::from(2);

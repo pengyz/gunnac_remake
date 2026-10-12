@@ -15,6 +15,7 @@ pub mod player;
 pub mod shot;
 pub mod stage;
 pub mod terrain;
+pub mod ui;
 pub mod weapons;
 
 pub use game_platform::{Buttons, Clock, GameRng, Input};

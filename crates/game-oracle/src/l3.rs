@@ -571,3 +571,77 @@ pub fn diff_scroll_trace(rows: &[ScrollRow]) -> Result<(usize, Vec<String>), Str
     }
     Ok((compared, problems))
 }
+
+/// 金钱转移事件（$E0-$E6）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MoneyEvent {
+    pub f: u32,
+    pub before: Vec<u8>,
+    pub after: Vec<u8>,
+}
+
+/// 解析金钱事件 golden JSONL。
+pub fn parse_money_events(jsonl: &str) -> Result<Vec<MoneyEvent>, String> {
+    fn arr(obj: &[(String, Json)], k: &str) -> Result<Vec<u8>, String> {
+        match obj.iter().find(|(kk, _)| kk == k) {
+            Some((_, Json::Arr(items))) => items.iter().map(|v| match v {
+                Json::Num(n) => Ok(*n as u8),
+                _ => Err("非数值".to_string()),
+            }).collect(),
+            _ => Err(format!("缺字段 {k}")),
+        }
+    }
+    let mut out = Vec::new();
+    for (lineno, line) in jsonl.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        let v = crate::l2::parse_json(line).map_err(|e| format!("第 {} 行: {e}", lineno + 1))?;
+        let obj = match v { Json::Obj(o) => o, _ => return Err(format!("第 {} 行非对象", lineno + 1)) };
+        out.push(MoneyEvent {
+            f: obj_num(&obj, "f")? as u32,
+            before: arr(&obj, "before")?,
+            after: arr(&obj, "after")?,
+        });
+    }
+    Ok(out)
+}
+
+/// 金钱事件合法性（R-money-5）：每次转移 = **≤8 次加法器事件之和**（delta 可分解为加数表值
+/// [10..2000] 组合——帧粒度捆绑实测：200=100+100、500=400+100、1200=800+400）或封顶
+/// （after[0..6] 全 9）。delta≤0 或不可分解 ⇒ 违规（卖出/消费侧未证不入面）。
+pub fn money_events_legal(events: &[MoneyEvent]) -> Vec<String> {
+    const ADDENDS: [i64; 10] = [10, 30, 100, 150, 250, 400, 600, 800, 1000, 2000];
+    fn val(d: &[u8]) -> i64 {
+        d.iter().fold(0i64, |acc, &x| acc * 10 + x as i64)
+    }
+    fn decomposable(delta: i64, budget: u32) -> bool {
+        if delta == 0 {
+            return budget > 0;
+        }
+        for &a in ADDENDS.iter().rev() {
+            if a <= delta && budget > 0 && decomposable(delta - a, budget - 1) {
+                return true;
+            }
+        }
+        false
+    }
+    let mut problems = Vec::new();
+    for e in events {
+        if e.before.len() != 7 || e.after.len() != 7 {
+            problems.push(format!("f{}: 非 7 位 BCD", e.f));
+            continue;
+        }
+        if e.after[..6].iter().all(|&d| d == 9) {
+            continue; // 封顶（R-money-5 溢出路径）
+        }
+        let delta = val(&e.after) - val(&e.before);
+        if delta <= 0 || !decomposable(delta, 8) {
+            problems.push(format!("f{}: delta={} 不可分解为 ≤8 次加数表事件（R-money-5 违例）", e.f, delta));
+        }
+        if problems.len() >= 10 {
+            problems.push("…（截断）".to_string());
+            break;
+        }
+    }
+    problems
+}

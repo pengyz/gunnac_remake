@@ -282,14 +282,23 @@ pub fn parse_cases(jsonl: &str) -> Result<Vec<Case>, String> {
         let ctx = match obj_get(&obj, "context")? { Json::Obj(o) => o.clone(), _ => return Err("context 非对象".into()) };
         let r6 = as_usize(obj_get(&ctx, "r6")?)?;
         let r7 = as_usize(obj_get(&ctx, "r7")?)?;
-        // bank 标签 ↔ 映射窗一致性（t2 §2）：$8000 窗=R6、$A000 窗=R7
+        // bank 标签 ↔ 映射窗一致性（t2 §2）：$8000 窗=R6、$A000 窗=R7；
+        // 固定窗：$C000-$DFFF=bank14、$E000-$FFFF=bank15（无寄存器切换）
         let expected = match entry {
-            0x8000..=0x9FFF => r6,
-            0xA000..=0xBFFF => r7,
-            _ => return Err(format!("{id}: entry 须落在 $8000-$BFFF 映射窗")),
+            0x8000..=0x9FFF => Some(r6),
+            0xA000..=0xBFFF => Some(r7),
+            0xC000..=0xFFFF => None,
+            _ => return Err(format!("{id}: entry 须落在 CPU 映射窗")),
         };
-        if expected != entry_bank {
-            return Err(format!("{id}: entry bank{entry_bank:02} 与 context 不符（窗寄存器={expected}）"));
+        if let Some(expected) = expected {
+            if expected != entry_bank {
+                return Err(format!("{id}: entry bank{entry_bank:02} 与 context 不符（窗寄存器={expected}）"));
+            }
+        } else {
+            let fixed = if entry < 0xE000 { 14 } else { 15 };
+            if fixed != entry_bank {
+                return Err(format!("{id}: entry bank{entry_bank:02} 与固定窗 bank{fixed} 不符"));
+            }
         }
         let in_o = match obj_get(&obj, "in")? { Json::Obj(o) => o.clone(), _ => return Err("in 非对象".into()) };
         let regs = match obj_get(&in_o, "regs")? { Json::Obj(o) => o.clone(), _ => return Err("in.regs 非对象".into()) };
@@ -639,6 +648,18 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
             writes.insert(0x2005, w1);
             let _ = w2; // 同值双写（Out 写集按地址去重，形状由单测断言）
             (a_in, x_in, y_in)
+        }
+        "money_add_event" => {
+            let mut money = game_core::ui::MoneyCounter {
+                digits: [ram(0x00E0), ram(0x00E1), ram(0x00E2), ram(0x00E3), ram(0x00E4), ram(0x00E5), ram(0x00E6)],
+            };
+            game_core::ui::money_add_event(&mut money, a_in);
+            for (i, d) in money.digits[..6].iter().enumerate() {
+                writes.insert(0x00E0 + i as u16, *d);
+            }
+            // 退出寄存器 = ROM 副产物：A=末位 STA（$E0 结果），Y=type*6-5，X=入参
+            let y_out = a_in.wrapping_mul(6).wrapping_sub(6); // 6 次 DEY 后 Y=type*6-6
+            (money.digits[0], x_in, y_out)
         }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),
     };
