@@ -411,7 +411,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 ```
 格: B-SYS-FIRE
 强度: L2
-证据: 原 L2/§2.4.6 证据 + t48 定谳：docs/findings/shot-slot-geometry.md（槽位几何 4 组×5 槽/组距 $1C、分配器 bank2:$888D 首次适应、空槽=state==0、回收=寿命归零、满载 SEC Y=A=$F0）+ L2 用例 shot-alloc-1..4 三方全等 + churn 对照（最大并发 9≤20）
+证据: 原 L2/§2.4.6 证据 + t48 定谳：docs/findings/shot-slot-geometry.md（槽位几何 4 组×5 槽/组距 $1C、分配器 bank2:$888D 首次适应、空槽=state==0、回收=寿命归零、满载 SEC Y=A=$F0）+ L2 用例 shot-alloc-1..4 三方全等（~~churn 9≤20 对照~~ 已随 t50 F2 证伪撤除：20 槽 state 系 B5 交错区静态数据）
 工件: docs/spec/shot-system.md#R-shot-alloc-1..4（L2 已实证→L3 前提 t50）、#R-shot-gen-1..3（L3 前提标注）、oracle/traces/README.md（t45 注记撤销）
 日期: 2026-10-12
 备注: L3 升格前提=t50 shots golden 转正（--shots-extract 入默认抽取链）；Ws-6（$05CE 写点）留抽取器六字段补证
@@ -554,7 +554,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | **W**（RAM watch 假设） | `docs/findings/ram-watch-s3.md` §7/§8.4/§9.5 | W1 证伪（真源 $E0-$E6）｜W2 观察中｜W3 未闭环（等级/残机 _todo_）｜W4 未闭环（slot 偏移）｜**W5 收口**（=重生坐标重置）｜W6 B 级维持（速度查表分划）｜W7 → [gotcha-parallel-read-image-order-unreliable](../knowledge/gotcha-parallel-read-image-order-unreliable.md)｜**W8 证伪**（孤儿 run 干扰）→ [gotcha-concurrent-mesen-output-corruption](../knowledge/gotcha-concurrent-mesen-output-corruption.md) |
 | **S**（t42 关卡结构假设） | `docs/findings/stage-timeline.md` §7 | S1 段参数语义（时刻/序号/掩码，C）｜S2 $ACEF 目录消费方式（C）｜S3 bank2 $8100 页目录读者（C）｜S4 地形碰撞数据（C）｜S5 关卡长度/切换条件（C）｜S6 bank9/10 逐关归属（B，候选定位级）——S 系列与 H/W/Q 并列互通，收口须同步本表 |
 | **Wv**（wave 域，2026-10-12 t51 消歧：原 W1-W5 → Wv-1..5） | `docs/findings/wave-semantics-s1.md` §7 | Wv-1 链首字用途（C）｜Wv-2 `XX FD` 标记+参数对语义（C）｜Wv-3 16 帧节律定时机制（B，= B-SYS-SPAWNRHYTHM L3 前置）｜Wv-4 地形流消费例程（C，S4 延续）｜Wv-5 链尾段 `C8 AD` 后续（C） |
-| **Ws**（shot 域，t51 消歧） | `docs/findings/shot-slot-geometry.md` §4 | Ws-6（源编号 W6）：`$05CE`（motion_code）槽偏移写点不在生成例程内（脚本机运行时写）——抽取器六字段齐备性补证 |
+| **Ws**（shot 域，t51 消歧） | `docs/findings/shot-slot-geometry.md` §4 | Ws-6（源编号 W6）：`$05CE`（motion_code）槽偏移写点不在生成例程内（脚本机运行时写）——抽取器六字段齐备性补证｜**Ws-7（待 t52 定谳）**：W5/Ws 交错语义（槽位集 ↔ $1C 网格/B5 交错区归属）——t50 F2 关联，先标"待 t52" |
 | **Q**（t28 孤儿 run 复核遗留） | `docs/findings/orphan-run-recheck.md` §四 | Q1 **收口**（t29：$0190 拾取处理器 + $3B 连收计数）｜Q2 → N-0037 同域｜Q3 干净重跑已做（t29 akey-role）｜Q4 已落地（`oracle/scenarios/README.md` +1 帧约定） |
 
 > 【t51 W 系列消歧规则】三域并存，引用必须带域前缀：**W**=ram-watch（W1-W8，历史深嵌不改名）、
@@ -620,6 +620,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 `v0.10 (2026-10-12, t46) 关卡系统规则面开张：stage-timeline.md R-stage-1..6（波次链分段记录流/行为脚本指针族/$ACEF 块范围对/滚动指令嵌入=混合指令流定性/bank 图归属/时间线骨架+churn 交叉验证）；B-STG-01-TL 首个关卡子格按证据准入（§2.3.1，L2，帧级对齐待 S1），其余子格不预建；行为面 47→48；S1-S6 入 §7.1 S 系列；constants §1.5 关卡结构锚点。`
 `v0.11 (2026-10-12, t49) t47 消化：R-stage 修正（"参数对递增"=地址伪影更正：块首字=自起点−6 7/7；记录格式 FE 分段 8 块/自指首字/链末 FF 升 A 级）+ R-stage-1a 三裁定（时刻✗/序号✗/掩码部分支持）+ $ACEF 收口顺序扫入口；STG-01-TL L3 升格否定如实登记（维持 L2/部分）；B-SYS-SPAWNRHYTHM 新格约束①准入（R-spawn-1..3，L2→L3 部分，16 帧节律+突发簇 104 事件 A 级）；t47 W1-W5 入 §7.1（与 ram-watch W 撞车标警告）；行为面 48→49。`
 `v0.12 (2026-10-12, t51) t48 登记：R-shot-alloc-1..4 建档（槽位几何 4 组×5/组距 $1C、分配器首次适应/空槽=state==0/回收=寿命归零/满载 SEC；L2 shot-alloc-1..4 三方全等）+ R-shot-gen-1..3/alloc-* 升格标注"L3（前提 t50 golden 转正，落地后改已判）"（FA-2 先例不虚高）；t45 槽位几何未证注记撤销（18 例矛盾值=伪读，oracle/traces/README 原地更正）；W 系列三域消歧（W=ram-watch 不改/Wv=wave 原 W1-W5/Ws=shot 原 W6，新遗留自携域前缀）；B-SYS-FIRE 证据扩充（§2.4.11）。`
+`v0.13 (2026-10-12, t53) F2 churn 证伪更正：shot-slot-geometry §3 churn 统计口径不成立原地更正（20 槽 state=B5 交错区静态非寿命数据/20 帧不递减/同址交错；921 帧零解释被 F1 反证）；R-shot-alloc-* 证据链撤除 churn 引用（几何/分配断言不依赖）；Ws-7（W5/Ws 交错语义）入索引标待 t52；知识条目 gotcha-false-green-idle-assertions 入库（断言存在≠生效，caed518 ss-1/2 空转教训）。`
 
 ---
 

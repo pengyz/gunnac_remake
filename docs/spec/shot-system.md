@@ -96,7 +96,7 @@
 > 可判定性：**L2 已实证 → L3（前提 t50 golden 转正，落地后改"已判"）**——照 R-respawn FA-2 先例，不虚高提前标已判。
 
 ### R-shot-alloc-1: 槽位几何：**4 组 × 5 = 20 槽**（`$80-$84`/`$9C-$A0`/`$B8-$BC`/`$D4-$D8`），组内 stride=1，**组距 $1C**（与对象网格同格交错）
-- 证据: `docs/findings/shot-slot-geometry.md` §1（字节实证）+ §2 shot-alloc-1..4 三方全等 + churn 对照（最大并发 9≤20）
+- 证据: `docs/findings/shot-slot-geometry.md` §1（字节实证）+ §2 shot-alloc-1..4 三方全等；~~churn 对照（最大并发 9≤20）~~【2026-10-12 t53 撤除引用（t50 F2 证伪：所计 20 槽 state 系 B5 交错区静态数据，口径不成立）——几何/分配断言不依赖该统计，证据链与更正一致】
 - 可判定性: 机器可判定（L2 数据解析/分配断言）；**L3（前提 t50 转正，落地后改已判）**
 - 关联: B-SYS-FIRE、N-0054（obj_field_grid_1c 同格）
 - 【t51 撤销】t45"槽位几何未证"注记**已定谳撤销**：t45 的 18 例矛盾值= stride-1 跨 $18 组间空隙**伪读**（`oracle/traces/README.md` 原地更正）
