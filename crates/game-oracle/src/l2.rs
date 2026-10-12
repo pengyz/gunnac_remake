@@ -108,7 +108,7 @@ pub struct Out {
 // ---------------- 迷你 JSON（零外部依赖；仅覆盖 case 结构所需）
 
 #[derive(Debug, Clone, PartialEq)]
-enum Json {
+pub enum Json {
     Num(f64),
     Str(String),
     Bool(bool),
@@ -117,7 +117,7 @@ enum Json {
     Obj(Vec<(String, Json)>),
 }
 
-fn parse_json(s: &str) -> Result<Json, String> {
+pub fn parse_json(s: &str) -> Result<Json, String> {
     let b: Vec<char> = s.chars().collect();
     let mut i = 0usize;
     let v = parse_value(&b, &mut i)?;
@@ -413,6 +413,27 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
                     writes.insert(0x0401, 7); // mode := 7
                     (7, x_in, y)
                 }
+            }
+        }
+        "movement_tick" => {
+            let st = game_core::player::PlayerState {
+                x: ram(0x04E0), y: ram(0x04FC), x_subpix: ram(0x0470), y_subpix: ram(0x048C),
+                ..Default::default()
+            };
+            let held = ram(0x0018);
+            let vx = game_core::player::VelocityPair { subpix: ram(0x0550), int: ram(0x056C) };
+            let vy = game_core::player::VelocityPair { subpix: ram(0x0588), int: ram(0x05A4) };
+            let ns = game_core::player::movement_tick(&st, held, vx, vy);
+            writes.insert(0x04FC, ns.y);
+            writes.insert(0x048C, ns.y_subpix);
+            // 退出寄存器 = ROM 片段副产物（按指令流导出）：X 门跳过时 A=held&3、Y=亚像素；
+            // X 门执行时 A=像素结果、Y=X 亚像素（TAY 覆写）。
+            if held & 0x03 != 0 {
+                writes.insert(0x04E0, ns.x);
+                writes.insert(0x0470, ns.x_subpix);
+                (ns.x, x_in, ns.x_subpix)
+            } else {
+                (held & 0x03, x_in, ns.y_subpix)
             }
         }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),

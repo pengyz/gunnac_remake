@@ -1,0 +1,40 @@
+# 场景：A 键分工 / $0401 值域（t25 · H-14/H-15）
+# 证据注记（假设区，未证不得引为结论）：
+#   - 静态线索（bank03:A1F5-A2B2 射击生成器）：6 弹型循环 $072E,X 计数 vs $074A,Y 阈值，
+#     **无按键判断** → 疑主武器自动连射；A 边沿仅见投放例程（bank03:A2B4 消耗 $018F）→ H-14 疑 A=投放
+#   - 本场景用『无输入段 vs 点按 A vs 长按 A』三段对照定谳：弹幕生成是否与 A 相关、$018F 每次点按是否递减
+#   - $0401 值域（H-15）：全程采样（0=待机、7=投放中 已知）
+name akey-role
+frames 2200
+press_len 4
+
+# 标题/菜单 → 商店（与 gameplay-stage1 同源路径，B 级复现一致）
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+
+# 1260-1500 静止无 A：自动连射对照段
+# 1520 点按 A 一次
+press 1520 a
+# 1600-1700 长按 A（100 帧）
+hold 1600-1700 a
+# 1750-2150 静止对照
+
+capture_every 40 probe
+capture 1260 combat-start
+capture 1500 no-input
+capture 1560 tap-a
+capture 1700 hold-a-end
+capture 2150 late
+
+watch_range 0000-00ff zp
+watch 0320
+watch_range 0300-07ff iram
+watch_range 6000-7fff wram

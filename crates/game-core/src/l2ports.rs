@@ -128,3 +128,14 @@ pub fn bomb_drop(pressed: u8, mode: u8, bomb_ammo: u8, idx: u8) -> BombDrop {
     let (ammo_new, y) = bcd_sub_ammo(bomb_ammo, deduct);
     BombDrop::Fired { ammo_new, bomb_type, y }
 }
+
+/// 投放可观察结果（R-fire-4/5/6）：新弹药（BCD）、类型表值、ED03 返回 Y。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BombDropResult {
+    pub ammo_new: u8,
+    pub bomb_type: u8,
+    pub y: u8,
+}
+
+/// 移动 tick 的 L2 对拍面（S5 模块本体在 `player`，此处再导出以保持 l2ports=统一差分接口）。
+pub use crate::player::{movement_tick, PlayerState, VelocityPair};

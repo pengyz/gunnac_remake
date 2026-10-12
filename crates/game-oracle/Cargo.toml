@@ -10,3 +10,7 @@ game-core = { path = "../game-core" }
 [[bin]]
 name = "l2-diff"
 path = "src/bin/l2_diff.rs"
+
+[[bin]]
+name = "l3-diff"
+path = "src/bin/l3_diff.rs"

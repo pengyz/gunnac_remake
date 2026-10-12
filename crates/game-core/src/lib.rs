@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 
 pub mod l2ports;
+pub mod player;
 
 pub use game_platform::{Buttons, Clock, GameRng, Input};
 

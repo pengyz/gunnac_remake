@@ -1,0 +1,62 @@
+# 场景：实机 gameplay —— 商店退出 + 自动移动 + 自动射击（S2 首批 3/3）
+# 重点补采实机画面（矩阵 §2.6 待取证入口）。
+# 证据注记：
+#   - 退出商店（B 级，exp-shop-b 实测）：商店内连按 B（f1100、f1160）→ f1200 近黑过渡
+#     → f1260 起实机（星域+自机+敌机+HUD，shots/exp-shop-b_f01260..f01980 可复核）
+#   - Start 在商店内无效果（exp-shop-start 反证），退出不走 Start
+#   - HUD 观察（B 级，画面文字）：左上 "A?/F?/1" 与红圈数字随输入变化；语义命名留台账
+name gameplay-stage1
+frames 2400
+press_len 4
+
+# 输入前缀：标题/菜单 → 商店（B 级：三连 exp 复现一致）
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+
+# 商店退出（B 级实测路径：两连 B）
+press 1100 b
+press 1160 b
+
+# 实机：自动射击（每 12 帧点按 A）+ 自动移动（分段持方向）
+press_every 12 1250-2350 a
+hold 1300-1450 right
+hold 1470-1620 left
+hold 1650-1800 right
+hold 1830-1950 down
+hold 1980-2100 up
+hold 2130-2280 right
+# 炸弹采样（画面 HUD 有 F 计数；B 级假设：B=投放/切换，留证为准）
+press 1500 b
+
+capture_every 60 probe
+capture 1080 shop-arrival
+capture 1200 exit-transition
+capture 1260 stage-start
+capture 1500 mid-combat
+capture 2349 end
+
+watch_range 0000-00ff zp
+watch 0320
+# 玩家状态向量（标签=命名台账 A 级名：N-0011..N-0024）
+watch 04e0 player_x
+watch 04fc player_y
+watch 0470 player_x_subpix
+watch 048c player_y_subpix
+watch 0550 player_x_velocity_subpix
+watch 056c player_x_velocity_int
+watch 0588 player_y_velocity_subpix
+watch 05a4 player_y_velocity_int
+watch 0018 controller_held
+watch 0016 controller_pressed
+watch 0401 game_action_mode
+watch 018f bomb_ammo
+# t22 watch 扩展（观察性，不改输入）：内部 RAM 尾段（HUD/对象槽）与 WRAM $6000-$7FFF
+# （金钱显示源候选区，t18 负结果定向补证；MEMTYPE=8 CPU 总线视图可读）
+watch_range 0300-07ff iram
+watch_range 6000-7fff wram

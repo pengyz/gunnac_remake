@@ -1,0 +1,38 @@
+# 场景：商店界面 + 交互采样（S2 首批 2/3）
+# 证据注记：
+#   - f1080 起为商店稳定屏（sha efcfe736；exp-shop-start 2000 帧无输入保持不变=静态屏）
+#   - f1140 商店信息页（"你有———￥0 / 导弹20个 上限。" + "A键,B键转换" 提示，sha fec87b88）
+#     —— A/B 切页的"转换"提示与画面文本一致（B 级：exp-shop-b 实测，B 按下后页面切换）
+#   - Start 在商店内无效果（B 级：exp-shop-start 全程稳定屏，反证）
+#   - 退出商店 → 实机的路径在 gameplay-stage1.txt（本场景刻意短交互，尽量留在商店内采样）
+name shop
+frames 1450
+press_len 4
+
+# 输入前缀：标题/菜单 → 商店（B 级：三连 exp 复现一致，f1080 到店）
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+
+# 商店交互采样：单次 B 切页（1100）→ A 采样（1180）→ B（1260）→ A（1340）
+# （每步间隔 ≥60 帧，便于 capture_every 30 逐步留证；不主动重复退出组合）
+press 1100 b
+press 1180 a
+press 1260 b
+press 1340 a
+
+capture_every 30 probe
+capture 1080 shop-arrival
+capture 1140 shop-page
+capture 1449 end
+
+watch_range 0000-00ff zp
+watch 0320
+# t22 watch 扩展（观察性，不改输入）：内部 RAM 尾段 + WRAM $6000-$7FFF（金钱显示源候选区）
+watch_range 0300-07ff iram
+watch_range 6000-7fff wram
