@@ -15,12 +15,12 @@
   ],
   "faces": {
     "behavior": {
-      "denominator": 49,
-      "covered": 9
+      "denominator": 50,
+      "covered": 10
     },
     "rule": {
-      "denominator": 49,
-      "covered_cells": 9,
+      "denominator": 50,
+      "covered_cells": 10,
       "rule_entries": 21,
       "note": "规则面分母=行为格数×1 下限；条目数为 shop-economy 13 + ui-flow 8（completeness.md §5）"
     },
@@ -828,6 +828,24 @@
         ],
         "rule": [
           "R-spawn-1..3"
+        ]
+      },
+      "covered": true
+    },
+    "B-SYS-ENEMY": {
+      "id": "B-SYS-ENEMY",
+      "face": "behavior",
+      "content": "敌对象系统：生成记录 / 行为脚本流 / 双 SoA 网格 / RAM 绑定流 / 生命周期已证链（2026-10-12 t60 约束①准入；命中/清除段=H-16 待证）",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {
+        "scenario": [],
+        "trace": [],
+        "rule": [
+          "R-enemy-1..6",
+          "R-enemy-2",
+          "R-enemy-7",
+          "R-enemy-8"
         ]
       },
       "covered": true
