@@ -132,10 +132,152 @@ pub fn output_table_write(index: u8, value: u8) -> Option<(u8, u8)> {
     }
 }
 
-/// W12 桥输出面**挂接点预留**（t64 桥语义：`$150,X`×5 → 5B 记录 → BG 缓冲族 `$0130/$0140`
-/// + `$D3,X` 位属性）。**TODO(W12)**：写链移植待证，此处仅预留接口形状——行为不发明
-/// （返回 None=未实现，fail-closed）。
-pub fn bridge_output_commit(_five_byte_record: [u8; 5]) -> Option<()> {
-    // TODO(W12): $0130/$0140 BG 缓冲写集 + $D3,X 位属性——t64 桥语义定谳后移植。
-    None
+// ============ W12 桥输出面（t90 兑现 t71 挂接点；t64 定谳） ============
+
+/// 5 字节 BG 记录（4 字段 + 标志字节；t64 字段映射 A 级）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BgRecord {
+    pub f1: u8,   // → $130,X
+    pub f2: u8,   // → $131,X
+    pub f3: u8,   // → $140,X
+    pub f4: u8,   // → $141,X
+    pub flag: u8, // 低 3 位 → $07 标志
+}
+
+/// `$D3,X` 位属性掩码（$E9D2/$E9D6/$E9DA 三引用位，ROM 逐字节）。
+/// 合成选择规则（Y 变址）**未全证**——掩码导出，选择注记不发明。
+pub const ATTR_MASKS: [u8; 3] = [0xFF, 0xF9, 0xF0];
+
+/// 图案索引→记录寻址（**v×5 quirk 保真**：ASL/ROL 两轮=×4 + ADC=+v，t70 更正 N-0088）。
+pub fn bg_record_at(pattern: &[u8], index: u8) -> BgRecord {
+    let off = index as usize * 5;
+    let b = pattern.get(off..off + 5).expect("图案表越界（5B 记录）");
+    BgRecord { f1: b[0], f2: b[1], f3: b[2], f4: b[3], flag: b[4] }
+}
+
+/// BG 缓冲族（$0130/$0131/$0140/$0141 + $07 标志 + $D3 位属性；16 槽输出表 $0150）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BgBuffers {
+    pub b130: [u8; 16],
+    pub b131: [u8; 16],
+    pub b140: [u8; 16],
+    pub b141: [u8; 16],
+    pub attr: [u8; 16],
+    pub flag: u8,
+}
+
+/// W12 桥**单记录搬运**（t64 字段映射；t71 挂接点兑现）：
+/// 记录 4 字段 → $130/$131/$140/$141 槽位 + 标志&7 → $07 + 位属性合成（掩码口径）。
+pub fn bridge_output_commit(record: BgRecord, slot: u8, bufs: &mut BgBuffers) -> Option<()> {
+    let i = slot as usize;
+    if i >= 16 {
+        return None; // $0150 表界 CPX #$10（fail-closed）
+    }
+    bufs.b130[i] = record.f1;
+    bufs.b131[i] = record.f2;
+    bufs.b140[i] = record.f3;
+    bufs.b141[i] = record.f4;
+    bufs.flag = record.flag & 7;
+    // 位属性合成：(旧 & 掩码) | 标志位——掩码选择规则未全证（Y 变址），取掩码[0] 兜底+注记
+    bufs.attr[i] = (bufs.attr[i] & ATTR_MASKS[0]) | (record.flag & 7);
+    Some(())
+}
+
+/// 桥帧（t64 同步时机：VM 槽循环后，**8 输出/帧**，输出偏移 $0E 步进 −2）。
+/// `output[i]` = $150,i 图案索引；`i ∈ {0,2,...,14}` 偶偏移 8 槽。
+pub fn bridge_commit_frame(output: &[u8; 16], pattern: &[u8], bufs: &mut BgBuffers) {
+    let mut off = 0x0Ei32;
+    while off >= 0 {
+        let slot = off as u8;
+        let rec = bg_record_at(pattern, output[slot as usize]);
+        bridge_output_commit(rec, slot, bufs);
+        off -= 2;
+    }
+}
+
+/// terrain VM 单帧执行环（t71 归位模块跑真脚本流；t64 同步：6 槽/帧）：
+/// 每活动槽执行**一条**指令（已证子集：$00 结束 / $FC X 界门 / $FD/$FE 循环 / $FF 跳转 /
+/// $80-$FB 参数指令）；未证操作码 fail-closed 返回 Err（不发明）。
+/// `mem` = 流内存读（($14),Y 语义由调用方拼装：PC 为流指针）。
+pub fn vm_run_frame(
+    slots: &mut [TerrainSlot],
+    mem: &dyn Fn(u16) -> u8,
+) -> Result<(), String> {
+    for slot in slots.iter_mut() {
+        if !slot.active() {
+            continue;
+        }
+        let pc = u16::from_le_bytes([slot.pc_lo, slot.pc_hi]);
+        let op = mem(pc);
+        match op {
+            0x00 => slot.pc_hi = 0, // 流结束退槽（$8462）
+            0xFC => {
+                // X 界门（$8471-$8483）：参数 + 界门语义
+                let d = mem(pc.wrapping_add(1));
+                let (nx, exit) = crate::stage::vm_x_adjust_gate(slot.x, d);
+                slot.x = nx;
+                slot.pc_lo = pc.wrapping_add(2) as u8;
+                slot.pc_hi = (pc.wrapping_add(2) >> 8) as u8;
+                if exit {
+                    slot.pc_hi = 0; // 界内退槽（$8481 BEQ $8462）
+                }
+            }
+            0xFD => {
+                slot.loop_cnt = mem(pc.wrapping_add(1));
+                let np = pc.wrapping_add(2);
+                slot.pc_lo = np as u8;
+                slot.pc_hi = (np >> 8) as u8;
+            }
+            0xFE => {
+                let lo = mem(pc.wrapping_add(1));
+                let hi = mem(pc.wrapping_add(2));
+                let (c, taken, nlo, nhi) = vm_loop_step(slot.loop_cnt, lo, hi);
+                slot.loop_cnt = c;
+                if taken {
+                    slot.pc_lo = nlo;
+                    slot.pc_hi = nhi;
+                } else {
+                    let np = pc.wrapping_add(3);
+                    slot.pc_lo = np as u8;
+                    slot.pc_hi = (np >> 8) as u8;
+                }
+            }
+            0xFF => {
+                let lo = mem(pc.wrapping_add(1));
+                let hi = mem(pc.wrapping_add(2));
+                slot.pc_lo = lo;
+                slot.pc_hi = hi;
+            }
+            0x02..=0x7F => {
+                // 嵌套调用（t59 表）：B0=码自身，B6/BC=子流指针(2B)——3 字节记录
+                let p0 = mem(pc.wrapping_add(1));
+                let p1 = mem(pc.wrapping_add(2));
+                slot.opcode = op;
+                slot.param = op;
+                slot.sub_lo = p0;
+                slot.sub_hi = p1;
+                let np = pc.wrapping_add(3);
+                slot.pc_lo = np as u8;
+                slot.pc_hi = (np >> 8) as u8;
+            }
+            0x80..=0xFB => {
+                // 指令+3 参数（$84A9-$84C4）：AA/B0/B6/BC + PC 前进（4 字节记录）
+                let p0 = mem(pc.wrapping_add(1));
+                let p1 = mem(pc.wrapping_add(2));
+                let p2 = mem(pc.wrapping_add(3));
+                let y_after = 3u8;
+                let (b0, b6, bc, lo, hi) = vm_fetch_params(
+                    pc as u8, (pc >> 8) as u8, y_after, p0, p1, p2,
+                );
+                slot.opcode = op;
+                slot.param = b0;
+                slot.sub_lo = b6;
+                slot.sub_hi = bc;
+                slot.pc_lo = lo;
+                slot.pc_hi = hi;
+            }
+            _ => return Err(format!("未证操作码 ${:02X}（fail-closed，不发明）", op)),
+        }
+    }
+    Ok(())
 }

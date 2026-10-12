@@ -217,3 +217,8 @@ pub fn spawn_to_vm_slot(rec: &SpawnRecord) -> crate::terrain::TerrainSlot {
 pub fn boss_segment_unproven() -> Result<(), String> {
     Err("Boss/EN-9+ 段未证（t79 约束①：BOSS 子格不在本批）——不发明".to_string())
 }
+
+/// VM `$FC` X 界门（terrain VM 执行环复用；语义=game-core::terrain::vm_x_adjust 同源）。
+pub fn vm_x_adjust_gate(x: u8, d: u8) -> (u8, bool) {
+    crate::terrain::vm_x_adjust(x, d)
+}
