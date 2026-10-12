@@ -1,0 +1,17 @@
+[package]
+name = "game-desktop"
+version = "0.1.0"
+edition = "2021"
+
+# 平台缝纪律（AGENTS.md §2）：本 crate 是平台侧，可引平台依赖；
+# game-core/game-data/game-platform 保持零平台依赖。
+[dependencies]
+game-core = { path = "../game-core" }
+game-data = { path = "../game-data" }
+game-platform = { path = "../game-platform" }
+winit = "0.30"
+softbuffer = "0.4"
+
+[[bin]]
+name = "game-desktop"
+path = "src/main.rs"
