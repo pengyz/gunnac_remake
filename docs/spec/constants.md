@@ -19,7 +19,7 @@
 | C-bomb-consume | `$A336,Y` = **[1, 2, 3, 2]**（Y=0..3） | 炸弹消耗量表逐值（投放按 $3B 索引；不足回退 Y=1） | `bank03:A336-A339` seed 字节 `01 02 03 02` | A | R-fire-3 |
 | C-money-bcd | `money_counter_bcd` = `$E0-$E6` 7 位 BCD（$E0=最高位；值=显示值） | `bank14:D009-D046` 渲染 + probe f2160=4400/f2220=5700/f2280=6800/f2340=7200 | A | R-money-4 |
 | C-money-addend-tbl | 加数表 `$DCCF+type×6` 逐值：type 1..10 = **+10/+30/+100/+150/+250/+400/+600/+800/+1000/+2000**（行 6 字节 BCD，倒序配对 $E5..$E0）；type 0 = no-op | `bank14:$DCD0-$DD0F` seed 字节逐行 | A | R-money-5 |
-| C-money-cap | 溢出封顶 **999999**（$E0-$E5 全 9） | `bank14:DBF1-DBFD` | A | R-money-5 |
+| C-money-cap | 溢出封顶=**六工作位全 9**（ROM 态 `$E0-$E5` 全 9、`$E6` 恒 0）——显示值 **9999990**（七位含尾 0；"999999"系六工作位简称，【t80 精化】） | `bank14:DBF1-DBFD` | A | R-money-5 |
 | C-extend-threshold | `extend_threshold_bcd` = `$E7-$EC` = **008000（8000）**，达标置 `$ED=$40` | `bank14:DAE7-DAFC` + probe 恒 0,0,8,0,0,0 | A | R-money-6 |
 | C-bomb-type-index | `bomb_type_index` = `$0190` 值域 **0-3**（四弹种）；映射 0=F/3=W 实测、1=B/2=T 推定 | `bank15:E138-E13D` + probe f2220 拾「W」0→3 | A（值域）/B（映射 1=B、2=T） | R-bomb-1、R-bomb-3 |
 
@@ -67,3 +67,4 @@
 - `v5 (2026-10-12, t46) 关卡结构锚点（§1.5）：C-wave-chain（波次链区 $AD00-$ADD0 分段记录流）、C-wave-dir（$ACEF 块范围对）、C-scroll-vars（$1C/$1D 滚动寄存器）——结构级 B 级，语义留 S1/S2`
 - `v6 (2026-10-12, t57) LUT 表注补正：索引无掩码（motion≥16 读表间字节 $88CB=$F8，t55 实证——"16 向"仅为表内形态非索引规则，掩码解读会伪造 +9 偏移）；表界/夹缝区=A4 素材`
 - `v7 (2026-10-12, t60) 敌对象结构锚点（§1.6）：C-spawn-rec（t_005 5 字节记录）、C-grid-1c（$1C 28 槽字段阵列）、C-grid-70（$70 弹对象）——参数语义留 B1-B5`
+- `v8 (2026-10-12, t80) C-money-cap 措辞精化：六工作位计（ROM 态 $E0-$E5 全 9、$E6 恒 0，显示值 9999990）——"999999"=六工作位简称；R-money-5 加法器补 borrow 链进位 quirk/type0 无操作/Y=type*6-6 索引更正（t77 ROM 逐字节）`
