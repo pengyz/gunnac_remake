@@ -3,7 +3,9 @@
 # ROM 字节不入库，由根目录 SHA256SUMS 跟踪哈希（供 gates/cli.py rom 校验）。
 
 # ROM 字节（唯一资产真相源，sha256 见 SHA256SUMS；rom/ 永不修改）
+# *.nes —— 2026-10-12 用户决策：ROM 入库（撤销 t5 SHA256SUMS 跟踪模式）
 *.nes
+!rom/gunnac_cn.nes
 
 # 可再生工作区（由 rom/ + 工具可复现）
 analysis/
