@@ -29,11 +29,18 @@ pub const CFG_STREAM: [u8; 124] = [
     0x14, 0x03, 0x16, 0xFF,
 ];
 
-/// C-motion-lut-x（$88BB，16 项，有符号）。
-pub const LUT_X: [i8; 16] = [9, 8, 5, 3, 0, -3, -5, -8, -9, -8, -5, -3, 0, 3, 5, 8];
+/// C-motion-lut-x 域（$88BB 起 32B ROM 字节）：16 项正式表 + 表间字节（$88CB-$88CE）
+/// + 下表首段——**无掩码索引**（t55 实测：motion=16 读 $88CB=$F8，掩码会伪造 +9）。
+pub const LUT_X: [i8; 32] = [
+    9, 8, 5, 3, 0, -3, -5, -8, -9, -8, -5, -3, 0, 3, 5, 8,
+    -8, -8, 8, 8, 0, 3, 6, 8, 9, 8, 6, 3, 0, -3, -6, -8,
+];
 
-/// C-motion-lut-y（$88CF，16 项，有符号）。
-pub const LUT_Y: [i8; 16] = [0, 3, 6, 8, 9, 8, 6, 3, 0, -3, -6, -8, -9, -8, -6, -3];
+/// C-motion-lut-y 域（$88CF 起 32B ROM 字节）：同上无掩码索引。
+pub const LUT_Y: [i8; 32] = [
+    0, 3, 6, 8, 9, 8, 6, 3, 0, -3, -6, -8, -9, -8, -6, -3,
+    -8, 12, -8, 12, 89, 91, 91, 93, 93, 93, 91, 91, 89, 91, 91, 93,
+];
 
 /// C-action-stream（$890B 观测区 36B；表界未证=A4，越界访问 fail-closed）。
 pub const ACTION_STREAM: [u8; 36] = [
@@ -103,8 +110,8 @@ pub fn script_fetch(ptr: u8, durations: &[u8], actions: &[u8]) -> (u8, u8, u8) {
 
 /// 16 向 LUT 累加单轴一步（R-shot-motion-2，bank2:$87DA-$8818 quirk 保真）：
 /// 带符号加（负值走 BMI 分支）；正向溢出/负向借位 ⇒ None（进死亡处理器 $87FD）。
-pub fn lut_accumulate_axis(pos: u8, motion_code: u8, lut: &[i8; 16]) -> Option<u8> {
-    let v = *lut.get((motion_code & 0x0F) as usize).expect("LUT 越界");
+pub fn lut_accumulate_axis(pos: u8, motion_code: u8, lut: &[i8]) -> Option<u8> {
+    let v = *lut.get(motion_code as usize).expect("LUT 域越界（A4 表界未证，fail-closed）");
     if v >= 0 {
         let sum = pos as u16 + v as u16;
         if sum > 0xFF {

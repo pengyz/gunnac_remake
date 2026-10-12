@@ -123,70 +123,150 @@ SHOT_SLOTS = [0x80, 0x81, 0x82, 0x83, 0x84,
 SHOT_SAMPLE_N = 4  # 帧降采样（声明口径，可复现）
 
 
+def _lifetime_walk_possible(lt_prev: int, gap: int, durs=frozenset({0xFF, 0x0A, 0x05, 0x01, 0x04})) -> set:
+    """t52 F2b 寿命倒数模型的非确定行走：v>1 递减；v==1 时装载时长表值（refill）。
+    返回 gap 帧后可能的寿命集合（v==0=释放，不出现在存活窗口内）。"""
+    poss = {lt_prev}
+    for _ in range(gap):
+        nxt = set()
+        for v in poss:
+            if v > 1:
+                nxt.add(v - 1)
+            elif v == 1:
+                nxt.update(durs)
+        poss = nxt
+    return poss
+
+
+def _spawn_signature_ok(rows: list, player_at: dict) -> bool:
+    """R-shot-gen-3 生成链 A 级签名：窗口起点坐标 = 玩家坐标 + 一步（|Δ|≤9，LUT 幅值界）。
+    W7 网格驻留值（$1C 交错区）不满足 ⇒ 不是弹窗口（负例场景 0 窗口的判定源）。"""
+    r0 = rows[0]
+    px, py = player_at[r0["f"]]
+    return abs(r0["pos_x"] - px) <= 9 and abs(r0["pos_y"] - py) <= 9
+
+
+def _is_shot_window(rows: list) -> bool:
+    """窗口资格判定（t52 F2b）：整窗逐段符合寿命倒数模型 ⇒ 弹窗口；
+    $1C 网格驻留值（静态/递增）不满足 ⇒ 排除（W7 交错残余，未证所有权不入库）。"""
+    for prev, cur in zip(rows, rows[1:]):
+        gap = cur["f"] - prev["f"]
+        if gap <= 0:
+            return False
+        if cur["lifetime"] not in _lifetime_walk_possible(prev["lifetime"], gap):
+            return False
+        if cur["shot_type"] > 5:  # R-shot-gen-3 生成链：弹型=X（0..5）
+            return False
+        if cur["motion_code"] > 0x12:  # C-action-stream 观测值域上界（$890B 区最大 0x12）
+            return False
+    return all(r["shot_type"] <= 5 and r["motion_code"] <= 0x12 for r in rows[:1])
+
+
+def _pos_jump_gt_lut(prev: dict, cur: dict, gap: int) -> bool:
+    """粗可观测边界：单帧位置变化超 LUT 幅值界（|Δ|≤9×gap，C-motion-lut-x/y A 级界）
+    ⇒ 同槽死亡→重生合窗切开。仅用粗界切分，精确逐值由 L3 重放对拍（非空转）。"""
+    dx = abs(cur["pos_x"] - prev["pos_x"])
+    dy = abs(cur["pos_y"] - prev["pos_y"])
+    return dx > 9 * gap or dy > 9 * gap
+
+
 def extract_shot_trajectories(scene: str) -> int:
     """弹对象轨迹/slot state 向量 golden（分列命名六数组；slot 全覆盖）。
 
-    采样口径（显式声明，可复现，t50 转正）：
+    采样口径（显式声明，可复现，t55 转正）：
     ①slot 全覆盖 = t48 定谳 20 槽偏移集（$80-$84/$9C-$A0/$B8-$BC/$D4-$D8），state==0 空槽；
-    ②每个存活窗口（state≠0 连续段）首帧 + 每 SHOT_SAMPLE_N 帧 + 末帧入 golden；
-    ③**出生帧（任一槽 state 0→非0）补全 20 槽行**（首次适应分配断言的当帧状态向量源）；
-    ④比对=出生帧播种 + 逐帧 tick（R-shot-motion-1/2）；死亡帧（state 归 0）为
-    未证域边界不入轨迹比对面（边界判定未证），但 state 向量行保留供分配断言。
+    ②窗口资格 = t52 F2b 寿命倒数语义（逐段非确定行走可及）——网格驻留值窗口排除（W7）；
+    ③每个合格窗口 首帧 + 每 SHOT_SAMPLE_N 帧 + 末帧入 golden；
+    ④出生帧（合格窗口起点）补全 20 槽行（首次适应分配断言的当帧状态向量源）；
+    ⑤比对 = 出生帧播种 + 逐帧 tick（R-shot-motion-1/2）+ 寿命递减断言 + 分配断言；
+    死亡帧（state 归 0）为未证域边界不入轨迹比对面。
     """
     src = ROOT / "analysis" / "traces" / f"{scene}.frames.jsonl"
     dst = ROOT / "oracle" / "traces" / f"{scene}.shots.jsonl"
     if not src.is_file():
         print(f"oracle 全量 trace 缺失：{src}", file=sys.stderr)
         return 2
-    rows_by_frame: list[tuple[int, dict]] = []
+    frames: list[tuple[int, dict]] = []
     for line in src.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         rec = json.loads(line)
         w = rec["w"]
-        # 六数组最高位 $063E+$D8=$0716 ⊂ iram watch（$0300-$07FF）——按 iram 列解析
         blob_w = w.get("iram")
         if blob_w is None:
-            print(f"  {scene} 无 iram watch——跳过弹轨迹抽取（仅 gameplay-stage1 覆盖）")
+            print(f"  {scene} 无 iram watch——跳过弹轨迹抽取")
             return 0
         blob = bytes.fromhex(blob_w)
-        base = 0x300  # iram blob 首地址
-        slots = {}
-        for slot in SHOT_SLOTS:
-            fields = {name: blob[(0x400 + off + slot) - base] for name, off in SHOT_FIELDS}
-            slots[slot] = fields
-        rows_by_frame.append((rec["f"], slots))
-    # 出生帧检测（membership 变化）+ 存活窗口采样
-    emit: set[tuple[int, int]] = set()
-    prev_alive = {}
-    for f, slots in rows_by_frame:
-        alive = {slot for slot, fl in slots.items() if fl["lifetime"] != 0}
-        spawns = alive - set(prev_alive)
-        if spawns:
-            for slot in SHOT_SLOTS:  # 出生帧补全 20 槽行
-                emit.add((f, slot))
-        prev_alive = alive
+        base = 0x300
+        slots = {slot: {name: blob[(0x400 + off + slot) - base] for name, off in SHOT_FIELDS}
+                 for slot in SHOT_SLOTS}
+        frames.append((rec["f"], slots))
+    # 逐槽收集连续存活窗口并做资格判定；win=槽内弹生命周期序号（跨窗重播种标识）
+    emit: dict[tuple[int, int], int] = {}
+    win_of: dict[tuple[int, int], int] = {}
+    n_qualified = 0
+    player_at = {rec_f: (slots_pl.get("_px", 0), slots_pl.get("_py", 0)) for rec_f, slots_pl in []}
+    player_at = {}
+    for f, slots in frames:
+        pass
+    # 玩家坐标源 = 命名 watch（两场景齐备）
+    for line in src.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        w = rec["w"]
+        if "player_x" in w and "player_y" in w:
+            player_at[rec["f"]] = (w["player_x"], w["player_y"])
+
+    def flush(window: list, slot: int) -> None:
+        nonlocal n_qualified
+        if (len(window) >= 2 and _is_shot_window(window)
+                and player_at.get(window[0]["f"]) is not None
+                and _spawn_signature_ok(window, player_at)):
+            n_qualified += 1
+            win_id = n_qualified
+            for i, r in enumerate(window):
+                win_of[(r["f"], slot)] = win_id
+                if i % SHOT_SAMPLE_N == 0 or i == len(window) - 1:
+                    emit[(r["f"], slot)] = win_id
+            for s2 in SHOT_SLOTS:
+                emit.setdefault((window[0]["f"], s2), 0)
+                emit.setdefault((window[0]["f"] - 1, s2), 0)  # 出生前帧全向量（分配断言真值源）
+
     for slot in SHOT_SLOTS:
-        window: list[int] = []
-        for f, slots in rows_by_frame:
-            if slots[slot]["lifetime"] != 0:
-                window.append(f)
-            elif window:
-                for i, wf in enumerate(window):
-                    if i % SHOT_SAMPLE_N == 0 or i == len(window) - 1:
-                        emit.add((wf, slot))
+        window: list[dict] = []
+        for f, slots in frames:
+            fl = slots[slot]
+            row = {"f": f, "slot": slot, **fl}
+            if fl["lifetime"] == 0:
+                flush(window, slot)
                 window = []
-        for i, wf in enumerate(window):
-            if i % SHOT_SAMPLE_N == 0 or i == len(window) - 1:
-                emit.add((wf, slot))
+            elif window:
+                prev = window[-1]
+                gap = f - prev["f"]
+                if (gap <= 0 or _pos_jump_gt_lut(prev, row, gap)
+                        or row["lifetime"] not in _lifetime_walk_possible(prev["lifetime"], gap)):
+                    flush(window, slot)  # 合窗切开（死亡→重生/网格切换）
+                    window = [row]
+                else:
+                    window.append(row)
+            else:
+                window = [row]
+        flush(window, slot)
+    if n_qualified == 0:
+        if dst.exists():
+            dst.unlink()  # 清除陈旧 golden（负例场景不得留旧档）
+        print(f"弹轨迹抽取：{scene} 0 个合格弹窗口（负例段 ✓ 无 B 长按静默/W7 驻留值全排除）——不产出 golden")
+        return 0
     n_rows = 0
     with open(dst, "w", encoding="utf-8") as out:
-        for f, slots in rows_by_frame:
+        for f, slots in frames:
             for slot in SHOT_SLOTS:
                 if (f, slot) in emit:
-                    out.write(json.dumps({"f": f, "slot": slot, **slots[slot]}) + "\n")
+                    win = win_of.get((f, slot), 0)
+                    out.write(json.dumps({"f": f, "slot": slot, "win": win, **slots[slot]}) + "\n")
                     n_rows += 1
-    print(f"弹轨迹/slot 向量抽取：{scene} {n_rows} 行（20 槽全覆盖，帧降采样 n={SHOT_SAMPLE_N} + 出生帧全向量）→ {dst.relative_to(ROOT)}")
+    print(f"弹轨迹抽取：{scene} {n_qualified} 个合格弹窗口 / {n_rows} 行（20 槽全覆盖，帧降采样 n={SHOT_SAMPLE_N} + 出生帧全向量）→ {dst.relative_to(ROOT)}")
     return 0
 
 
@@ -218,12 +298,15 @@ def extract() -> int:
                 f.write(json.dumps(r) + "\n")
         print(f"player golden 抽取：{scene} {len(rows)} 帧 → {dst.relative_to(ROOT)}")
         rc = rc or extract_weapon_events(scene)
+    for scene in ("fire-hold", "gameplay-stage1", "weapon-pickup"):
+        rc = rc or extract_shot_trajectories(scene)
     return rc
 
 
 def run_diff() -> int:
     goldens = (sorted((ROOT / "oracle" / "traces").glob("*.player.jsonl")) +
-        sorted((ROOT / "oracle" / "traces").glob("*.weapons.jsonl")))
+        sorted((ROOT / "oracle" / "traces").glob("*.weapons.jsonl")) +
+        sorted((ROOT / "oracle" / "traces").glob("*.shots.jsonl")))
     if not goldens:
         print(f"L3 golden 缺失（先 --extract）", file=sys.stderr)
         return 2
@@ -236,12 +319,6 @@ def run_diff() -> int:
 
 
 def main() -> int:
-    if "--shots-extract" in sys.argv:
-        # 【实验性·t50 发现】20 槽几何已定谳（t48），但 gameplay-stage1 全程无生成器活动
-        # （$072E,X 计数恒 0、无 R-shot-gen-3 五字段写入链）——槽 state 值为 B5 交错区静态
-        # 他系统数据（t48 §3 churn 解读被反证）。真弹对象归因需生成器门控取证后启用。
-        return extract_shot_trajectories("gameplay-stage1")
-
     if "--extract" in sys.argv:
         rc = extract()
         return rc if rc else run_diff()

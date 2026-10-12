@@ -107,7 +107,7 @@ fn l3_shot_replay_machine_self_consistent() {
     use game_core::shot::{script_fetch, spawn_init, tick, ShotObject, ACTION_DURATIONS, ACTION_STREAM};
     let mut obj = spawn_init(0, 2, 0, 100, 50, 0x0C);
     let mut frames = vec![game_oracle::l3::ShotFrame {
-        f: 1, slot: 0x80, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
+        f: 1, slot: 0x80, win: 1, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
         pos_y: obj.pos_y, motion_code: obj.motion_code, shot_type: obj.shot_type,
     }];
     for f in 2..40u32 {
@@ -115,7 +115,7 @@ fn l3_shot_replay_machine_self_consistent() {
             break;
         }
         frames.push(game_oracle::l3::ShotFrame {
-            f, slot: 0x80, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
+            f, slot: 0x80, win: 1, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
             pos_y: obj.pos_y, motion_code: obj.motion_code, shot_type: obj.shot_type,
         });
     }
@@ -148,9 +148,55 @@ fn l3_alloc_first_fit_semantics() {
         let slot = [0x80u8,0x81,0x82,0x83,0x84,0x9C,0x9D,0x9E,0x9F,0xA0,0xB8,0xB9,0xBA,0xBB,0xBC,0xD4,0xD5,0xD6,0xD7,0xD8][i as usize];
         let lt = if slot <= 0x81 { 1 } else { 0 };
         game_oracle::l3::ShotFrame {
-            f: 10, slot, lifetime: lt, script_ptr: 0, pos_x: 0, pos_y: 0,
+            f: 10, slot, win: 1, lifetime: lt, script_ptr: 0, pos_x: 0, pos_y: 0,
             motion_code: 0, shot_type: 0,
         }
     }).collect();
     assert!(game_oracle::l3::alloc_events_legal(&rows).is_empty(), "合法出生帧被误判");
+}
+
+#[test]
+fn l3_alloc_negative_selfproof() {
+    // 负向自证：期望反转/非首次适应的出生集必须被检出（断言不得空转）
+    use game_oracle::l3::{alloc_events_legal, ShotFrame};
+    let mut rows = Vec::new();
+    // 出生前帧全向量（f9）：全空
+    let slots = [0x80u8, 0x81, 0x82, 0x83, 0x84, 0x9C, 0x9D, 0x9E, 0x9F, 0xA0,
+                 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8];
+    for &slot in &slots {
+        rows.push(ShotFrame { f: 9, slot, win: 0, lifetime: 0, script_ptr: 0,
+                              pos_x: 0, pos_y: 0, motion_code: 0, shot_type: 0 });
+    }
+    // f10：槽 $B8 出生（非首次适应——$80 才是首空槽）⇒ 必须报违例
+    for &slot in &slots {
+        let lt = if slot == 0xB8 { 10 } else { 0 };
+        rows.push(ShotFrame { f: 10, slot, win: 1, lifetime: lt, script_ptr: 0,
+                              pos_x: 0, pos_y: 0, motion_code: 0, shot_type: 0 });
+    }
+    let problems = alloc_events_legal(&rows);
+    assert!(!problems.is_empty(), "非首次适应出生必须被检出（负向自证）");
+}
+
+#[test]
+fn l3_lifetime_negative_selfproof() {
+    // 负向自证：寿命中途无装载回升（239→255）必须被检出
+    use game_oracle::l3::{lifetime_decrements_legal, ShotFrame};
+    let rows = vec![
+        ShotFrame { f: 1, slot: 0x80, win: 1, lifetime: 240, script_ptr: 0,
+                    pos_x: 0, pos_y: 0, motion_code: 0, shot_type: 0 },
+        ShotFrame { f: 2, slot: 0x80, win: 1, lifetime: 255, script_ptr: 0,
+                    pos_x: 0, pos_y: 0, motion_code: 0, shot_type: 0 },
+    ];
+    let problems = lifetime_decrements_legal(&rows);
+    assert!(!problems.is_empty(), "无装载回升必须被检出（负向自证）");
+    // 合法：递减 + 归 1 后装载（255 为时长表值）
+    let ok = vec![
+        ShotFrame { f: 1, slot: 0x80, win: 1, lifetime: 2, script_ptr: 0,
+                    pos_x: 0, pos_y: 0, motion_code: 0, shot_type: 0 },
+        ShotFrame { f: 2, slot: 0x80, win: 1, lifetime: 1, script_ptr: 0,
+                    pos_x: 0, pos_y: 0, motion_code: 0, shot_type: 0 },
+        ShotFrame { f: 3, slot: 0x80, win: 1, lifetime: 255, script_ptr: 0,
+                    pos_x: 0, pos_y: 0, motion_code: 0, shot_type: 0 },
+    ];
+    assert!(lifetime_decrements_legal(&ok).is_empty(), "合法递减/装载被误判");
 }

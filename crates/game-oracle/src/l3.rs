@@ -240,6 +240,8 @@ pub fn bomb_events_legal(events: &[TraceEvent]) -> Vec<String> {
 pub struct ShotFrame {
     pub f: u32,
     pub slot: u8,
+    /// 槽内弹生命周期序号（0=非轨迹行；同 win=同弹，跨 win 重播种）
+    pub win: u32,
     pub lifetime: u8,
     pub script_ptr: u8,
     pub pos_x: u8,
@@ -261,6 +263,7 @@ pub fn parse_shot_frames(jsonl: &str) -> Result<Vec<ShotFrame>, String> {
         out.push(ShotFrame {
             f: obj_num(&obj, "f")? as u32,
             slot: obj_num(&obj, "slot")? as u8,
+            win: obj_num(&obj, "win").unwrap_or(0) as u32,
             lifetime: obj_num(&obj, "lifetime")? as u8,
             script_ptr: obj_num(&obj, "script_ptr")? as u8,
             pos_x: obj_num(&obj, "pos_x")? as u8,
@@ -290,21 +293,18 @@ pub fn diff_shot_trajectory(frames: &[ShotFrame]) -> Result<(usize, Vec<String>)
         true
     }
 
-    let mut by_slot: BTreeMap<u8, Vec<&ShotFrame>> = BTreeMap::new();
-    for r in frames.iter().filter(|r| r.lifetime != 0) {
-        by_slot.entry(r.slot).or_default().push(r);
+    let mut by_slot: BTreeMap<(u8, u32), Vec<&ShotFrame>> = BTreeMap::new();
+    for r in frames.iter().filter(|r| r.lifetime != 0 && r.win > 0) {
+        by_slot.entry((r.slot, r.win)).or_default().push(r);
     }
     let mut problems = Vec::new();
     let mut compared = 0usize;
-    for (_slot, rows) in &by_slot {
+    for ((_slot, _win), rows) in &by_slot {
         let mut obj: Option<ShotObject> = None;
         for w in rows.windows(2) {
             let (prev, cur) = (*w[0], *w[1]);
             if cur.f <= prev.f {
                 return Err(format!("槽 {} 帧序乱序", cur.slot));
-            }
-            if cur.f != prev.f + 1 {
-                obj = None; // 帧缺口 = 新段，以 cur 前一行（prev=段首）重播种
             }
             let ok = {
                 let o = obj.get_or_insert(ShotObject {
@@ -362,11 +362,11 @@ pub fn alloc_events_legal(frames: &[ShotFrame]) -> Vec<String> {
             }
         }
         if !spawns.is_empty() && deaths.is_empty() {
-            // 出生帧：以当帧向量为"生成后"视图，出生槽回填 0 得生成前可用集；
-            // 首次适应连续取 |S| 个，结果集合必须 == spawns
+            // 出生帧：首次适应在生成前状态上取 |S| 个空槽，结果集合必须 == spawns
+            // （真值源=抽取端补的出生前帧全向量 prev；同帧死亡跳过=帧内顺序未证）
             let mut probe = [0u8; 0x100];
-            for (slot, lt) in cur {
-                probe[*slot as usize] = if spawns.contains(slot) { 0 } else { *lt };
+            for (slot, lt) in prev.iter() {
+                probe[*slot as usize] = *lt;
             }
             let mut expected = BTreeSet::new();
             for _ in 0..spawns.len() {
@@ -386,6 +386,49 @@ pub fn alloc_events_legal(frames: &[ShotFrame]) -> Vec<String> {
             }
         }
         prev = cur.clone();
+    }
+    problems
+}
+
+/// 寿命递减断言（t52 F2b 语义）：同窗（slot,win）内寿命逐帧递减；归 1 帧装载时长表值
+/// （refill 集合 = C-action-durations 值域）。违规明细空=全合法。
+pub fn lifetime_decrements_legal(frames: &[ShotFrame]) -> Vec<String> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let durs: BTreeSet<u8> = game_core::shot::ACTION_DURATIONS.iter().copied().collect();
+    let mut by_win: BTreeMap<(u8, u32), Vec<&ShotFrame>> = BTreeMap::new();
+    for r in frames.iter().filter(|r| r.lifetime != 0 && r.win > 0) {
+        by_win.entry((r.slot, r.win)).or_default().push(r);
+    }
+    let mut problems = Vec::new();
+    for ((slot, win), rows) in &by_win {
+        for w in rows.windows(2) {
+            let (prev, cur) = (*w[0], *w[1]);
+            let gap = cur.f as i64 - prev.f as i64;
+            if gap <= 0 {
+                problems.push(format!("slot={slot} win={win} f{}: 帧序非正", cur.f));
+                continue;
+            }
+            // 非确定行走：v>1 递减；v==1 装载时长表值
+            let mut poss: BTreeSet<u8> = BTreeSet::new();
+            poss.insert(prev.lifetime);
+            for _ in 0..gap {
+                let mut nxt = BTreeSet::new();
+                for v in poss {
+                    if v > 1 {
+                        nxt.insert(v - 1);
+                    } else if v == 1 {
+                        nxt.extend(durs.iter().copied());
+                    }
+                }
+                poss = nxt;
+            }
+            if !poss.contains(&cur.lifetime) {
+                problems.push(format!(
+                    "slot={slot} win={win} f{}: 寿命 {}→{} 违反递减/装载语义（t52 F2b）",
+                    cur.f, prev.lifetime, cur.lifetime
+                ));
+            }
+        }
     }
     problems
 }
