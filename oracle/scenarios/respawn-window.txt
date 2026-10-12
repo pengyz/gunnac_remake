@@ -1,0 +1,47 @@
+# 场景：死亡/重生窄窗细分时序（t40 FA-2 · R-respawn-2/3/4 升"已判"取证 / H-16 事件内时序）
+# 证据注记（假设区，未证不得引为结论）：
+#   - R-respawn-2 备注：t24 缺口 2（f2047-2101）+ 冻结段（f2102-2130）+ 缺口 3（f2131-2175）
+#     疑为**同一事件的分段遮蔽**，事件内细分时序未证 → 本场景窄窗全采样定谳
+#   - FA-2 真覆盖需求（player-movement.md R-respawn-4 尾注）：①事件窗不整体剔除 ②$018F/$04E0/$04FC
+#     入逐帧向量 —— 本场景两项落齐
+#   - 输入设计：**复刻 gameplay-stage1 输入序列**（确定性 run 已实测该输入产生 3 个死亡/重生窗
+#     f1831-1916/f2047-2101/f2131-2175）——首版静止设计无事件（负结果：spawn 点 (128,160) 在
+#     本窗内为安全位，站着不挨打），改用已知产生事件的输入轨道做窄窗细分
+name respawn-window
+frames 2400
+press_len 4
+
+# 标题/菜单 → 商店 → 双 B 退出（与 gameplay-stage1 同源前缀）
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+
+# 与 gameplay-stage1 逐帧同输入（事件复现轨道）
+press_every 12 1250-2350 a
+hold 1300-1450 right
+hold 1470-1620 left
+hold 1650-1800 right
+hold 1830-1950 down
+hold 1980-2100 up
+hold 2130-2280 right
+press 1500 b
+
+capture_every 10 probe
+capture 1260 stage-start
+capture 2320 end
+
+watch_range 0000-00ff zp
+watch 0320
+watch 018f bomb_ammo
+watch 0190 bomb_type_index
+watch 04e0 player_x
+watch 04fc player_y
+watch_range 0300-07ff iram
+watch_range 6000-7fff wram
