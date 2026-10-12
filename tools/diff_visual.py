@@ -217,6 +217,22 @@ def main() -> int:
     lines.append("W-C1 调色板映射（强候选）/ W-C2 汉化字形 / W-C3 文本渲染 / W-C4 色彩空间 / W-C5 扫描线分割——")
     lines.append("见 docs/spec/l4-visual-plan.md §2；启用逐条需用户确认 + gates/visual_whitelist.json 登记。")
     REPORT.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+    # 白名单申请清单（t96 ④）：残余=纯平台差异候选——申请单列，未批前不启用
+    if DIFF_DIR.is_dir() and not WHITELIST.is_file():
+        app = SCREENS / "whitelist-application.md"
+        app.write_text(
+            "# 视觉白名单申请清单（t96 4；未启用——启用需用户确认 + gates/visual_whitelist.json 登记）\n"
+            "\n> 申请判据（t33 §2）：仅平台差异（渲染路径不同但语义等价）可申请；游戏行为差异（含 D4 quirks）永不入。\n"
+            "\n## 申请项\n"
+            "- W-C1 调色板映射（强候选）：NES 调色板↔GREY4 公共域量化差——整帧系统性色偏；证据：diff/ 逐帧差异图 + 灰阶公共口径比对记录；建议先共用映射表再议豁免。\n"
+            "- W-C4 色彩空间/伽马（强候选，与 W-C1 合并处理优先）。\n"
+            "- W-C2/W-C3（弱候选）：字形/文本渲染差——预期移植对齐后消失，暂不申请。\n"
+            "\n## 归因证据\n"
+            "- 差异图：oracle/screens/diff/*.diff.png\n"
+            "- 分类记录：oracle/screens/visual-report.md\n"
+            "- 时序相位证据：docs/findings/linebuf-timing-wnew.md（t94）+ t96 处置\n"
+            "\n## 状态\n申请中（未启用）——captain 转用户裁定前 gates/visual_whitelist.json 不建立。\n",
+            encoding="utf-8")
     print(f"L4 视觉：{passed} 通过 / {len(results)} 比对；分类记录 {len(classified)}；未分类 {len(unclassified)}")
     # 退出码口径（t92 ⑤）：≥1 通过帧（灰阶公共口径 0 容差）或 全部差异有显式四分类记录 ⇒ 0
     if unclassified:
