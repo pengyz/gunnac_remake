@@ -209,6 +209,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | B-SYS-FIRE | 射击/投放：A 边沿投放例程流 / 消耗查表 / 坐标快照 / mode:=7 / 主武器弹药 | N-0017..0021/N-0024, bank03:A2B4-A2FA, ram-watch-s3 §3-4, scenario: gameplay-stage1 | A | **L2**（R-fire-1..6，§2.4.3） |
 | B-SYS-RESPAWN | 死亡/重生事件：事件窗口 / 移动冻结 / 坐标重置 128/160 / 弹药回满 4（2026-10-12 t27 按约束①准入；受击判定/死亡语义不在此格，见 H-16/W3） | oracle/traces/gameplay-stage1.player.jsonl 帧域 f1831-1916/f2047-2101/f2131-2175, t24 L3 发现 | A | **L2**（R-respawn-1..4，§2.4.5） |
 | B-SYS-SPAWNRHYTHM | spawn 节律：16 帧周期连发 / 突发簇 / 独立定时机制（2026-10-12 t49 约束①准入，t47 证据包） | wave-semantics-s1.md §2（104 事件 A 级）, gameplay-stage1 对象槽 $0400+n×$1C 激活流 | A | **L2→L3 部分**（R-spawn-1..3，§2.4.10） |
+| B-SYS-ENEMY | 敌对象系统：生成记录 / 行为脚本流 / 双 SoA 网格 / RAM 绑定流 / 生命周期已证链（2026-10-12 t60 约束①准入；命中/清除段=H-16 待证） | enemy-dataface.md §1-2（t_005 5 字节实录/双 SoA 字段扫描/t_001 375 指针）, t48/t52 弹侧定谳合流 | A/B | **L2**（R-enemy-1..6，§2.4.12） |
 
 #### 2.4.1 分子登记记录（L1，规则面覆盖；t6 2026-10-12）
 
@@ -422,11 +423,25 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 备注: L3 升格前提=t50 shots golden 转正（--shots-extract 入默认抽取链）；Ws-6（$05CE 写点）留抽取器六字段补证
 ```
 
+#### 2.4.12 分子登记记录（L2，enemy 模块合同开张；t60 2026-10-12）
+
+> 格式按 §6.2；B-SYS-ENEMY 约束①准入（t32 证据包 + t48/t52 弹侧定谳合流）；
+> 命中/受击判定维持 H-16 待证（t60 脚本机考证在途可分批回填）。
+
+```
+格: B-SYS-ENEMY
+强度: L2
+证据: docs/findings/enemy-dataface.md §1-2（t_005 5 字节记录实录/行为脚本流 $B2B4 族/双 SoA 字段阵列 raw 扫描/t_001 变长绑定流 375 指针）+ t48（$70 槽位几何）+ t52（槽迭代 +$7E/+$1C×3 交错）+ N-0011..0016/N-0054 锚点 + gameplay-stage1 对象 churn 1090/1090 帧
+工件: docs/spec/enemy-system.md#R-enemy-1..6、docs/spec/constants.md#C-spawn-rec/C-grid-1c/C-grid-70
+日期: 2026-10-12
+备注: 命中/清除段待证（H-16）；HP 字段四候选未定谳（B4）；B-STG-xx-EN 逐关子格仍证据后准入不预建
+```
+
 ### 2.5 分母统计（v0）
 
 | 面 | 格数 | 备注 |
 |---|---|---|
-| 行为面/内容面（§2） | 25 + 4 + 8 + 11 + 1 = **49** | 武器 25 / 炸弹 4 / 关卡 8 / 系统 11（t49 +B-SYS-SPAWNRHYTHM）/ 关卡子格 1；其余子格不预建 |
+| 行为面/内容面（§2） | 25 + 4 + 8 + 12 + 1 = **50** | 武器 25 / 炸弹 4 / 关卡 8 / 系统 12（t60 +B-SYS-ENEMY）/ 关卡子格 1；其余子格不预建 |
 | 规则面（§5） | 46（下限，按行为格派生） | 每格 ≥1 条 R- 规则 |
 | 符号面（§3） | **未计**（占位） | S1 后机械导出 |
 | 数据面（§4） | **未计**（占位） | S1 后机械导出 |
@@ -560,6 +575,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | **S**（t42 关卡结构假设） | `docs/findings/stage-timeline.md` §7 | S1 段参数语义（时刻/序号/掩码，C）｜S2 $ACEF 目录消费方式（C）｜S3 bank2 $8100 页目录读者（C）｜S4 地形碰撞数据（C）｜S5 关卡长度/切换条件（C）｜S6 bank9/10 逐关归属（B，候选定位级）——S 系列与 H/W/Q 并列互通，收口须同步本表 |
 | **Wv**（wave 域，2026-10-12 t51 消歧：原 W1-W5 → Wv-1..5） | `docs/findings/wave-semantics-s1.md` §7 | Wv-1 链首字用途（C）｜Wv-2 `XX FD` 标记+参数对语义（C）｜Wv-3 16 帧节律定时机制（B，= B-SYS-SPAWNRHYTHM L3 前置）｜Wv-4 地形流消费例程（C，S4 延续）｜Wv-5 链尾段 `C8 AD` 后续（C） |
 | **Ws**（shot 域，t51 消歧） | `docs/findings/shot-slot-geometry.md` §4、`docs/findings/shot-gating-f1.md` §4 | Ws-6：`$05CE`（motion_code）写点（脚本机运行时写，六字段补证）｜**Ws-7** 弹 state 与网格字段**同址所有权**（时分复用？B 级；原"交错语义待 t52"占位经 t52 F2b 收口转正；【t57 增量】t55 实证存在**网格驻留切换**现象——断言腿曾将其误计为出生（f2350 结案素材），时分复用假设方向获旁证）｜**Ws-8**（t52 W8）：`$32` bit2/bit3 置位时机（模式来源，C）｜**Ws-9**（t52 W9）：计数器满阈值停发/复位闭环（`$91B3` 调用时机 vs `$074A` 周期，B） |
+| **B**（t32 敌数据面，与 B-WPN/B-SYS 前缀无撞——专指假设编号） | `docs/findings/enemy-dataface.md` §3 | B1 t_005 三参数语义（C）｜B2 t_001 RAM 槽指针语义（C）｜B3 玩家=$1C 系统固定槽（B）｜B4 HP 字段四候选 $05DC/$0630/$06A0/$06BC（C）｜B5 $1C/$70 两系统对象关系（C，Ws-7 互链）｜B6 bank8 $AD00 链=波次脚本链（C，Wv 族互链） |
 | **Q**（t28 孤儿 run 复核遗留） | `docs/findings/orphan-run-recheck.md` §四 | Q1 **收口**（t29：$0190 拾取处理器 + $3B 连收计数）｜Q2 → N-0037 同域｜Q3 干净重跑已做（t29 akey-role）｜Q4 已落地（`oracle/scenarios/README.md` +1 帧约定） |
 
 > 【t51 W 系列消歧规则】三域并存，引用必须带域前缀：**W**=ram-watch（W1-W8，历史深嵌不改名）、
@@ -628,6 +644,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 `v0.13 (2026-10-12, t53) F2 churn 证伪更正：shot-slot-geometry §3 churn 统计口径不成立原地更正（20 槽 state=B5 交错区静态非寿命数据/20 帧不递减/同址交错；921 帧零解释被 F1 反证）；R-shot-alloc-* 证据链撤除 churn 引用（几何/分配断言不依赖）；Ws-7（W5/Ws 交错语义）入索引标待 t52；知识条目 gotcha-false-green-idle-assertions 入库（断言存在≠生效，caed518 ss-1/2 空转教训）。`
 `v0.14 (2026-10-12, t56) 控制方案大修（t52 冲击波更正扫荡）：R-shot-gen-2 证伪更正（主武器=B 键按住连发，门控链 $18 bit6→$39/$3A→$32 bit2；N-0035"自动连射"撤回 N-0073、t25"B=弹种切换"更正 N-0072）；H-14 定谳文本两处作废重写（A=投放/B 长按连发/弹种切换=拾取字母圈）；R-move-1 补 bit6=B；R-shot-alloc-1 churn 口径更新（fire-hold 0-9 众数 2-6、容量 20 未饱和，N-0074）；B-WPN 25 格控制方案备注；Ws-7/8/9 入索引。`
 `v0.15 (2026-10-12, t57) t55 后续：f2350"待联查"结案（=移植/实现差：断言腿出生检测误计 W7 网格驻留切换，补 R-shot-gen-3 签名后负例归零；非规格缺口，R-shot-alloc-2 无需改）；R-shot-motion-2 LUT 索引无掩码语义补正（motion≥16 读表间字节 $88CB=$F8，"16 向"非掩码规则）+ constants v6 表注；R-shot-gen-3 出生签名（坐标=玩家±9px）入规则（A 级）；R-shot-gen/alloc-* L3 前提标注升级"已判"（t55 转正落地）；Ws-7 增量（网格驻留切换现象实证）。`
+`v0.16 (2026-10-12, t60) enemy 模块合同开张：enemy-system.md R-enemy-1..6（t_005 生成记录 5 字节/行为脚本流 FE·FC 终止+嵌套指针/双 SoA 网格 $1C 28 槽+$70 弹对象/字段阵列/t_001 变长绑定流/生命周期已证链——命中清除段 H-16 待证）；B-SYS-ENEMY 约束①准入（§2.4.12，L2），行为面 49→50；B1-B6 入 §7.1 B 系列；constants §1.6 三锚点。`
 
 ---
 

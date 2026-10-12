@@ -31,6 +31,14 @@
 | C-wave-dir | 目录 `bank8:$ACEF` = 块范围对（`44 AD D0 AD` → $AD44-$ADD0） | stage-timeline §2.3 | B | R-stage-3 |
 | C-scroll-vars | 滚动寄存器变量 `$1C/$1D`（NMI `bank15:$EFC8/$EFCD STA $2005` 消费） | stage-timeline §4 + S0 | B | R-stage-4 |
 
+## 1.6 敌对象结构锚点（2026-10-12 t60，结构级；参数语义留 B 系假设）
+
+| 常量 ID | 值 | 来源 | 级 | 关联 |
+|---|---|---|---|---|
+| C-spawn-rec | t_005 生成记录 5 字节 `{参数×3, 行为脚本指针(2,LE,bank8 窗内)}`（bank8:$ADD0-$BFFF，4656B） | `docs/findings/enemy-dataface.md` §1.1 实录 | A/B | R-enemy-1 |
+| C-grid-1c | 关卡对象网格：**$1C 间距 28 槽**（字段=base+n×$1C：$0400 类型/状态、$0470/$048C 亚像素、$04E0/$04FC 坐标、$0550/$056C/$0588/$05A4 速度、$05C0+ 倒计时簇） | enemy-dataface §2.1 + N-0011..0016 | A | R-enemy-3/4 |
+| C-grid-70 | 弹对象网格：**$70 间距**六字段（$040E/$047E/$04EE/$055E/$05CE/$063E） | shot-behavior §1.3 + t48/t52 | A | R-enemy-3 |
+
 ## 2. 登记不解释（存在性已证，含义未证）
 
 | 常量 ID | 值 | 来源 | 级 | 关联 | 备注 |
@@ -58,3 +66,4 @@
 - `v4 (2026-10-12, t36) 弹丸六表逐值（§2.5）：C-lvl-offsets（12 项）、C-shot-cfg-stream（12 级逐对）、C-motion-lut-x/y（16 项）、C-action-stream（观测区 36B，界未证）、C-action-durations（FF 段+0=跳转语义）——全部 seed 逐字节核；t29 样本列错位已在 shot-system.md §5 更正（指针标签经代码级复核正确）`
 - `v5 (2026-10-12, t46) 关卡结构锚点（§1.5）：C-wave-chain（波次链区 $AD00-$ADD0 分段记录流）、C-wave-dir（$ACEF 块范围对）、C-scroll-vars（$1C/$1D 滚动寄存器）——结构级 B 级，语义留 S1/S2`
 - `v6 (2026-10-12, t57) LUT 表注补正：索引无掩码（motion≥16 读表间字节 $88CB=$F8，t55 实证——"16 向"仅为表内形态非索引规则，掩码解读会伪造 +9 偏移）；表界/夹缝区=A4 素材`
+- `v7 (2026-10-12, t60) 敌对象结构锚点（§1.6）：C-spawn-rec（t_005 5 字节记录）、C-grid-1c（$1C 28 槽字段阵列）、C-grid-70（$70 弹对象）——参数语义留 B1-B5`
