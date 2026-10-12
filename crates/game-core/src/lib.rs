@@ -9,6 +9,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod l2ports;
+
 pub use game_platform::{Buttons, Clock, GameRng, Input};
 
 /// 目标帧率（NES = 60Hz）：一切 tick 逻辑以此锁帧。
