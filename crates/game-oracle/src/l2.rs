@@ -632,6 +632,14 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
             writes.insert(0x019D + slot_off, hi);
             (hi, x_in, y_in + 2)
         }
+        "ui_scroll_write" => {
+            // bank1:$AB3B UI 卷轴 $2005 同值双写（R-bg-scroll-4 分立通道）
+            let ui = game_core::stage::UiScroll { value: a_in };
+            let (w1, w2) = ui.ppu_scroll_writes();
+            writes.insert(0x2005, w1);
+            let _ = w2; // 同值双写（Out 写集按地址去重，形状由单测断言）
+            (a_in, x_in, y_in)
+        }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),
     };
     Ok(Out { a, x, y, writes, exit: exit_at })

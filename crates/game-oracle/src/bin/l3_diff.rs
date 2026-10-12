@@ -121,6 +121,32 @@ fn main() -> ExitCode {
                     println!("         {p}");
                 }
             }
+        } else if path.ends_with(".scroll.jsonl") {
+            let rows = match game_oracle::l3::parse_scroll_rows(&jsonl) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("{path}: golden 解析失败：{e}");
+                    return ExitCode::from(2);
+                }
+            };
+            match game_oracle::l3::diff_scroll_trace(&rows) {
+                Ok((compared, problems)) => {
+                    total += compared;
+                    if problems.is_empty() {
+                        println!("[ok]   {path}: $1C/$1D 逐帧全等 {compared} 帧（R-bg-scroll-1..3）");
+                    } else {
+                        failures += 1;
+                        println!("[FAIL] {path}:");
+                        for p in &problems {
+                            println!("         {p}");
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{path}: 差分执行错误：{e}");
+                    return ExitCode::from(2);
+                }
+            }
         } else {
             eprintln!("{path}: 未知 golden 类型（*.player.jsonl / *.weapons.jsonl / *.shots.jsonl）");
             return ExitCode::from(2);

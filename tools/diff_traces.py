@@ -311,6 +311,39 @@ def extract_enemy_churn(scene: str) -> int:
     return 0
 
 
+
+def extract_stage_scroll(scene: str) -> int:
+    """关卡卷轴 $1C/$1D 逐帧向量 golden（R-bg-scroll-1..3，L3 全等对拍）。
+
+    采样口径（声明）：f1193-2400 **逐帧全采**（无降采样——规则为帧级确定性值序列）。
+    载体 = zp watch（$1C/$1D 逐帧向量，L3 状态向量已含 zp）。UI 卷轴通道（$AB3B）分立
+    不在此面（R-bg-scroll-4）。
+    """
+    src = ROOT / "analysis" / "traces" / f"{scene}.frames.jsonl"
+    dst = ROOT / "oracle" / "traces" / f"{scene}.scroll.jsonl"
+    if not src.is_file():
+        return 2
+    n = 0
+    with open(dst, "w", encoding="utf-8") as out:
+        for line in src.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            f = rec["f"]
+            if f < 1193 or f > 2400:
+                continue
+            w = rec["w"]
+            zp_w = w.get("zp")
+            if zp_w is None:
+                print(f"  {scene} 无 zp watch——跳过卷轴抽取")
+                return 0
+            zp = bytes.fromhex(zp_w)
+            out.write(json.dumps({"f": f, "scroll_x": zp[0x1C], "scroll_y": zp[0x1D]}) + "\n")
+            n += 1
+    print(f"卷轴向量抽取：{scene} {n} 行（f1193-2400 逐帧全采）→ {dst.relative_to(ROOT)}")
+    return 0
+
+
 def extract() -> int:
     rc = 0
     for scene, cfg in SCENES.items():
@@ -342,6 +375,9 @@ def extract() -> int:
     for scene in ("fire-hold", "gameplay-stage1", "weapon-pickup"):
         rc = rc or extract_shot_trajectories(scene)
         rc = rc or extract_enemy_churn(scene)
+    # 卷轴 golden 仅 gameplay-stage1（R-bg-scroll 相位/边界帧系该场景时间线定谳；
+    # 他场景时间线未证不抽取）
+    rc = rc or extract_stage_scroll("gameplay-stage1")
     return rc
 
 
@@ -349,7 +385,8 @@ def run_diff() -> int:
     goldens = (sorted((ROOT / "oracle" / "traces").glob("*.player.jsonl")) +
         sorted((ROOT / "oracle" / "traces").glob("*.weapons.jsonl")) +
         sorted((ROOT / "oracle" / "traces").glob("*.shots.jsonl")) +
-        sorted((ROOT / "oracle" / "traces").glob("*.enemy.jsonl")))
+        sorted((ROOT / "oracle" / "traces").glob("*.enemy.jsonl")) +
+        sorted((ROOT / "oracle" / "traces").glob("*.scroll.jsonl")))
     if not goldens:
         print(f"L3 golden 缺失（先 --extract）", file=sys.stderr)
         return 2
