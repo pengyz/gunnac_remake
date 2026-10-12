@@ -31,5 +31,8 @@ capture 2320 end
 
 watch_range 0000-00ff zp
 watch 0320
+# 弹药/弹型（$0100 页游戏变量，R-bomb-2 三变量同步断言源）
+watch 018f bomb_ammo
+watch 0190 bomb_type_index
 watch_range 0300-07ff iram
 watch_range 6000-7fff wram

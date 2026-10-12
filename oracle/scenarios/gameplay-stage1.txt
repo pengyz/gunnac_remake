@@ -56,6 +56,7 @@ watch 0018 controller_held
 watch 0016 controller_pressed
 watch 0401 game_action_mode
 watch 018f bomb_ammo
+watch 0190 bomb_type_index
 # t22 watch 扩展（观察性，不改输入）：内部 RAM 尾段（HUD/对象槽）与 WRAM $6000-$7FFF
 # （金钱显示源候选区，t18 负结果定向补证；MEMTYPE=8 CPU 总线视图可读）
 watch_range 0300-07ff iram
