@@ -1,17 +1,12 @@
-//! game-oracle —— 差分宿主占位（L1–L3/L5 比对宿主，S6 落地）。
+//! game-oracle —— 差分宿主（L2 子程序级差分先落地；L3/L5 后续）。
 //!
 //! 契约（AGENTS.md §2 `oracle/` 行）：比对逻辑**不得为"通过测试"放宽阈值**；
 //! 白名单唯一例外 = `gates/visual_whitelist.json`（L4，需用户确认）。
-//! 本占位不放任何比对/阈值逻辑 —— 差分实现必须与 verifier 的裁定同 commit 落地。
+//!
+//! - `cpu6502`：6502 CPU 核（仅 CPU+RAM，PPU/APU stub），执行 ROM 原字节子程序；
+//! - `l2`：case 格式（JSONL）+ 三方裁定（golden / ROM 执行 / game-core 同名函数）。
 
 #![forbid(unsafe_code)]
 
-/// 差分宿主骨架（占位）。真实现到来前不提供任何"判定"入口，防止被误用为放水通道。
-#[derive(Debug, Default)]
-pub struct DiffHost;
-
-impl DiffHost {
-    pub const fn new() -> Self {
-        Self
-    }
-}
+pub mod cpu6502;
+pub mod l2;

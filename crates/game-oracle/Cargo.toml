@@ -5,3 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+game-core = { path = "../game-core" }
+
+[[bin]]
+name = "l2-diff"
+path = "src/bin/l2_diff.rs"
