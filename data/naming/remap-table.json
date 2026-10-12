@@ -1,0 +1,7687 @@
+{
+  "schema": 1,
+  "layer": "mechanical",
+  "generated_by": "tools/remap/run.py",
+  "rom_sha256": "4d76901c1b2455f2bdae8e8ac99b1779441f9f2155614dab222c229ae06c77ae",
+  "projection": {
+    "decoder": "IDA 9.1 processor M6502 (tools/ida/export_bank.py)",
+    "seed": "reference/seed/gunnac.asm",
+    "xref_scope": "intra-bank code xrefs（跨 bank 引用经 far-call/指针，机械层不计）"
+  },
+  "counts": {
+    "subroutines": 276,
+    "vectors": 3,
+    "far_call_sites": 18,
+    "bank11_entry_table": 7,
+    "ram_symbols": 560,
+    "io_register_symbols": 414,
+    "data_tables": 8,
+    "code_bytes": 74436,
+    "data_bytes": 56636
+  },
+  "vectors": [
+    {
+      "name": "NMI",
+      "cpu": "$EF85",
+      "bank": 15,
+      "prg": "0x1EF85"
+    },
+    {
+      "name": "RESET",
+      "cpu": "$E000",
+      "bank": 15,
+      "prg": "0x1E000"
+    },
+    {
+      "name": "IRQ",
+      "cpu": "$F20B",
+      "bank": 15,
+      "prg": "0x1F20B"
+    }
+  ],
+  "entries": {
+    "far_call_sites": [
+      {
+        "bank": 0,
+        "site": "bank00:89D5",
+        "r6": 11,
+        "r7": 12,
+        "target": "$8012"
+      },
+      {
+        "bank": 0,
+        "site": "bank00:8BCE",
+        "r6": 11,
+        "r7": 12,
+        "target": "$8012"
+      },
+      {
+        "bank": 0,
+        "site": "bank00:8F70",
+        "r6": 11,
+        "r7": 0,
+        "target": "$8012"
+      },
+      {
+        "bank": 0,
+        "site": "bank00:8F8C",
+        "r6": 11,
+        "r7": 0,
+        "target": "$8012"
+      },
+      {
+        "bank": 0,
+        "site": "bank00:9CDC",
+        "r6": 2,
+        "r7": 3,
+        "target": "$9698"
+      },
+      {
+        "bank": 0,
+        "site": "bank00:9E01",
+        "r6": 2,
+        "r7": 3,
+        "target": "$922B"
+      },
+      {
+        "bank": 0,
+        "site": "bank00:9E14",
+        "r6": 2,
+        "r7": 3,
+        "target": "$92C5"
+      },
+      {
+        "bank": 7,
+        "site": "bank07:A8FB",
+        "r6": 0,
+        "r7": 1,
+        "target": "$8807"
+      },
+      {
+        "bank": 7,
+        "site": "bank07:A902",
+        "r6": 11,
+        "r7": 12,
+        "target": "$8012"
+      },
+      {
+        "bank": 7,
+        "site": "bank07:AB33",
+        "r6": 0,
+        "r7": 1,
+        "target": "$8807"
+      },
+      {
+        "bank": 15,
+        "site": "bank15:E087",
+        "r6": 11,
+        "r7": 12,
+        "target": "$8000"
+      },
+      {
+        "bank": 15,
+        "site": "bank15:E0AF",
+        "r6": 0,
+        "r7": 1,
+        "target": "$8DDF"
+      },
+      {
+        "bank": 15,
+        "site": "bank15:E171",
+        "r6": 0,
+        "r7": 1,
+        "target": "$9BC3"
+      },
+      {
+        "bank": 15,
+        "site": "bank15:E3A1",
+        "r6": 0,
+        "r7": 1,
+        "target": "$95F9"
+      },
+      {
+        "bank": 15,
+        "site": "bank15:F254",
+        "r6": 11,
+        "r7": 12,
+        "target": "$800C"
+      },
+      {
+        "bank": 15,
+        "site": "bank15:F269",
+        "r6": 0,
+        "r7": 0,
+        "target": "$881A"
+      },
+      {
+        "bank": 15,
+        "site": "bank15:F2B8",
+        "r6": 11,
+        "r7": 12,
+        "target": "$800F"
+      },
+      {
+        "bank": 15,
+        "site": "bank15:F2C8",
+        "r6": 0,
+        "r7": 0,
+        "target": "$881A"
+      }
+    ],
+    "bank11_jmp_table": [
+      {
+        "at": "bank11:8000",
+        "target": "$88A3"
+      },
+      {
+        "at": "bank11:8003",
+        "target": "$88A7"
+      },
+      {
+        "at": "bank11:8006",
+        "target": "$890B"
+      },
+      {
+        "at": "bank11:8009",
+        "target": "$8016"
+      },
+      {
+        "at": "bank11:800C",
+        "target": "$8894"
+      },
+      {
+        "at": "bank11:800F",
+        "target": "$889B"
+      },
+      {
+        "at": "bank11:8012",
+        "target": "$8E2C"
+      }
+    ]
+  },
+  "symbols": [
+    {
+      "id": "f_000",
+      "kind": "subroutine",
+      "mech": "sub_8000",
+      "bank": 0,
+      "cpu": "$8000",
+      "prg": "0x00000",
+      "size": 53
+    },
+    {
+      "id": "f_001",
+      "kind": "subroutine",
+      "mech": "sub_8035",
+      "bank": 0,
+      "cpu": "$8035",
+      "prg": "0x00035",
+      "size": 53
+    },
+    {
+      "id": "f_002",
+      "kind": "subroutine",
+      "mech": "sub_80DA",
+      "bank": 0,
+      "cpu": "$80DA",
+      "prg": "0x000DA",
+      "size": 28
+    },
+    {
+      "id": "f_003",
+      "kind": "subroutine",
+      "mech": "sub_80F6",
+      "bank": 0,
+      "cpu": "$80F6",
+      "prg": "0x000F6",
+      "size": 3
+    },
+    {
+      "id": "f_004",
+      "kind": "subroutine",
+      "mech": "sub_80F9",
+      "bank": 0,
+      "cpu": "$80F9",
+      "prg": "0x000F9",
+      "size": 28
+    },
+    {
+      "id": "f_005",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_006",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_007",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_008",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_009",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_010",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_011",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_012",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_013",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_014",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_015",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_016",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_017",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_018",
+      "kind": "subroutine",
+      "mech": "sub_8185",
+      "bank": 0,
+      "cpu": "$8185",
+      "prg": "0x00185",
+      "size": 1051
+    },
+    {
+      "id": "f_019",
+      "kind": "subroutine",
+      "mech": "sub_85A0",
+      "bank": 0,
+      "cpu": "$85A0",
+      "prg": "0x005A0",
+      "size": 121
+    },
+    {
+      "id": "f_020",
+      "kind": "subroutine",
+      "mech": "sub_85A0",
+      "bank": 0,
+      "cpu": "$85A0",
+      "prg": "0x005A0",
+      "size": 121
+    },
+    {
+      "id": "f_021",
+      "kind": "subroutine",
+      "mech": "sub_8619",
+      "bank": 0,
+      "cpu": "$8619",
+      "prg": "0x00619",
+      "size": 67
+    },
+    {
+      "id": "f_022",
+      "kind": "subroutine",
+      "mech": "sub_865C",
+      "bank": 0,
+      "cpu": "$865C",
+      "prg": "0x0065C",
+      "size": 67
+    },
+    {
+      "id": "f_023",
+      "kind": "subroutine",
+      "mech": "sub_86A0",
+      "bank": 0,
+      "cpu": "$86A0",
+      "prg": "0x006A0",
+      "size": 14
+    },
+    {
+      "id": "f_024",
+      "kind": "subroutine",
+      "mech": "sub_86CE",
+      "bank": 0,
+      "cpu": "$86CE",
+      "prg": "0x006CE",
+      "size": 48
+    },
+    {
+      "id": "f_025",
+      "kind": "subroutine",
+      "mech": "sub_86CE",
+      "bank": 0,
+      "cpu": "$86CE",
+      "prg": "0x006CE",
+      "size": 48
+    },
+    {
+      "id": "f_026",
+      "kind": "subroutine",
+      "mech": "sub_86FE",
+      "bank": 0,
+      "cpu": "$86FE",
+      "prg": "0x006FE",
+      "size": 18
+    },
+    {
+      "id": "f_027",
+      "kind": "subroutine",
+      "mech": "sub_8895",
+      "bank": 0,
+      "cpu": "$8895",
+      "prg": "0x00895",
+      "size": 41
+    },
+    {
+      "id": "f_028",
+      "kind": "subroutine",
+      "mech": "sub_88BE",
+      "bank": 0,
+      "cpu": "$88BE",
+      "prg": "0x008BE",
+      "size": 28
+    },
+    {
+      "id": "f_029",
+      "kind": "subroutine",
+      "mech": "sub_8D3A",
+      "bank": 0,
+      "cpu": "$8D3A",
+      "prg": "0x00D3A",
+      "size": 75
+    },
+    {
+      "id": "f_030",
+      "kind": "subroutine",
+      "mech": "sub_8D8D",
+      "bank": 0,
+      "cpu": "$8D8D",
+      "prg": "0x00D8D",
+      "size": 35
+    },
+    {
+      "id": "f_031",
+      "kind": "subroutine",
+      "mech": "sub_8DB0",
+      "bank": 0,
+      "cpu": "$8DB0",
+      "prg": "0x00DB0",
+      "size": 13
+    },
+    {
+      "id": "f_032",
+      "kind": "subroutine",
+      "mech": "sub_8DBD",
+      "bank": 0,
+      "cpu": "$8DBD",
+      "prg": "0x00DBD",
+      "size": 15
+    },
+    {
+      "id": "f_033",
+      "kind": "subroutine",
+      "mech": "sub_8DCC",
+      "bank": 0,
+      "cpu": "$8DCC",
+      "prg": "0x00DCC",
+      "size": 19
+    },
+    {
+      "id": "f_034",
+      "kind": "subroutine",
+      "mech": "sub_8FEE",
+      "bank": 0,
+      "cpu": "$8FEE",
+      "prg": "0x00FEE",
+      "size": 102
+    },
+    {
+      "id": "f_035",
+      "kind": "subroutine",
+      "mech": "sub_929E",
+      "bank": 0,
+      "cpu": "$929E",
+      "prg": "0x0129E",
+      "size": 364
+    },
+    {
+      "id": "f_036",
+      "kind": "subroutine",
+      "mech": "sub_929E",
+      "bank": 0,
+      "cpu": "$929E",
+      "prg": "0x0129E",
+      "size": 364
+    },
+    {
+      "id": "f_037",
+      "kind": "subroutine",
+      "mech": "sub_929E",
+      "bank": 0,
+      "cpu": "$929E",
+      "prg": "0x0129E",
+      "size": 364
+    },
+    {
+      "id": "f_038",
+      "kind": "subroutine",
+      "mech": "sub_929E",
+      "bank": 0,
+      "cpu": "$929E",
+      "prg": "0x0129E",
+      "size": 364
+    },
+    {
+      "id": "f_039",
+      "kind": "subroutine",
+      "mech": "sub_940A",
+      "bank": 0,
+      "cpu": "$940A",
+      "prg": "0x0140A",
+      "size": 170
+    },
+    {
+      "id": "f_040",
+      "kind": "subroutine",
+      "mech": "sub_95F9",
+      "bank": 0,
+      "cpu": "$95F9",
+      "prg": "0x015F9",
+      "size": 362
+    },
+    {
+      "id": "f_041",
+      "kind": "subroutine",
+      "mech": "sub_95F9",
+      "bank": 0,
+      "cpu": "$95F9",
+      "prg": "0x015F9",
+      "size": 362
+    },
+    {
+      "id": "f_042",
+      "kind": "subroutine",
+      "mech": "sub_95F9",
+      "bank": 0,
+      "cpu": "$95F9",
+      "prg": "0x015F9",
+      "size": 362
+    },
+    {
+      "id": "f_043",
+      "kind": "subroutine",
+      "mech": "sub_95F9",
+      "bank": 0,
+      "cpu": "$95F9",
+      "prg": "0x015F9",
+      "size": 362
+    },
+    {
+      "id": "f_044",
+      "kind": "subroutine",
+      "mech": "sub_95F9",
+      "bank": 0,
+      "cpu": "$95F9",
+      "prg": "0x015F9",
+      "size": 362
+    },
+    {
+      "id": "f_045",
+      "kind": "subroutine",
+      "mech": "sub_9763",
+      "bank": 0,
+      "cpu": "$9763",
+      "prg": "0x01763",
+      "size": 112
+    },
+    {
+      "id": "f_046",
+      "kind": "subroutine",
+      "mech": "sub_9E08",
+      "bank": 0,
+      "cpu": "$9E08",
+      "prg": "0x01E08",
+      "size": 15
+    },
+    {
+      "id": "f_047",
+      "kind": "subroutine",
+      "mech": "sub_9E08",
+      "bank": 0,
+      "cpu": "$9E08",
+      "prg": "0x01E08",
+      "size": 15
+    },
+    {
+      "id": "f_048",
+      "kind": "subroutine",
+      "mech": "sub_9E1E",
+      "bank": 0,
+      "cpu": "$9E1E",
+      "prg": "0x01E1E",
+      "size": 34
+    },
+    {
+      "id": "f_049",
+      "kind": "subroutine",
+      "mech": "sub_9E40",
+      "bank": 0,
+      "cpu": "$9E40",
+      "prg": "0x01E40",
+      "size": 70
+    },
+    {
+      "id": "f_050",
+      "kind": "subroutine",
+      "mech": "sub_9E40",
+      "bank": 0,
+      "cpu": "$9E40",
+      "prg": "0x01E40",
+      "size": 70
+    },
+    {
+      "id": "f_051",
+      "kind": "subroutine",
+      "mech": "sub_9E86",
+      "bank": 0,
+      "cpu": "$9E86",
+      "prg": "0x01E86",
+      "size": 109
+    },
+    {
+      "id": "f_052",
+      "kind": "subroutine",
+      "mech": "sub_9E86",
+      "bank": 0,
+      "cpu": "$9E86",
+      "prg": "0x01E86",
+      "size": 109
+    },
+    {
+      "id": "f_053",
+      "kind": "subroutine",
+      "mech": "sub_9EF3",
+      "bank": 0,
+      "cpu": "$9EF3",
+      "prg": "0x01EF3",
+      "size": 16
+    },
+    {
+      "id": "f_054",
+      "kind": "subroutine",
+      "mech": "sub_9F86",
+      "bank": 0,
+      "cpu": "$9F86",
+      "prg": "0x01F86",
+      "size": 93
+    },
+    {
+      "id": "f_055",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 1,
+      "cpu": "$A000",
+      "prg": "0x02000",
+      "size": 35
+    },
+    {
+      "id": "f_056",
+      "kind": "subroutine",
+      "mech": "sub_A06C",
+      "bank": 1,
+      "cpu": "$A06C",
+      "prg": "0x0206C",
+      "size": 26
+    },
+    {
+      "id": "f_057",
+      "kind": "subroutine",
+      "mech": "sub_A09F",
+      "bank": 1,
+      "cpu": "$A09F",
+      "prg": "0x0209F",
+      "size": 29
+    },
+    {
+      "id": "f_058",
+      "kind": "subroutine",
+      "mech": "sub_A0BC",
+      "bank": 1,
+      "cpu": "$A0BC",
+      "prg": "0x020BC",
+      "size": 26
+    },
+    {
+      "id": "f_059",
+      "kind": "subroutine",
+      "mech": "sub_A92E",
+      "bank": 1,
+      "cpu": "$A92E",
+      "prg": "0x0292E",
+      "size": 33
+    },
+    {
+      "id": "f_060",
+      "kind": "subroutine",
+      "mech": "sub_AB70",
+      "bank": 1,
+      "cpu": "$AB70",
+      "prg": "0x02B70",
+      "size": 70
+    },
+    {
+      "id": "f_061",
+      "kind": "subroutine",
+      "mech": "sub_B29B",
+      "bank": 1,
+      "cpu": "$B29B",
+      "prg": "0x0329B",
+      "size": 9
+    },
+    {
+      "id": "f_062",
+      "kind": "subroutine",
+      "mech": "sub_8000",
+      "bank": 2,
+      "cpu": "$8000",
+      "prg": "0x04000",
+      "size": 1
+    },
+    {
+      "id": "f_063",
+      "kind": "subroutine",
+      "mech": "sub_82F8",
+      "bank": 2,
+      "cpu": "$82F8",
+      "prg": "0x042F8",
+      "size": 28
+    },
+    {
+      "id": "f_064",
+      "kind": "subroutine",
+      "mech": "sub_83DE",
+      "bank": 2,
+      "cpu": "$83DE",
+      "prg": "0x043DE",
+      "size": 40
+    },
+    {
+      "id": "f_065",
+      "kind": "subroutine",
+      "mech": "sub_863B",
+      "bank": 2,
+      "cpu": "$863B",
+      "prg": "0x0463B",
+      "size": 61
+    },
+    {
+      "id": "f_066",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 3,
+      "cpu": "$A000",
+      "prg": "0x06000",
+      "size": 763
+    },
+    {
+      "id": "f_067",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 3,
+      "cpu": "$A000",
+      "prg": "0x06000",
+      "size": 763
+    },
+    {
+      "id": "f_068",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 3,
+      "cpu": "$A000",
+      "prg": "0x06000",
+      "size": 763
+    },
+    {
+      "id": "f_069",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 3,
+      "cpu": "$A000",
+      "prg": "0x06000",
+      "size": 763
+    },
+    {
+      "id": "f_070",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 3,
+      "cpu": "$A000",
+      "prg": "0x06000",
+      "size": 763
+    },
+    {
+      "id": "f_071",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 3,
+      "cpu": "$A000",
+      "prg": "0x06000",
+      "size": 763
+    },
+    {
+      "id": "f_072",
+      "kind": "subroutine",
+      "mech": "sub_A343",
+      "bank": 3,
+      "cpu": "$A343",
+      "prg": "0x06343",
+      "size": 8
+    },
+    {
+      "id": "f_073",
+      "kind": "subroutine",
+      "mech": "sub_A4B6",
+      "bank": 3,
+      "cpu": "$A4B6",
+      "prg": "0x064B6",
+      "size": 42
+    },
+    {
+      "id": "f_074",
+      "kind": "subroutine",
+      "mech": "sub_A9AE",
+      "bank": 3,
+      "cpu": "$A9AE",
+      "prg": "0x069AE",
+      "size": 86
+    },
+    {
+      "id": "f_075",
+      "kind": "subroutine",
+      "mech": "sub_AB3D",
+      "bank": 3,
+      "cpu": "$AB3D",
+      "prg": "0x06B3D",
+      "size": 21
+    },
+    {
+      "id": "f_076",
+      "kind": "subroutine",
+      "mech": "sub_AB52",
+      "bank": 3,
+      "cpu": "$AB52",
+      "prg": "0x06B52",
+      "size": 24
+    },
+    {
+      "id": "f_077",
+      "kind": "subroutine",
+      "mech": "sub_AC42",
+      "bank": 3,
+      "cpu": "$AC42",
+      "prg": "0x06C42",
+      "size": 34
+    },
+    {
+      "id": "f_078",
+      "kind": "subroutine",
+      "mech": "sub_8000",
+      "bank": 4,
+      "cpu": "$8000",
+      "prg": "0x08000",
+      "size": 198
+    },
+    {
+      "id": "f_079",
+      "kind": "subroutine",
+      "mech": "sub_8000",
+      "bank": 5,
+      "cpu": "$8000",
+      "prg": "0x0A000",
+      "size": 243
+    },
+    {
+      "id": "f_080",
+      "kind": "subroutine",
+      "mech": "sub_8497",
+      "bank": 5,
+      "cpu": "$8497",
+      "prg": "0x0A497",
+      "size": 36
+    },
+    {
+      "id": "f_081",
+      "kind": "subroutine",
+      "mech": "sub_8000",
+      "bank": 6,
+      "cpu": "$8000",
+      "prg": "0x0C000",
+      "size": 65
+    },
+    {
+      "id": "f_082",
+      "kind": "subroutine",
+      "mech": "sub_845A",
+      "bank": 6,
+      "cpu": "$845A",
+      "prg": "0x0C45A",
+      "size": 65
+    },
+    {
+      "id": "f_083",
+      "kind": "subroutine",
+      "mech": "sub_845A",
+      "bank": 6,
+      "cpu": "$845A",
+      "prg": "0x0C45A",
+      "size": 65
+    },
+    {
+      "id": "f_084",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 7,
+      "cpu": "$A000",
+      "prg": "0x0E000",
+      "size": 294
+    },
+    {
+      "id": "f_085",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 7,
+      "cpu": "$A000",
+      "prg": "0x0E000",
+      "size": 294
+    },
+    {
+      "id": "f_086",
+      "kind": "subroutine",
+      "mech": "sub_A176",
+      "bank": 7,
+      "cpu": "$A176",
+      "prg": "0x0E176",
+      "size": 342
+    },
+    {
+      "id": "f_087",
+      "kind": "subroutine",
+      "mech": "sub_A176",
+      "bank": 7,
+      "cpu": "$A176",
+      "prg": "0x0E176",
+      "size": 342
+    },
+    {
+      "id": "f_088",
+      "kind": "subroutine",
+      "mech": "sub_A4A9",
+      "bank": 7,
+      "cpu": "$A4A9",
+      "prg": "0x0E4A9",
+      "size": 173
+    },
+    {
+      "id": "f_089",
+      "kind": "subroutine",
+      "mech": "sub_A4A9",
+      "bank": 7,
+      "cpu": "$A4A9",
+      "prg": "0x0E4A9",
+      "size": 173
+    },
+    {
+      "id": "f_090",
+      "kind": "subroutine",
+      "mech": "sub_A773",
+      "bank": 7,
+      "cpu": "$A773",
+      "prg": "0x0E773",
+      "size": 130
+    },
+    {
+      "id": "f_091",
+      "kind": "subroutine",
+      "mech": "sub_A7F5",
+      "bank": 7,
+      "cpu": "$A7F5",
+      "prg": "0x0E7F5",
+      "size": 28
+    },
+    {
+      "id": "f_092",
+      "kind": "subroutine",
+      "mech": "sub_A811",
+      "bank": 7,
+      "cpu": "$A811",
+      "prg": "0x0E811",
+      "size": 238
+    },
+    {
+      "id": "f_093",
+      "kind": "subroutine",
+      "mech": "sub_A811",
+      "bank": 7,
+      "cpu": "$A811",
+      "prg": "0x0E811",
+      "size": 238
+    },
+    {
+      "id": "f_094",
+      "kind": "subroutine",
+      "mech": "sub_A930",
+      "bank": 7,
+      "cpu": "$A930",
+      "prg": "0x0E930",
+      "size": 519
+    },
+    {
+      "id": "f_095",
+      "kind": "subroutine",
+      "mech": "sub_AB75",
+      "bank": 7,
+      "cpu": "$AB75",
+      "prg": "0x0EB75",
+      "size": 110
+    },
+    {
+      "id": "f_096",
+      "kind": "subroutine",
+      "mech": "sub_ABE3",
+      "bank": 7,
+      "cpu": "$ABE3",
+      "prg": "0x0EBE3",
+      "size": 22
+    },
+    {
+      "id": "f_097",
+      "kind": "subroutine",
+      "mech": "sub_AD8B",
+      "bank": 7,
+      "cpu": "$AD8B",
+      "prg": "0x0ED8B",
+      "size": 86
+    },
+    {
+      "id": "f_098",
+      "kind": "subroutine",
+      "mech": "sub_AD8B",
+      "bank": 7,
+      "cpu": "$AD8B",
+      "prg": "0x0ED8B",
+      "size": 86
+    },
+    {
+      "id": "f_099",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 8,
+      "cpu": "$A000",
+      "prg": "0x10000",
+      "size": 1
+    },
+    {
+      "id": "f_100",
+      "kind": "subroutine",
+      "mech": "sub_8000",
+      "bank": 9,
+      "cpu": "$8000",
+      "prg": "0x12000",
+      "size": 1
+    },
+    {
+      "id": "f_101",
+      "kind": "subroutine",
+      "mech": "sub_8000",
+      "bank": 10,
+      "cpu": "$8000",
+      "prg": "0x14000",
+      "size": 1
+    },
+    {
+      "id": "f_102",
+      "kind": "subroutine",
+      "mech": "sub_81BB",
+      "bank": 10,
+      "cpu": "$81BB",
+      "prg": "0x141BB",
+      "size": 19
+    },
+    {
+      "id": "f_103",
+      "kind": "subroutine",
+      "mech": "sub_8501",
+      "bank": 10,
+      "cpu": "$8501",
+      "prg": "0x14501",
+      "size": 8
+    },
+    {
+      "id": "f_104",
+      "kind": "subroutine",
+      "mech": "sub_87BB",
+      "bank": 10,
+      "cpu": "$87BB",
+      "prg": "0x147BB",
+      "size": 22
+    },
+    {
+      "id": "f_105",
+      "kind": "subroutine",
+      "mech": "sub_8000",
+      "bank": 11,
+      "cpu": "$8000",
+      "prg": "0x16000",
+      "size": 3
+    },
+    {
+      "id": "f_106",
+      "kind": "subroutine",
+      "mech": "sub_8016",
+      "bank": 11,
+      "cpu": "$8016",
+      "prg": "0x16016",
+      "size": 473
+    },
+    {
+      "id": "f_107",
+      "kind": "subroutine",
+      "mech": "sub_8016",
+      "bank": 11,
+      "cpu": "$8016",
+      "prg": "0x16016",
+      "size": 473
+    },
+    {
+      "id": "f_108",
+      "kind": "subroutine",
+      "mech": "sub_8016",
+      "bank": 11,
+      "cpu": "$8016",
+      "prg": "0x16016",
+      "size": 473
+    },
+    {
+      "id": "f_109",
+      "kind": "subroutine",
+      "mech": "sub_8016",
+      "bank": 11,
+      "cpu": "$8016",
+      "prg": "0x16016",
+      "size": 473
+    },
+    {
+      "id": "f_110",
+      "kind": "subroutine",
+      "mech": "sub_8016",
+      "bank": 11,
+      "cpu": "$8016",
+      "prg": "0x16016",
+      "size": 473
+    },
+    {
+      "id": "f_111",
+      "kind": "subroutine",
+      "mech": "sub_81EF",
+      "bank": 11,
+      "cpu": "$81EF",
+      "prg": "0x161EF",
+      "size": 26
+    },
+    {
+      "id": "f_112",
+      "kind": "subroutine",
+      "mech": "sub_8209",
+      "bank": 11,
+      "cpu": "$8209",
+      "prg": "0x16209",
+      "size": 73
+    },
+    {
+      "id": "f_113",
+      "kind": "subroutine",
+      "mech": "sub_8209",
+      "bank": 11,
+      "cpu": "$8209",
+      "prg": "0x16209",
+      "size": 73
+    },
+    {
+      "id": "f_114",
+      "kind": "subroutine",
+      "mech": "sub_8298",
+      "bank": 11,
+      "cpu": "$8298",
+      "prg": "0x16298",
+      "size": 11
+    },
+    {
+      "id": "f_115",
+      "kind": "subroutine",
+      "mech": "sub_83CE",
+      "bank": 11,
+      "cpu": "$83CE",
+      "prg": "0x163CE",
+      "size": 39
+    },
+    {
+      "id": "f_116",
+      "kind": "subroutine",
+      "mech": "sub_8411",
+      "bank": 11,
+      "cpu": "$8411",
+      "prg": "0x16411",
+      "size": 31
+    },
+    {
+      "id": "f_117",
+      "kind": "subroutine",
+      "mech": "sub_8438",
+      "bank": 11,
+      "cpu": "$8438",
+      "prg": "0x16438",
+      "size": 17
+    },
+    {
+      "id": "f_118",
+      "kind": "subroutine",
+      "mech": "sub_8449",
+      "bank": 11,
+      "cpu": "$8449",
+      "prg": "0x16449",
+      "size": 357
+    },
+    {
+      "id": "f_119",
+      "kind": "subroutine",
+      "mech": "sub_8449",
+      "bank": 11,
+      "cpu": "$8449",
+      "prg": "0x16449",
+      "size": 357
+    },
+    {
+      "id": "f_120",
+      "kind": "subroutine",
+      "mech": "sub_8449",
+      "bank": 11,
+      "cpu": "$8449",
+      "prg": "0x16449",
+      "size": 357
+    },
+    {
+      "id": "f_121",
+      "kind": "subroutine",
+      "mech": "sub_8449",
+      "bank": 11,
+      "cpu": "$8449",
+      "prg": "0x16449",
+      "size": 357
+    },
+    {
+      "id": "f_122",
+      "kind": "subroutine",
+      "mech": "sub_8449",
+      "bank": 11,
+      "cpu": "$8449",
+      "prg": "0x16449",
+      "size": 357
+    },
+    {
+      "id": "f_123",
+      "kind": "subroutine",
+      "mech": "sub_85AE",
+      "bank": 11,
+      "cpu": "$85AE",
+      "prg": "0x165AE",
+      "size": 151
+    },
+    {
+      "id": "f_124",
+      "kind": "subroutine",
+      "mech": "sub_85AE",
+      "bank": 11,
+      "cpu": "$85AE",
+      "prg": "0x165AE",
+      "size": 151
+    },
+    {
+      "id": "f_125",
+      "kind": "subroutine",
+      "mech": "sub_8645",
+      "bank": 11,
+      "cpu": "$8645",
+      "prg": "0x16645",
+      "size": 60
+    },
+    {
+      "id": "f_126",
+      "kind": "subroutine",
+      "mech": "sub_8681",
+      "bank": 11,
+      "cpu": "$8681",
+      "prg": "0x16681",
+      "size": 66
+    },
+    {
+      "id": "f_127",
+      "kind": "subroutine",
+      "mech": "sub_86C3",
+      "bank": 11,
+      "cpu": "$86C3",
+      "prg": "0x166C3",
+      "size": 100
+    },
+    {
+      "id": "f_128",
+      "kind": "subroutine",
+      "mech": "sub_8727",
+      "bank": 11,
+      "cpu": "$8727",
+      "prg": "0x16727",
+      "size": 108
+    },
+    {
+      "id": "f_129",
+      "kind": "subroutine",
+      "mech": "sub_8793",
+      "bank": 11,
+      "cpu": "$8793",
+      "prg": "0x16793",
+      "size": 27
+    },
+    {
+      "id": "f_130",
+      "kind": "subroutine",
+      "mech": "sub_87AE",
+      "bank": 11,
+      "cpu": "$87AE",
+      "prg": "0x167AE",
+      "size": 15
+    },
+    {
+      "id": "f_131",
+      "kind": "subroutine",
+      "mech": "sub_87BD",
+      "bank": 11,
+      "cpu": "$87BD",
+      "prg": "0x167BD",
+      "size": 215
+    },
+    {
+      "id": "f_132",
+      "kind": "subroutine",
+      "mech": "sub_87BD",
+      "bank": 11,
+      "cpu": "$87BD",
+      "prg": "0x167BD",
+      "size": 215
+    },
+    {
+      "id": "f_133",
+      "kind": "subroutine",
+      "mech": "sub_8894",
+      "bank": 11,
+      "cpu": "$8894",
+      "prg": "0x16894",
+      "size": 7
+    },
+    {
+      "id": "f_134",
+      "kind": "subroutine",
+      "mech": "sub_889B",
+      "bank": 11,
+      "cpu": "$889B",
+      "prg": "0x1689B",
+      "size": 112
+    },
+    {
+      "id": "f_135",
+      "kind": "subroutine",
+      "mech": "sub_889B",
+      "bank": 11,
+      "cpu": "$889B",
+      "prg": "0x1689B",
+      "size": 112
+    },
+    {
+      "id": "f_136",
+      "kind": "subroutine",
+      "mech": "sub_889B",
+      "bank": 11,
+      "cpu": "$889B",
+      "prg": "0x1689B",
+      "size": 112
+    },
+    {
+      "id": "f_137",
+      "kind": "subroutine",
+      "mech": "sub_890B",
+      "bank": 11,
+      "cpu": "$890B",
+      "prg": "0x1690B",
+      "size": 35
+    },
+    {
+      "id": "f_138",
+      "kind": "subroutine",
+      "mech": "sub_890B",
+      "bank": 11,
+      "cpu": "$890B",
+      "prg": "0x1690B",
+      "size": 35
+    },
+    {
+      "id": "f_139",
+      "kind": "subroutine",
+      "mech": "sub_892E",
+      "bank": 11,
+      "cpu": "$892E",
+      "prg": "0x1692E",
+      "size": 191
+    },
+    {
+      "id": "f_140",
+      "kind": "subroutine",
+      "mech": "sub_892E",
+      "bank": 11,
+      "cpu": "$892E",
+      "prg": "0x1692E",
+      "size": 191
+    },
+    {
+      "id": "f_141",
+      "kind": "subroutine",
+      "mech": "sub_892E",
+      "bank": 11,
+      "cpu": "$892E",
+      "prg": "0x1692E",
+      "size": 191
+    },
+    {
+      "id": "f_142",
+      "kind": "subroutine",
+      "mech": "sub_8E2C",
+      "bank": 11,
+      "cpu": "$8E2C",
+      "prg": "0x16E2C",
+      "size": 40
+    },
+    {
+      "id": "f_143",
+      "kind": "subroutine",
+      "mech": "sub_A000",
+      "bank": 12,
+      "cpu": "$A000",
+      "prg": "0x18000",
+      "size": 9
+    },
+    {
+      "id": "f_144",
+      "kind": "subroutine",
+      "mech": "sub_8800",
+      "bank": 13,
+      "cpu": "$8800",
+      "prg": "0x1A800",
+      "size": 44
+    },
+    {
+      "id": "f_145",
+      "kind": "subroutine",
+      "mech": "sub_C304",
+      "bank": 14,
+      "cpu": "$C304",
+      "prg": "0x1C304",
+      "size": 13
+    },
+    {
+      "id": "f_146",
+      "kind": "subroutine",
+      "mech": "sub_C40B",
+      "bank": 14,
+      "cpu": "$C40B",
+      "prg": "0x1C40B",
+      "size": 37
+    },
+    {
+      "id": "f_147",
+      "kind": "subroutine",
+      "mech": "sub_C430",
+      "bank": 14,
+      "cpu": "$C430",
+      "prg": "0x1C430",
+      "size": 16
+    },
+    {
+      "id": "f_148",
+      "kind": "subroutine",
+      "mech": "sub_C506",
+      "bank": 14,
+      "cpu": "$C506",
+      "prg": "0x1C506",
+      "size": 26
+    },
+    {
+      "id": "f_149",
+      "kind": "subroutine",
+      "mech": "sub_C520",
+      "bank": 14,
+      "cpu": "$C520",
+      "prg": "0x1C520",
+      "size": 34
+    },
+    {
+      "id": "f_150",
+      "kind": "subroutine",
+      "mech": "sub_C520",
+      "bank": 14,
+      "cpu": "$C520",
+      "prg": "0x1C520",
+      "size": 34
+    },
+    {
+      "id": "f_151",
+      "kind": "subroutine",
+      "mech": "sub_C608",
+      "bank": 14,
+      "cpu": "$C608",
+      "prg": "0x1C608",
+      "size": 67
+    },
+    {
+      "id": "f_152",
+      "kind": "subroutine",
+      "mech": "sub_C608",
+      "bank": 14,
+      "cpu": "$C608",
+      "prg": "0x1C608",
+      "size": 67
+    },
+    {
+      "id": "f_153",
+      "kind": "subroutine",
+      "mech": "sub_C64D",
+      "bank": 14,
+      "cpu": "$C64D",
+      "prg": "0x1C64D",
+      "size": 549
+    },
+    {
+      "id": "f_154",
+      "kind": "subroutine",
+      "mech": "sub_C64D",
+      "bank": 14,
+      "cpu": "$C64D",
+      "prg": "0x1C64D",
+      "size": 549
+    },
+    {
+      "id": "f_155",
+      "kind": "subroutine",
+      "mech": "sub_C64D",
+      "bank": 14,
+      "cpu": "$C64D",
+      "prg": "0x1C64D",
+      "size": 549
+    },
+    {
+      "id": "f_156",
+      "kind": "subroutine",
+      "mech": "sub_C64D",
+      "bank": 14,
+      "cpu": "$C64D",
+      "prg": "0x1C64D",
+      "size": 549
+    },
+    {
+      "id": "f_157",
+      "kind": "subroutine",
+      "mech": "sub_C64D",
+      "bank": 14,
+      "cpu": "$C64D",
+      "prg": "0x1C64D",
+      "size": 549
+    },
+    {
+      "id": "f_158",
+      "kind": "subroutine",
+      "mech": "sub_C64D",
+      "bank": 14,
+      "cpu": "$C64D",
+      "prg": "0x1C64D",
+      "size": 549
+    },
+    {
+      "id": "f_159",
+      "kind": "subroutine",
+      "mech": "sub_C64D",
+      "bank": 14,
+      "cpu": "$C64D",
+      "prg": "0x1C64D",
+      "size": 549
+    },
+    {
+      "id": "f_160",
+      "kind": "subroutine",
+      "mech": "sub_C64D",
+      "bank": 14,
+      "cpu": "$C64D",
+      "prg": "0x1C64D",
+      "size": 549
+    },
+    {
+      "id": "f_161",
+      "kind": "subroutine",
+      "mech": "sub_CA32",
+      "bank": 14,
+      "cpu": "$CA32",
+      "prg": "0x1CA32",
+      "size": 255
+    },
+    {
+      "id": "f_162",
+      "kind": "subroutine",
+      "mech": "sub_CB4F",
+      "bank": 14,
+      "cpu": "$CB4F",
+      "prg": "0x1CB4F",
+      "size": 20
+    },
+    {
+      "id": "f_163",
+      "kind": "subroutine",
+      "mech": "sub_CBAF",
+      "bank": 14,
+      "cpu": "$CBAF",
+      "prg": "0x1CBAF",
+      "size": 65
+    },
+    {
+      "id": "f_164",
+      "kind": "subroutine",
+      "mech": "sub_CC6A",
+      "bank": 14,
+      "cpu": "$CC6A",
+      "prg": "0x1CC6A",
+      "size": 40
+    },
+    {
+      "id": "f_165",
+      "kind": "subroutine",
+      "mech": "sub_CC97",
+      "bank": 14,
+      "cpu": "$CC97",
+      "prg": "0x1CC97",
+      "size": 29
+    },
+    {
+      "id": "f_166",
+      "kind": "subroutine",
+      "mech": "sub_CCB4",
+      "bank": 14,
+      "cpu": "$CCB4",
+      "prg": "0x1CCB4",
+      "size": 31
+    },
+    {
+      "id": "f_167",
+      "kind": "subroutine",
+      "mech": "sub_CCD3",
+      "bank": 14,
+      "cpu": "$CCD3",
+      "prg": "0x1CCD3",
+      "size": 53
+    },
+    {
+      "id": "f_168",
+      "kind": "subroutine",
+      "mech": "sub_CD08",
+      "bank": 14,
+      "cpu": "$CD08",
+      "prg": "0x1CD08",
+      "size": 33
+    },
+    {
+      "id": "f_169",
+      "kind": "subroutine",
+      "mech": "sub_CD29",
+      "bank": 14,
+      "cpu": "$CD29",
+      "prg": "0x1CD29",
+      "size": 58
+    },
+    {
+      "id": "f_170",
+      "kind": "subroutine",
+      "mech": "sub_CD63",
+      "bank": 14,
+      "cpu": "$CD63",
+      "prg": "0x1CD63",
+      "size": 58
+    },
+    {
+      "id": "f_171",
+      "kind": "subroutine",
+      "mech": "sub_CDBF",
+      "bank": 14,
+      "cpu": "$CDBF",
+      "prg": "0x1CDBF",
+      "size": 9
+    },
+    {
+      "id": "f_172",
+      "kind": "subroutine",
+      "mech": "sub_CDF2",
+      "bank": 14,
+      "cpu": "$CDF2",
+      "prg": "0x1CDF2",
+      "size": 214
+    },
+    {
+      "id": "f_173",
+      "kind": "subroutine",
+      "mech": "sub_CDF2",
+      "bank": 14,
+      "cpu": "$CDF2",
+      "prg": "0x1CDF2",
+      "size": 214
+    },
+    {
+      "id": "f_174",
+      "kind": "subroutine",
+      "mech": "sub_CEC8",
+      "bank": 14,
+      "cpu": "$CEC8",
+      "prg": "0x1CEC8",
+      "size": 41
+    },
+    {
+      "id": "f_175",
+      "kind": "subroutine",
+      "mech": "sub_CF2C",
+      "bank": 14,
+      "cpu": "$CF2C",
+      "prg": "0x1CF2C",
+      "size": 152
+    },
+    {
+      "id": "f_176",
+      "kind": "subroutine",
+      "mech": "sub_CF2C",
+      "bank": 14,
+      "cpu": "$CF2C",
+      "prg": "0x1CF2C",
+      "size": 152
+    },
+    {
+      "id": "f_177",
+      "kind": "subroutine",
+      "mech": "sub_CF2C",
+      "bank": 14,
+      "cpu": "$CF2C",
+      "prg": "0x1CF2C",
+      "size": 152
+    },
+    {
+      "id": "f_178",
+      "kind": "subroutine",
+      "mech": "sub_CFC5",
+      "bank": 14,
+      "cpu": "$CFC5",
+      "prg": "0x1CFC5",
+      "size": 37
+    },
+    {
+      "id": "f_179",
+      "kind": "subroutine",
+      "mech": "sub_D087",
+      "bank": 14,
+      "cpu": "$D087",
+      "prg": "0x1D087",
+      "size": 133
+    },
+    {
+      "id": "f_180",
+      "kind": "subroutine",
+      "mech": "sub_D10C",
+      "bank": 14,
+      "cpu": "$D10C",
+      "prg": "0x1D10C",
+      "size": 83
+    },
+    {
+      "id": "f_181",
+      "kind": "subroutine",
+      "mech": "sub_D323",
+      "bank": 14,
+      "cpu": "$D323",
+      "prg": "0x1D323",
+      "size": 3
+    },
+    {
+      "id": "f_182",
+      "kind": "subroutine",
+      "mech": "sub_D32C",
+      "bank": 14,
+      "cpu": "$D32C",
+      "prg": "0x1D32C",
+      "size": 144
+    },
+    {
+      "id": "f_183",
+      "kind": "subroutine",
+      "mech": "sub_D422",
+      "bank": 14,
+      "cpu": "$D422",
+      "prg": "0x1D422",
+      "size": 180
+    },
+    {
+      "id": "f_184",
+      "kind": "subroutine",
+      "mech": "sub_D548",
+      "bank": 14,
+      "cpu": "$D548",
+      "prg": "0x1D548",
+      "size": 159
+    },
+    {
+      "id": "f_185",
+      "kind": "subroutine",
+      "mech": "sub_D60E",
+      "bank": 14,
+      "cpu": "$D60E",
+      "prg": "0x1D60E",
+      "size": 33
+    },
+    {
+      "id": "f_186",
+      "kind": "subroutine",
+      "mech": "sub_D60E",
+      "bank": 14,
+      "cpu": "$D60E",
+      "prg": "0x1D60E",
+      "size": 33
+    },
+    {
+      "id": "f_187",
+      "kind": "subroutine",
+      "mech": "sub_D62F",
+      "bank": 14,
+      "cpu": "$D62F",
+      "prg": "0x1D62F",
+      "size": 69
+    },
+    {
+      "id": "f_188",
+      "kind": "subroutine",
+      "mech": "sub_D674",
+      "bank": 14,
+      "cpu": "$D674",
+      "prg": "0x1D674",
+      "size": 77
+    },
+    {
+      "id": "f_189",
+      "kind": "subroutine",
+      "mech": "sub_D674",
+      "bank": 14,
+      "cpu": "$D674",
+      "prg": "0x1D674",
+      "size": 77
+    },
+    {
+      "id": "f_190",
+      "kind": "subroutine",
+      "mech": "sub_D6CC",
+      "bank": 14,
+      "cpu": "$D6CC",
+      "prg": "0x1D6CC",
+      "size": 105
+    },
+    {
+      "id": "f_191",
+      "kind": "subroutine",
+      "mech": "sub_D735",
+      "bank": 14,
+      "cpu": "$D735",
+      "prg": "0x1D735",
+      "size": 5
+    },
+    {
+      "id": "f_192",
+      "kind": "subroutine",
+      "mech": "sub_D74C",
+      "bank": 14,
+      "cpu": "$D74C",
+      "prg": "0x1D74C",
+      "size": 17
+    },
+    {
+      "id": "f_193",
+      "kind": "subroutine",
+      "mech": "sub_D75D",
+      "bank": 14,
+      "cpu": "$D75D",
+      "prg": "0x1D75D",
+      "size": 13
+    },
+    {
+      "id": "f_194",
+      "kind": "subroutine",
+      "mech": "sub_D76A",
+      "bank": 14,
+      "cpu": "$D76A",
+      "prg": "0x1D76A",
+      "size": 15
+    },
+    {
+      "id": "f_195",
+      "kind": "subroutine",
+      "mech": "sub_D78B",
+      "bank": 14,
+      "cpu": "$D78B",
+      "prg": "0x1D78B",
+      "size": 24
+    },
+    {
+      "id": "f_196",
+      "kind": "subroutine",
+      "mech": "sub_D7A3",
+      "bank": 14,
+      "cpu": "$D7A3",
+      "prg": "0x1D7A3",
+      "size": 74
+    },
+    {
+      "id": "f_197",
+      "kind": "subroutine",
+      "mech": "sub_DA04",
+      "bank": 14,
+      "cpu": "$DA04",
+      "prg": "0x1DA04",
+      "size": 52
+    },
+    {
+      "id": "f_198",
+      "kind": "subroutine",
+      "mech": "sub_DAE7",
+      "bank": 14,
+      "cpu": "$DAE7",
+      "prg": "0x1DAE7",
+      "size": 45
+    },
+    {
+      "id": "f_199",
+      "kind": "subroutine",
+      "mech": "sub_DB4C",
+      "bank": 14,
+      "cpu": "$DB4C",
+      "prg": "0x1DB4C",
+      "size": 130
+    },
+    {
+      "id": "f_200",
+      "kind": "subroutine",
+      "mech": "sub_DB4C",
+      "bank": 14,
+      "cpu": "$DB4C",
+      "prg": "0x1DB4C",
+      "size": 130
+    },
+    {
+      "id": "f_201",
+      "kind": "subroutine",
+      "mech": "sub_DBCE",
+      "bank": 14,
+      "cpu": "$DBCE",
+      "prg": "0x1DBCE",
+      "size": 50
+    },
+    {
+      "id": "f_202",
+      "kind": "subroutine",
+      "mech": "sub_E000",
+      "bank": 15,
+      "cpu": "$E000",
+      "prg": "0x1E000",
+      "size": 141
+    },
+    {
+      "id": "f_203",
+      "kind": "subroutine",
+      "mech": "sub_E000",
+      "bank": 15,
+      "cpu": "$E000",
+      "prg": "0x1E000",
+      "size": 141
+    },
+    {
+      "id": "f_204",
+      "kind": "subroutine",
+      "mech": "sub_E0D9",
+      "bank": 15,
+      "cpu": "$E0D9",
+      "prg": "0x1E0D9",
+      "size": 156
+    },
+    {
+      "id": "f_205",
+      "kind": "subroutine",
+      "mech": "sub_E0D9",
+      "bank": 15,
+      "cpu": "$E0D9",
+      "prg": "0x1E0D9",
+      "size": 156
+    },
+    {
+      "id": "f_206",
+      "kind": "subroutine",
+      "mech": "sub_E21C",
+      "bank": 15,
+      "cpu": "$E21C",
+      "prg": "0x1E21C",
+      "size": 619
+    },
+    {
+      "id": "f_207",
+      "kind": "subroutine",
+      "mech": "sub_E21C",
+      "bank": 15,
+      "cpu": "$E21C",
+      "prg": "0x1E21C",
+      "size": 619
+    },
+    {
+      "id": "f_208",
+      "kind": "subroutine",
+      "mech": "sub_E21C",
+      "bank": 15,
+      "cpu": "$E21C",
+      "prg": "0x1E21C",
+      "size": 619
+    },
+    {
+      "id": "f_209",
+      "kind": "subroutine",
+      "mech": "sub_E21C",
+      "bank": 15,
+      "cpu": "$E21C",
+      "prg": "0x1E21C",
+      "size": 619
+    },
+    {
+      "id": "f_210",
+      "kind": "subroutine",
+      "mech": "sub_E21C",
+      "bank": 15,
+      "cpu": "$E21C",
+      "prg": "0x1E21C",
+      "size": 619
+    },
+    {
+      "id": "f_211",
+      "kind": "subroutine",
+      "mech": "sub_E487",
+      "bank": 15,
+      "cpu": "$E487",
+      "prg": "0x1E487",
+      "size": 25
+    },
+    {
+      "id": "f_212",
+      "kind": "subroutine",
+      "mech": "sub_E55D",
+      "bank": 15,
+      "cpu": "$E55D",
+      "prg": "0x1E55D",
+      "size": 4
+    },
+    {
+      "id": "f_213",
+      "kind": "subroutine",
+      "mech": "sub_E561",
+      "bank": 15,
+      "cpu": "$E561",
+      "prg": "0x1E561",
+      "size": 6
+    },
+    {
+      "id": "f_214",
+      "kind": "subroutine",
+      "mech": "sub_E580",
+      "bank": 15,
+      "cpu": "$E580",
+      "prg": "0x1E580",
+      "size": 10
+    },
+    {
+      "id": "f_215",
+      "kind": "subroutine",
+      "mech": "sub_E58A",
+      "bank": 15,
+      "cpu": "$E58A",
+      "prg": "0x1E58A",
+      "size": 6
+    },
+    {
+      "id": "f_216",
+      "kind": "subroutine",
+      "mech": "sub_E590",
+      "bank": 15,
+      "cpu": "$E590",
+      "prg": "0x1E590",
+      "size": 7
+    },
+    {
+      "id": "f_217",
+      "kind": "subroutine",
+      "mech": "sub_E597",
+      "bank": 15,
+      "cpu": "$E597",
+      "prg": "0x1E597",
+      "size": 6
+    },
+    {
+      "id": "f_218",
+      "kind": "subroutine",
+      "mech": "sub_E59D",
+      "bank": 15,
+      "cpu": "$E59D",
+      "prg": "0x1E59D",
+      "size": 35
+    },
+    {
+      "id": "f_219",
+      "kind": "subroutine",
+      "mech": "sub_E5C0",
+      "bank": 15,
+      "cpu": "$E5C0",
+      "prg": "0x1E5C0",
+      "size": 25
+    },
+    {
+      "id": "f_220",
+      "kind": "subroutine",
+      "mech": "sub_E5D9",
+      "bank": 15,
+      "cpu": "$E5D9",
+      "prg": "0x1E5D9",
+      "size": 40
+    },
+    {
+      "id": "f_221",
+      "kind": "subroutine",
+      "mech": "sub_E601",
+      "bank": 15,
+      "cpu": "$E601",
+      "prg": "0x1E601",
+      "size": 11
+    },
+    {
+      "id": "f_222",
+      "kind": "subroutine",
+      "mech": "sub_E60C",
+      "bank": 15,
+      "cpu": "$E60C",
+      "prg": "0x1E60C",
+      "size": 19
+    },
+    {
+      "id": "f_223",
+      "kind": "subroutine",
+      "mech": "sub_E61F",
+      "bank": 15,
+      "cpu": "$E61F",
+      "prg": "0x1E61F",
+      "size": 15
+    },
+    {
+      "id": "f_224",
+      "kind": "subroutine",
+      "mech": "sub_E62E",
+      "bank": 15,
+      "cpu": "$E62E",
+      "prg": "0x1E62E",
+      "size": 15
+    },
+    {
+      "id": "f_225",
+      "kind": "subroutine",
+      "mech": "sub_E63D",
+      "bank": 15,
+      "cpu": "$E63D",
+      "prg": "0x1E63D",
+      "size": 12
+    },
+    {
+      "id": "f_226",
+      "kind": "subroutine",
+      "mech": "sub_E649",
+      "bank": 15,
+      "cpu": "$E649",
+      "prg": "0x1E649",
+      "size": 41
+    },
+    {
+      "id": "f_227",
+      "kind": "subroutine",
+      "mech": "sub_E672",
+      "bank": 15,
+      "cpu": "$E672",
+      "prg": "0x1E672",
+      "size": 32
+    },
+    {
+      "id": "f_228",
+      "kind": "subroutine",
+      "mech": "sub_E692",
+      "bank": 15,
+      "cpu": "$E692",
+      "prg": "0x1E692",
+      "size": 7
+    },
+    {
+      "id": "f_229",
+      "kind": "subroutine",
+      "mech": "sub_E6C7",
+      "bank": 15,
+      "cpu": "$E6C7",
+      "prg": "0x1E6C7",
+      "size": 18
+    },
+    {
+      "id": "f_230",
+      "kind": "subroutine",
+      "mech": "sub_E6DF",
+      "bank": 15,
+      "cpu": "$E6DF",
+      "prg": "0x1E6DF",
+      "size": 139
+    },
+    {
+      "id": "f_231",
+      "kind": "subroutine",
+      "mech": "sub_E6DF",
+      "bank": 15,
+      "cpu": "$E6DF",
+      "prg": "0x1E6DF",
+      "size": 139
+    },
+    {
+      "id": "f_232",
+      "kind": "subroutine",
+      "mech": "sub_E76A",
+      "bank": 15,
+      "cpu": "$E76A",
+      "prg": "0x1E76A",
+      "size": 35
+    },
+    {
+      "id": "f_233",
+      "kind": "subroutine",
+      "mech": "sub_E7BE",
+      "bank": 15,
+      "cpu": "$E7BE",
+      "prg": "0x1E7BE",
+      "size": 14
+    },
+    {
+      "id": "f_234",
+      "kind": "subroutine",
+      "mech": "sub_E7BE",
+      "bank": 15,
+      "cpu": "$E7BE",
+      "prg": "0x1E7BE",
+      "size": 14
+    },
+    {
+      "id": "f_235",
+      "kind": "subroutine",
+      "mech": "sub_E7D0",
+      "bank": 15,
+      "cpu": "$E7D0",
+      "prg": "0x1E7D0",
+      "size": 12
+    },
+    {
+      "id": "f_236",
+      "kind": "subroutine",
+      "mech": "sub_E7DC",
+      "bank": 15,
+      "cpu": "$E7DC",
+      "prg": "0x1E7DC",
+      "size": 17
+    },
+    {
+      "id": "f_237",
+      "kind": "subroutine",
+      "mech": "sub_E7ED",
+      "bank": 15,
+      "cpu": "$E7ED",
+      "prg": "0x1E7ED",
+      "size": 14
+    },
+    {
+      "id": "f_238",
+      "kind": "subroutine",
+      "mech": "sub_E7FB",
+      "bank": 15,
+      "cpu": "$E7FB",
+      "prg": "0x1E7FB",
+      "size": 24
+    },
+    {
+      "id": "f_239",
+      "kind": "subroutine",
+      "mech": "sub_E813",
+      "bank": 15,
+      "cpu": "$E813",
+      "prg": "0x1E813",
+      "size": 21
+    },
+    {
+      "id": "f_240",
+      "kind": "subroutine",
+      "mech": "sub_E828",
+      "bank": 15,
+      "cpu": "$E828",
+      "prg": "0x1E828",
+      "size": 42
+    },
+    {
+      "id": "f_241",
+      "kind": "subroutine",
+      "mech": "sub_E852",
+      "bank": 15,
+      "cpu": "$E852",
+      "prg": "0x1E852",
+      "size": 25
+    },
+    {
+      "id": "f_242",
+      "kind": "subroutine",
+      "mech": "sub_E8B1",
+      "bank": 15,
+      "cpu": "$E8B1",
+      "prg": "0x1E8B1",
+      "size": 106
+    },
+    {
+      "id": "f_243",
+      "kind": "subroutine",
+      "mech": "sub_E8B1",
+      "bank": 15,
+      "cpu": "$E8B1",
+      "prg": "0x1E8B1",
+      "size": 106
+    },
+    {
+      "id": "f_244",
+      "kind": "subroutine",
+      "mech": "sub_E921",
+      "bank": 15,
+      "cpu": "$E921",
+      "prg": "0x1E921",
+      "size": 19
+    },
+    {
+      "id": "f_245",
+      "kind": "subroutine",
+      "mech": "sub_E95E",
+      "bank": 15,
+      "cpu": "$E95E",
+      "prg": "0x1E95E",
+      "size": 21
+    },
+    {
+      "id": "f_246",
+      "kind": "subroutine",
+      "mech": "sub_E9FA",
+      "bank": 15,
+      "cpu": "$E9FA",
+      "prg": "0x1E9FA",
+      "size": 292
+    },
+    {
+      "id": "f_247",
+      "kind": "subroutine",
+      "mech": "sub_E9FA",
+      "bank": 15,
+      "cpu": "$E9FA",
+      "prg": "0x1E9FA",
+      "size": 292
+    },
+    {
+      "id": "f_248",
+      "kind": "subroutine",
+      "mech": "sub_E9FA",
+      "bank": 15,
+      "cpu": "$E9FA",
+      "prg": "0x1E9FA",
+      "size": 292
+    },
+    {
+      "id": "f_249",
+      "kind": "subroutine",
+      "mech": "sub_EB8A",
+      "bank": 15,
+      "cpu": "$EB8A",
+      "prg": "0x1EB8A",
+      "size": 53
+    },
+    {
+      "id": "f_250",
+      "kind": "subroutine",
+      "mech": "sub_EB8A",
+      "bank": 15,
+      "cpu": "$EB8A",
+      "prg": "0x1EB8A",
+      "size": 53
+    },
+    {
+      "id": "f_251",
+      "kind": "subroutine",
+      "mech": "sub_EB8A",
+      "bank": 15,
+      "cpu": "$EB8A",
+      "prg": "0x1EB8A",
+      "size": 53
+    },
+    {
+      "id": "f_252",
+      "kind": "subroutine",
+      "mech": "sub_EBC2",
+      "bank": 15,
+      "cpu": "$EBC2",
+      "prg": "0x1EBC2",
+      "size": 47
+    },
+    {
+      "id": "f_253",
+      "kind": "subroutine",
+      "mech": "sub_EBF1",
+      "bank": 15,
+      "cpu": "$EBF1",
+      "prg": "0x1EBF1",
+      "size": 3
+    },
+    {
+      "id": "f_254",
+      "kind": "subroutine",
+      "mech": "sub_EC1F",
+      "bank": 15,
+      "cpu": "$EC1F",
+      "prg": "0x1EC1F",
+      "size": 13
+    },
+    {
+      "id": "f_255",
+      "kind": "subroutine",
+      "mech": "sub_ECBF",
+      "bank": 15,
+      "cpu": "$ECBF",
+      "prg": "0x1ECBF",
+      "size": 11
+    },
+    {
+      "id": "f_256",
+      "kind": "subroutine",
+      "mech": "sub_ECCA",
+      "bank": 15,
+      "cpu": "$ECCA",
+      "prg": "0x1ECCA",
+      "size": 15
+    },
+    {
+      "id": "f_257",
+      "kind": "subroutine",
+      "mech": "sub_ED27",
+      "bank": 15,
+      "cpu": "$ED27",
+      "prg": "0x1ED27",
+      "size": 9
+    },
+    {
+      "id": "f_258",
+      "kind": "subroutine",
+      "mech": "sub_ED30",
+      "bank": 15,
+      "cpu": "$ED30",
+      "prg": "0x1ED30",
+      "size": 11
+    },
+    {
+      "id": "f_259",
+      "kind": "subroutine",
+      "mech": "sub_ED3B",
+      "bank": 15,
+      "cpu": "$ED3B",
+      "prg": "0x1ED3B",
+      "size": 27
+    },
+    {
+      "id": "f_260",
+      "kind": "subroutine",
+      "mech": "sub_ED56",
+      "bank": 15,
+      "cpu": "$ED56",
+      "prg": "0x1ED56",
+      "size": 15
+    },
+    {
+      "id": "f_261",
+      "kind": "subroutine",
+      "mech": "sub_ED6C",
+      "bank": 15,
+      "cpu": "$ED6C",
+      "prg": "0x1ED6C",
+      "size": 68
+    },
+    {
+      "id": "f_262",
+      "kind": "subroutine",
+      "mech": "sub_EDB0",
+      "bank": 15,
+      "cpu": "$EDB0",
+      "prg": "0x1EDB0",
+      "size": 65
+    },
+    {
+      "id": "f_263",
+      "kind": "subroutine",
+      "mech": "sub_EDF1",
+      "bank": 15,
+      "cpu": "$EDF1",
+      "prg": "0x1EDF1",
+      "size": 18
+    },
+    {
+      "id": "f_264",
+      "kind": "subroutine",
+      "mech": "sub_EE03",
+      "bank": 15,
+      "cpu": "$EE03",
+      "prg": "0x1EE03",
+      "size": 26
+    },
+    {
+      "id": "f_265",
+      "kind": "subroutine",
+      "mech": "sub_EE1D",
+      "bank": 15,
+      "cpu": "$EE1D",
+      "prg": "0x1EE1D",
+      "size": 44
+    },
+    {
+      "id": "f_266",
+      "kind": "subroutine",
+      "mech": "sub_EECC",
+      "bank": 15,
+      "cpu": "$EECC",
+      "prg": "0x1EECC",
+      "size": 11
+    },
+    {
+      "id": "f_267",
+      "kind": "subroutine",
+      "mech": "sub_F030",
+      "bank": 15,
+      "cpu": "$F030",
+      "prg": "0x1F030",
+      "size": 172
+    },
+    {
+      "id": "f_268",
+      "kind": "subroutine",
+      "mech": "sub_F030",
+      "bank": 15,
+      "cpu": "$F030",
+      "prg": "0x1F030",
+      "size": 172
+    },
+    {
+      "id": "f_269",
+      "kind": "subroutine",
+      "mech": "sub_F030",
+      "bank": 15,
+      "cpu": "$F030",
+      "prg": "0x1F030",
+      "size": 172
+    },
+    {
+      "id": "f_270",
+      "kind": "subroutine",
+      "mech": "sub_F030",
+      "bank": 15,
+      "cpu": "$F030",
+      "prg": "0x1F030",
+      "size": 172
+    },
+    {
+      "id": "f_271",
+      "kind": "subroutine",
+      "mech": "sub_F030",
+      "bank": 15,
+      "cpu": "$F030",
+      "prg": "0x1F030",
+      "size": 172
+    },
+    {
+      "id": "f_272",
+      "kind": "subroutine",
+      "mech": "sub_F0DC",
+      "bank": 15,
+      "cpu": "$F0DC",
+      "prg": "0x1F0DC",
+      "size": 115
+    },
+    {
+      "id": "f_273",
+      "kind": "subroutine",
+      "mech": "sub_F251",
+      "bank": 15,
+      "cpu": "$F251",
+      "prg": "0x1F251",
+      "size": 3
+    },
+    {
+      "id": "f_274",
+      "kind": "subroutine",
+      "mech": "sub_F254",
+      "bank": 15,
+      "cpu": "$F254",
+      "prg": "0x1F254",
+      "size": 25
+    },
+    {
+      "id": "f_275",
+      "kind": "subroutine",
+      "mech": "sub_F2D6",
+      "bank": 15,
+      "cpu": "$F2D6",
+      "prg": "0x1F2D6",
+      "size": 71
+    }
+  ],
+  "ram_symbols": [
+    {
+      "id": "v_00A",
+      "addr": "$000A",
+      "uses": 146
+    },
+    {
+      "id": "v_00B",
+      "addr": "$000B",
+      "uses": 27
+    },
+    {
+      "id": "v_00C",
+      "addr": "$000C",
+      "uses": 77
+    },
+    {
+      "id": "v_00D",
+      "addr": "$000D",
+      "uses": 23
+    },
+    {
+      "id": "v_00E",
+      "addr": "$000E",
+      "uses": 77
+    },
+    {
+      "id": "v_00F",
+      "addr": "$000F",
+      "uses": 107
+    },
+    {
+      "id": "v_010",
+      "addr": "$0010",
+      "uses": 306
+    },
+    {
+      "id": "v_011",
+      "addr": "$0011",
+      "uses": 249
+    },
+    {
+      "id": "v_012",
+      "addr": "$0012",
+      "uses": 181
+    },
+    {
+      "id": "v_013",
+      "addr": "$0013",
+      "uses": 133
+    },
+    {
+      "id": "v_014",
+      "addr": "$0014",
+      "uses": 302
+    },
+    {
+      "id": "v_015",
+      "addr": "$0015",
+      "uses": 184
+    },
+    {
+      "id": "v_016",
+      "addr": "$0016",
+      "uses": 141
+    },
+    {
+      "id": "v_017",
+      "addr": "$0017",
+      "uses": 51
+    },
+    {
+      "id": "v_018",
+      "addr": "$0018",
+      "uses": 97
+    },
+    {
+      "id": "v_019",
+      "addr": "$0019",
+      "uses": 86
+    },
+    {
+      "id": "v_01A",
+      "addr": "$001A",
+      "uses": 42
+    },
+    {
+      "id": "v_01B",
+      "addr": "$001B",
+      "uses": 52
+    },
+    {
+      "id": "v_01C",
+      "addr": "$001C",
+      "uses": 44
+    },
+    {
+      "id": "v_01D",
+      "addr": "$001D",
+      "uses": 35
+    },
+    {
+      "id": "v_01E",
+      "addr": "$001E",
+      "uses": 74
+    },
+    {
+      "id": "v_01F",
+      "addr": "$001F",
+      "uses": 52
+    },
+    {
+      "id": "v_020",
+      "addr": "$0020",
+      "uses": 236
+    },
+    {
+      "id": "v_021",
+      "addr": "$0021",
+      "uses": 58
+    },
+    {
+      "id": "v_022",
+      "addr": "$0022",
+      "uses": 138
+    },
+    {
+      "id": "v_023",
+      "addr": "$0023",
+      "uses": 91
+    },
+    {
+      "id": "v_024",
+      "addr": "$0024",
+      "uses": 117
+    },
+    {
+      "id": "v_025",
+      "addr": "$0025",
+      "uses": 335
+    },
+    {
+      "id": "v_026",
+      "addr": "$0026",
+      "uses": 79
+    },
+    {
+      "id": "v_027",
+      "addr": "$0027",
+      "uses": 109
+    },
+    {
+      "id": "v_028",
+      "addr": "$0028",
+      "uses": 104
+    },
+    {
+      "id": "v_029",
+      "addr": "$0029",
+      "uses": 51
+    },
+    {
+      "id": "v_02A",
+      "addr": "$002A",
+      "uses": 113
+    },
+    {
+      "id": "v_02B",
+      "addr": "$002B",
+      "uses": 83
+    },
+    {
+      "id": "v_02C",
+      "addr": "$002C",
+      "uses": 73
+    },
+    {
+      "id": "v_02D",
+      "addr": "$002D",
+      "uses": 34
+    },
+    {
+      "id": "v_02E",
+      "addr": "$002E",
+      "uses": 80
+    },
+    {
+      "id": "v_02F",
+      "addr": "$002F",
+      "uses": 65
+    },
+    {
+      "id": "v_030",
+      "addr": "$0030",
+      "uses": 105
+    },
+    {
+      "id": "v_031",
+      "addr": "$0031",
+      "uses": 71
+    },
+    {
+      "id": "v_032",
+      "addr": "$0032",
+      "uses": 52
+    },
+    {
+      "id": "v_033",
+      "addr": "$0033",
+      "uses": 82
+    },
+    {
+      "id": "v_034",
+      "addr": "$0034",
+      "uses": 97
+    },
+    {
+      "id": "v_035",
+      "addr": "$0035",
+      "uses": 54
+    },
+    {
+      "id": "v_036",
+      "addr": "$0036",
+      "uses": 88
+    },
+    {
+      "id": "v_037",
+      "addr": "$0037",
+      "uses": 50
+    },
+    {
+      "id": "v_038",
+      "addr": "$0038",
+      "uses": 104
+    },
+    {
+      "id": "v_039",
+      "addr": "$0039",
+      "uses": 16
+    },
+    {
+      "id": "v_03A",
+      "addr": "$003A",
+      "uses": 40
+    },
+    {
+      "id": "v_03B",
+      "addr": "$003B",
+      "uses": 37
+    },
+    {
+      "id": "v_03C",
+      "addr": "$003C",
+      "uses": 33
+    },
+    {
+      "id": "v_03D",
+      "addr": "$003D",
+      "uses": 17
+    },
+    {
+      "id": "v_03E",
+      "addr": "$003E",
+      "uses": 10
+    },
+    {
+      "id": "v_03F",
+      "addr": "$003F",
+      "uses": 44
+    },
+    {
+      "id": "v_040",
+      "addr": "$0040",
+      "uses": 118
+    },
+    {
+      "id": "v_041",
+      "addr": "$0041",
+      "uses": 36
+    },
+    {
+      "id": "v_042",
+      "addr": "$0042",
+      "uses": 21
+    },
+    {
+      "id": "v_043",
+      "addr": "$0043",
+      "uses": 35
+    },
+    {
+      "id": "v_044",
+      "addr": "$0044",
+      "uses": 25
+    },
+    {
+      "id": "v_045",
+      "addr": "$0045",
+      "uses": 19
+    },
+    {
+      "id": "v_046",
+      "addr": "$0046",
+      "uses": 23
+    },
+    {
+      "id": "v_047",
+      "addr": "$0047",
+      "uses": 15
+    },
+    {
+      "id": "v_048",
+      "addr": "$0048",
+      "uses": 16
+    },
+    {
+      "id": "v_049",
+      "addr": "$0049",
+      "uses": 31
+    },
+    {
+      "id": "v_04A",
+      "addr": "$004A",
+      "uses": 21
+    },
+    {
+      "id": "v_04B",
+      "addr": "$004B",
+      "uses": 16
+    },
+    {
+      "id": "v_04C",
+      "addr": "$004C",
+      "uses": 43
+    },
+    {
+      "id": "v_04D",
+      "addr": "$004D",
+      "uses": 75
+    },
+    {
+      "id": "v_04E",
+      "addr": "$004E",
+      "uses": 37
+    },
+    {
+      "id": "v_04F",
+      "addr": "$004F",
+      "uses": 19
+    },
+    {
+      "id": "v_050",
+      "addr": "$0050",
+      "uses": 34
+    },
+    {
+      "id": "v_051",
+      "addr": "$0051",
+      "uses": 14
+    },
+    {
+      "id": "v_052",
+      "addr": "$0052",
+      "uses": 43
+    },
+    {
+      "id": "v_053",
+      "addr": "$0053",
+      "uses": 19
+    },
+    {
+      "id": "v_054",
+      "addr": "$0054",
+      "uses": 48
+    },
+    {
+      "id": "v_055",
+      "addr": "$0055",
+      "uses": 91
+    },
+    {
+      "id": "v_056",
+      "addr": "$0056",
+      "uses": 49
+    },
+    {
+      "id": "v_057",
+      "addr": "$0057",
+      "uses": 28
+    },
+    {
+      "id": "v_058",
+      "addr": "$0058",
+      "uses": 38
+    },
+    {
+      "id": "v_059",
+      "addr": "$0059",
+      "uses": 15
+    },
+    {
+      "id": "v_05A",
+      "addr": "$005A",
+      "uses": 32
+    },
+    {
+      "id": "v_05B",
+      "addr": "$005B",
+      "uses": 13
+    },
+    {
+      "id": "v_05C",
+      "addr": "$005C",
+      "uses": 13
+    },
+    {
+      "id": "v_05D",
+      "addr": "$005D",
+      "uses": 14
+    },
+    {
+      "id": "v_05E",
+      "addr": "$005E",
+      "uses": 10
+    },
+    {
+      "id": "v_05F",
+      "addr": "$005F",
+      "uses": 8
+    },
+    {
+      "id": "v_060",
+      "addr": "$0060",
+      "uses": 24
+    },
+    {
+      "id": "v_061",
+      "addr": "$0061",
+      "uses": 6
+    },
+    {
+      "id": "v_062",
+      "addr": "$0062",
+      "uses": 7
+    },
+    {
+      "id": "v_063",
+      "addr": "$0063",
+      "uses": 14
+    },
+    {
+      "id": "v_064",
+      "addr": "$0064",
+      "uses": 29
+    },
+    {
+      "id": "v_065",
+      "addr": "$0065",
+      "uses": 16
+    },
+    {
+      "id": "v_066",
+      "addr": "$0066",
+      "uses": 16
+    },
+    {
+      "id": "v_067",
+      "addr": "$0067",
+      "uses": 9
+    },
+    {
+      "id": "v_068",
+      "addr": "$0068",
+      "uses": 9
+    },
+    {
+      "id": "v_069",
+      "addr": "$0069",
+      "uses": 11
+    },
+    {
+      "id": "v_06A",
+      "addr": "$006A",
+      "uses": 13
+    },
+    {
+      "id": "v_06B",
+      "addr": "$006B",
+      "uses": 3
+    },
+    {
+      "id": "v_06C",
+      "addr": "$006C",
+      "uses": 6
+    },
+    {
+      "id": "v_06D",
+      "addr": "$006D",
+      "uses": 6
+    },
+    {
+      "id": "v_06E",
+      "addr": "$006E",
+      "uses": 21
+    },
+    {
+      "id": "v_06F",
+      "addr": "$006F",
+      "uses": 22
+    },
+    {
+      "id": "v_070",
+      "addr": "$0070",
+      "uses": 24
+    },
+    {
+      "id": "v_071",
+      "addr": "$0071",
+      "uses": 19
+    },
+    {
+      "id": "v_072",
+      "addr": "$0072",
+      "uses": 22
+    },
+    {
+      "id": "v_073",
+      "addr": "$0073",
+      "uses": 20
+    },
+    {
+      "id": "v_074",
+      "addr": "$0074",
+      "uses": 18
+    },
+    {
+      "id": "v_075",
+      "addr": "$0075",
+      "uses": 15
+    },
+    {
+      "id": "v_076",
+      "addr": "$0076",
+      "uses": 12
+    },
+    {
+      "id": "v_077",
+      "addr": "$0077",
+      "uses": 48
+    },
+    {
+      "id": "v_078",
+      "addr": "$0078",
+      "uses": 39
+    },
+    {
+      "id": "v_079",
+      "addr": "$0079",
+      "uses": 23
+    },
+    {
+      "id": "v_07A",
+      "addr": "$007A",
+      "uses": 10
+    },
+    {
+      "id": "v_07B",
+      "addr": "$007B",
+      "uses": 15
+    },
+    {
+      "id": "v_07C",
+      "addr": "$007C",
+      "uses": 20
+    },
+    {
+      "id": "v_07D",
+      "addr": "$007D",
+      "uses": 9
+    },
+    {
+      "id": "v_07E",
+      "addr": "$007E",
+      "uses": 33
+    },
+    {
+      "id": "v_07F",
+      "addr": "$007F",
+      "uses": 48
+    },
+    {
+      "id": "v_080",
+      "addr": "$0080",
+      "uses": 186
+    },
+    {
+      "id": "v_081",
+      "addr": "$0081",
+      "uses": 73
+    },
+    {
+      "id": "v_082",
+      "addr": "$0082",
+      "uses": 42
+    },
+    {
+      "id": "v_083",
+      "addr": "$0083",
+      "uses": 78
+    },
+    {
+      "id": "v_084",
+      "addr": "$0084",
+      "uses": 28
+    },
+    {
+      "id": "v_085",
+      "addr": "$0085",
+      "uses": 36
+    },
+    {
+      "id": "v_086",
+      "addr": "$0086",
+      "uses": 19
+    },
+    {
+      "id": "v_087",
+      "addr": "$0087",
+      "uses": 41
+    },
+    {
+      "id": "v_088",
+      "addr": "$0088",
+      "uses": 101
+    },
+    {
+      "id": "v_089",
+      "addr": "$0089",
+      "uses": 22
+    },
+    {
+      "id": "v_08A",
+      "addr": "$008A",
+      "uses": 18
+    },
+    {
+      "id": "v_08B",
+      "addr": "$008B",
+      "uses": 26
+    },
+    {
+      "id": "v_08C",
+      "addr": "$008C",
+      "uses": 20
+    },
+    {
+      "id": "v_08D",
+      "addr": "$008D",
+      "uses": 61
+    },
+    {
+      "id": "v_08E",
+      "addr": "$008E",
+      "uses": 10
+    },
+    {
+      "id": "v_08F",
+      "addr": "$008F",
+      "uses": 24
+    },
+    {
+      "id": "v_090",
+      "addr": "$0090",
+      "uses": 20
+    },
+    {
+      "id": "v_091",
+      "addr": "$0091",
+      "uses": 28
+    },
+    {
+      "id": "v_092",
+      "addr": "$0092",
+      "uses": 20
+    },
+    {
+      "id": "v_093",
+      "addr": "$0093",
+      "uses": 35
+    },
+    {
+      "id": "v_094",
+      "addr": "$0094",
+      "uses": 25
+    },
+    {
+      "id": "v_095",
+      "addr": "$0095",
+      "uses": 22
+    },
+    {
+      "id": "v_096",
+      "addr": "$0096",
+      "uses": 18
+    },
+    {
+      "id": "v_097",
+      "addr": "$0097",
+      "uses": 25
+    },
+    {
+      "id": "v_098",
+      "addr": "$0098",
+      "uses": 17
+    },
+    {
+      "id": "v_099",
+      "addr": "$0099",
+      "uses": 14
+    },
+    {
+      "id": "v_09A",
+      "addr": "$009A",
+      "uses": 5
+    },
+    {
+      "id": "v_09B",
+      "addr": "$009B",
+      "uses": 13
+    },
+    {
+      "id": "v_09C",
+      "addr": "$009C",
+      "uses": 10
+    },
+    {
+      "id": "v_09D",
+      "addr": "$009D",
+      "uses": 13
+    },
+    {
+      "id": "v_09E",
+      "addr": "$009E",
+      "uses": 12
+    },
+    {
+      "id": "v_09F",
+      "addr": "$009F",
+      "uses": 12
+    },
+    {
+      "id": "v_0A0",
+      "addr": "$00A0",
+      "uses": 30
+    },
+    {
+      "id": "v_0A1",
+      "addr": "$00A1",
+      "uses": 31
+    },
+    {
+      "id": "v_0A2",
+      "addr": "$00A2",
+      "uses": 25
+    },
+    {
+      "id": "v_0A3",
+      "addr": "$00A3",
+      "uses": 33
+    },
+    {
+      "id": "v_0A4",
+      "addr": "$00A4",
+      "uses": 51
+    },
+    {
+      "id": "v_0A5",
+      "addr": "$00A5",
+      "uses": 37
+    },
+    {
+      "id": "v_0A6",
+      "addr": "$00A6",
+      "uses": 39
+    },
+    {
+      "id": "v_0A7",
+      "addr": "$00A7",
+      "uses": 41
+    },
+    {
+      "id": "v_0A8",
+      "addr": "$00A8",
+      "uses": 29
+    },
+    {
+      "id": "v_0A9",
+      "addr": "$00A9",
+      "uses": 31
+    },
+    {
+      "id": "v_0AA",
+      "addr": "$00AA",
+      "uses": 35
+    },
+    {
+      "id": "v_0AB",
+      "addr": "$00AB",
+      "uses": 27
+    },
+    {
+      "id": "v_0AC",
+      "addr": "$00AC",
+      "uses": 14
+    },
+    {
+      "id": "v_0AD",
+      "addr": "$00AD",
+      "uses": 28
+    },
+    {
+      "id": "v_0AE",
+      "addr": "$00AE",
+      "uses": 11
+    },
+    {
+      "id": "v_0AF",
+      "addr": "$00AF",
+      "uses": 11
+    },
+    {
+      "id": "v_0B0",
+      "addr": "$00B0",
+      "uses": 29
+    },
+    {
+      "id": "v_0B1",
+      "addr": "$00B1",
+      "uses": 16
+    },
+    {
+      "id": "v_0B2",
+      "addr": "$00B2",
+      "uses": 10
+    },
+    {
+      "id": "v_0B3",
+      "addr": "$00B3",
+      "uses": 19
+    },
+    {
+      "id": "v_0B4",
+      "addr": "$00B4",
+      "uses": 22
+    },
+    {
+      "id": "v_0B5",
+      "addr": "$00B5",
+      "uses": 21
+    },
+    {
+      "id": "v_0B6",
+      "addr": "$00B6",
+      "uses": 36
+    },
+    {
+      "id": "v_0B7",
+      "addr": "$00B7",
+      "uses": 17
+    },
+    {
+      "id": "v_0B8",
+      "addr": "$00B8",
+      "uses": 20
+    },
+    {
+      "id": "v_0B9",
+      "addr": "$00B9",
+      "uses": 13
+    },
+    {
+      "id": "v_0BA",
+      "addr": "$00BA",
+      "uses": 4
+    },
+    {
+      "id": "v_0BB",
+      "addr": "$00BB",
+      "uses": 21
+    },
+    {
+      "id": "v_0BC",
+      "addr": "$00BC",
+      "uses": 13
+    },
+    {
+      "id": "v_0BD",
+      "addr": "$00BD",
+      "uses": 8
+    },
+    {
+      "id": "v_0BE",
+      "addr": "$00BE",
+      "uses": 2
+    },
+    {
+      "id": "v_0BF",
+      "addr": "$00BF",
+      "uses": 18
+    },
+    {
+      "id": "v_0C0",
+      "addr": "$00C0",
+      "uses": 241
+    },
+    {
+      "id": "v_0C1",
+      "addr": "$00C1",
+      "uses": 17
+    },
+    {
+      "id": "v_0C2",
+      "addr": "$00C2",
+      "uses": 12
+    },
+    {
+      "id": "v_0C3",
+      "addr": "$00C3",
+      "uses": 3
+    },
+    {
+      "id": "v_0C4",
+      "addr": "$00C4",
+      "uses": 9
+    },
+    {
+      "id": "v_0C5",
+      "addr": "$00C5",
+      "uses": 98
+    },
+    {
+      "id": "v_0C6",
+      "addr": "$00C6",
+      "uses": 4
+    },
+    {
+      "id": "v_0C7",
+      "addr": "$00C7",
+      "uses": 14
+    },
+    {
+      "id": "v_0C8",
+      "addr": "$00C8",
+      "uses": 24
+    },
+    {
+      "id": "v_0C9",
+      "addr": "$00C9",
+      "uses": 15
+    },
+    {
+      "id": "v_0CA",
+      "addr": "$00CA",
+      "uses": 21
+    },
+    {
+      "id": "v_0CB",
+      "addr": "$00CB",
+      "uses": 37
+    },
+    {
+      "id": "v_0CC",
+      "addr": "$00CC",
+      "uses": 33
+    },
+    {
+      "id": "v_0CD",
+      "addr": "$00CD",
+      "uses": 13
+    },
+    {
+      "id": "v_0CE",
+      "addr": "$00CE",
+      "uses": 21
+    },
+    {
+      "id": "v_0CF",
+      "addr": "$00CF",
+      "uses": 21
+    },
+    {
+      "id": "v_0D0",
+      "addr": "$00D0",
+      "uses": 29
+    },
+    {
+      "id": "v_0D1",
+      "addr": "$00D1",
+      "uses": 22
+    },
+    {
+      "id": "v_0D2",
+      "addr": "$00D2",
+      "uses": 10
+    },
+    {
+      "id": "v_0D3",
+      "addr": "$00D3",
+      "uses": 8
+    },
+    {
+      "id": "v_0D4",
+      "addr": "$00D4",
+      "uses": 8
+    },
+    {
+      "id": "v_0D5",
+      "addr": "$00D5",
+      "uses": 13
+    },
+    {
+      "id": "v_0D6",
+      "addr": "$00D6",
+      "uses": 5
+    },
+    {
+      "id": "v_0D7",
+      "addr": "$00D7",
+      "uses": 8
+    },
+    {
+      "id": "v_0D8",
+      "addr": "$00D8",
+      "uses": 8
+    },
+    {
+      "id": "v_0D9",
+      "addr": "$00D9",
+      "uses": 10
+    },
+    {
+      "id": "v_0DA",
+      "addr": "$00DA",
+      "uses": 7
+    },
+    {
+      "id": "v_0DB",
+      "addr": "$00DB",
+      "uses": 11
+    },
+    {
+      "id": "v_0DC",
+      "addr": "$00DC",
+      "uses": 9
+    },
+    {
+      "id": "v_0DD",
+      "addr": "$00DD",
+      "uses": 13
+    },
+    {
+      "id": "v_0DE",
+      "addr": "$00DE",
+      "uses": 22
+    },
+    {
+      "id": "v_0DF",
+      "addr": "$00DF",
+      "uses": 22
+    },
+    {
+      "id": "v_0E0",
+      "addr": "$00E0",
+      "uses": 33
+    },
+    {
+      "id": "v_0E1",
+      "addr": "$00E1",
+      "uses": 132
+    },
+    {
+      "id": "v_0E2",
+      "addr": "$00E2",
+      "uses": 7
+    },
+    {
+      "id": "v_0E3",
+      "addr": "$00E3",
+      "uses": 153
+    },
+    {
+      "id": "v_0E4",
+      "addr": "$00E4",
+      "uses": 15
+    },
+    {
+      "id": "v_0E5",
+      "addr": "$00E5",
+      "uses": 33
+    },
+    {
+      "id": "v_0E6",
+      "addr": "$00E6",
+      "uses": 6
+    },
+    {
+      "id": "v_0E7",
+      "addr": "$00E7",
+      "uses": 20
+    },
+    {
+      "id": "v_0E8",
+      "addr": "$00E8",
+      "uses": 61
+    },
+    {
+      "id": "v_0E9",
+      "addr": "$00E9",
+      "uses": 9
+    },
+    {
+      "id": "v_0EA",
+      "addr": "$00EA",
+      "uses": 51
+    },
+    {
+      "id": "v_0EB",
+      "addr": "$00EB",
+      "uses": 14
+    },
+    {
+      "id": "v_0EC",
+      "addr": "$00EC",
+      "uses": 7
+    },
+    {
+      "id": "v_0ED",
+      "addr": "$00ED",
+      "uses": 15
+    },
+    {
+      "id": "v_0EE",
+      "addr": "$00EE",
+      "uses": 9
+    },
+    {
+      "id": "v_0EF",
+      "addr": "$00EF",
+      "uses": 18
+    },
+    {
+      "id": "v_0F0",
+      "addr": "$00F0",
+      "uses": 40
+    },
+    {
+      "id": "v_0F1",
+      "addr": "$00F1",
+      "uses": 13
+    },
+    {
+      "id": "v_0F2",
+      "addr": "$00F2",
+      "uses": 6
+    },
+    {
+      "id": "v_0F3",
+      "addr": "$00F3",
+      "uses": 5
+    },
+    {
+      "id": "v_0F4",
+      "addr": "$00F4",
+      "uses": 11
+    },
+    {
+      "id": "v_0F5",
+      "addr": "$00F5",
+      "uses": 6
+    },
+    {
+      "id": "v_0F6",
+      "addr": "$00F6",
+      "uses": 1
+    },
+    {
+      "id": "v_0F7",
+      "addr": "$00F7",
+      "uses": 11
+    },
+    {
+      "id": "v_0F8",
+      "addr": "$00F8",
+      "uses": 27
+    },
+    {
+      "id": "v_0F9",
+      "addr": "$00F9",
+      "uses": 7
+    },
+    {
+      "id": "v_0FA",
+      "addr": "$00FA",
+      "uses": 9
+    },
+    {
+      "id": "v_0FB",
+      "addr": "$00FB",
+      "uses": 9
+    },
+    {
+      "id": "v_0FC",
+      "addr": "$00FC",
+      "uses": 14
+    },
+    {
+      "id": "v_0FD",
+      "addr": "$00FD",
+      "uses": 9
+    },
+    {
+      "id": "v_0FE",
+      "addr": "$00FE",
+      "uses": 55
+    },
+    {
+      "id": "v_0FF",
+      "addr": "$00FF",
+      "uses": 123
+    },
+    {
+      "id": "v_100",
+      "addr": "$0100",
+      "uses": 21
+    },
+    {
+      "id": "v_101",
+      "addr": "$0101",
+      "uses": 16
+    },
+    {
+      "id": "v_102",
+      "addr": "$0102",
+      "uses": 13
+    },
+    {
+      "id": "v_103",
+      "addr": "$0103",
+      "uses": 14
+    },
+    {
+      "id": "v_104",
+      "addr": "$0104",
+      "uses": 3
+    },
+    {
+      "id": "v_105",
+      "addr": "$0105",
+      "uses": 4
+    },
+    {
+      "id": "v_106",
+      "addr": "$0106",
+      "uses": 4
+    },
+    {
+      "id": "v_107",
+      "addr": "$0107",
+      "uses": 2
+    },
+    {
+      "id": "v_108",
+      "addr": "$0108",
+      "uses": 2
+    },
+    {
+      "id": "v_10C",
+      "addr": "$010C",
+      "uses": 1
+    },
+    {
+      "id": "v_110",
+      "addr": "$0110",
+      "uses": 2
+    },
+    {
+      "id": "v_111",
+      "addr": "$0111",
+      "uses": 1
+    },
+    {
+      "id": "v_11A",
+      "addr": "$011A",
+      "uses": 2
+    },
+    {
+      "id": "v_11B",
+      "addr": "$011B",
+      "uses": 1
+    },
+    {
+      "id": "v_11C",
+      "addr": "$011C",
+      "uses": 1
+    },
+    {
+      "id": "v_11F",
+      "addr": "$011F",
+      "uses": 10
+    },
+    {
+      "id": "v_120",
+      "addr": "$0120",
+      "uses": 2
+    },
+    {
+      "id": "v_130",
+      "addr": "$0130",
+      "uses": 3
+    },
+    {
+      "id": "v_131",
+      "addr": "$0131",
+      "uses": 3
+    },
+    {
+      "id": "v_132",
+      "addr": "$0132",
+      "uses": 1
+    },
+    {
+      "id": "v_133",
+      "addr": "$0133",
+      "uses": 1
+    },
+    {
+      "id": "v_134",
+      "addr": "$0134",
+      "uses": 1
+    },
+    {
+      "id": "v_135",
+      "addr": "$0135",
+      "uses": 1
+    },
+    {
+      "id": "v_136",
+      "addr": "$0136",
+      "uses": 1
+    },
+    {
+      "id": "v_137",
+      "addr": "$0137",
+      "uses": 1
+    },
+    {
+      "id": "v_140",
+      "addr": "$0140",
+      "uses": 1
+    },
+    {
+      "id": "v_141",
+      "addr": "$0141",
+      "uses": 1
+    },
+    {
+      "id": "v_150",
+      "addr": "$0150",
+      "uses": 5
+    },
+    {
+      "id": "v_154",
+      "addr": "$0154",
+      "uses": 1
+    },
+    {
+      "id": "v_15A",
+      "addr": "$015A",
+      "uses": 1
+    },
+    {
+      "id": "v_15C",
+      "addr": "$015C",
+      "uses": 1
+    },
+    {
+      "id": "v_15F",
+      "addr": "$015F",
+      "uses": 1
+    },
+    {
+      "id": "v_160",
+      "addr": "$0160",
+      "uses": 17
+    },
+    {
+      "id": "v_161",
+      "addr": "$0161",
+      "uses": 19
+    },
+    {
+      "id": "v_162",
+      "addr": "$0162",
+      "uses": 7
+    },
+    {
+      "id": "v_163",
+      "addr": "$0163",
+      "uses": 1
+    },
+    {
+      "id": "v_164",
+      "addr": "$0164",
+      "uses": 1
+    },
+    {
+      "id": "v_165",
+      "addr": "$0165",
+      "uses": 4
+    },
+    {
+      "id": "v_166",
+      "addr": "$0166",
+      "uses": 1
+    },
+    {
+      "id": "v_167",
+      "addr": "$0167",
+      "uses": 1
+    },
+    {
+      "id": "v_168",
+      "addr": "$0168",
+      "uses": 4
+    },
+    {
+      "id": "v_169",
+      "addr": "$0169",
+      "uses": 2
+    },
+    {
+      "id": "v_16B",
+      "addr": "$016B",
+      "uses": 3
+    },
+    {
+      "id": "v_16E",
+      "addr": "$016E",
+      "uses": 2
+    },
+    {
+      "id": "v_16F",
+      "addr": "$016F",
+      "uses": 1
+    },
+    {
+      "id": "v_170",
+      "addr": "$0170",
+      "uses": 1
+    },
+    {
+      "id": "v_177",
+      "addr": "$0177",
+      "uses": 3
+    },
+    {
+      "id": "v_178",
+      "addr": "$0178",
+      "uses": 4
+    },
+    {
+      "id": "v_17A",
+      "addr": "$017A",
+      "uses": 3
+    },
+    {
+      "id": "v_180",
+      "addr": "$0180",
+      "uses": 32
+    },
+    {
+      "id": "v_181",
+      "addr": "$0181",
+      "uses": 3
+    },
+    {
+      "id": "v_182",
+      "addr": "$0182",
+      "uses": 2
+    },
+    {
+      "id": "v_183",
+      "addr": "$0183",
+      "uses": 6
+    },
+    {
+      "id": "v_184",
+      "addr": "$0184",
+      "uses": 2
+    },
+    {
+      "id": "v_185",
+      "addr": "$0185",
+      "uses": 2
+    },
+    {
+      "id": "v_186",
+      "addr": "$0186",
+      "uses": 2
+    },
+    {
+      "id": "v_187",
+      "addr": "$0187",
+      "uses": 2
+    },
+    {
+      "id": "v_188",
+      "addr": "$0188",
+      "uses": 7
+    },
+    {
+      "id": "v_189",
+      "addr": "$0189",
+      "uses": 5
+    },
+    {
+      "id": "v_18D",
+      "addr": "$018D",
+      "uses": 8
+    },
+    {
+      "id": "v_18E",
+      "addr": "$018E",
+      "uses": 10
+    },
+    {
+      "id": "v_18F",
+      "addr": "$018F",
+      "uses": 12
+    },
+    {
+      "id": "v_190",
+      "addr": "$0190",
+      "uses": 4
+    },
+    {
+      "id": "v_191",
+      "addr": "$0191",
+      "uses": 3
+    },
+    {
+      "id": "v_192",
+      "addr": "$0192",
+      "uses": 3
+    },
+    {
+      "id": "v_193",
+      "addr": "$0193",
+      "uses": 2
+    },
+    {
+      "id": "v_194",
+      "addr": "$0194",
+      "uses": 2
+    },
+    {
+      "id": "v_195",
+      "addr": "$0195",
+      "uses": 2
+    },
+    {
+      "id": "v_197",
+      "addr": "$0197",
+      "uses": 3
+    },
+    {
+      "id": "v_19D",
+      "addr": "$019D",
+      "uses": 6
+    },
+    {
+      "id": "v_1A1",
+      "addr": "$01A1",
+      "uses": 1
+    },
+    {
+      "id": "v_1A3",
+      "addr": "$01A3",
+      "uses": 1
+    },
+    {
+      "id": "v_1A5",
+      "addr": "$01A5",
+      "uses": 1
+    },
+    {
+      "id": "v_1A9",
+      "addr": "$01A9",
+      "uses": 7
+    },
+    {
+      "id": "v_1AA",
+      "addr": "$01AA",
+      "uses": 3
+    },
+    {
+      "id": "v_1AB",
+      "addr": "$01AB",
+      "uses": 3
+    },
+    {
+      "id": "v_1AC",
+      "addr": "$01AC",
+      "uses": 3
+    },
+    {
+      "id": "v_1AD",
+      "addr": "$01AD",
+      "uses": 5
+    },
+    {
+      "id": "v_1AE",
+      "addr": "$01AE",
+      "uses": 23
+    },
+    {
+      "id": "v_1AF",
+      "addr": "$01AF",
+      "uses": 11
+    },
+    {
+      "id": "v_1B0",
+      "addr": "$01B0",
+      "uses": 2
+    },
+    {
+      "id": "v_1B6",
+      "addr": "$01B6",
+      "uses": 3
+    },
+    {
+      "id": "v_1B7",
+      "addr": "$01B7",
+      "uses": 3
+    },
+    {
+      "id": "v_1B8",
+      "addr": "$01B8",
+      "uses": 4
+    },
+    {
+      "id": "v_1B9",
+      "addr": "$01B9",
+      "uses": 2
+    },
+    {
+      "id": "v_1BA",
+      "addr": "$01BA",
+      "uses": 2
+    },
+    {
+      "id": "v_1BB",
+      "addr": "$01BB",
+      "uses": 3
+    },
+    {
+      "id": "v_1BC",
+      "addr": "$01BC",
+      "uses": 3
+    },
+    {
+      "id": "v_1BD",
+      "addr": "$01BD",
+      "uses": 3
+    },
+    {
+      "id": "v_1BE",
+      "addr": "$01BE",
+      "uses": 5
+    },
+    {
+      "id": "v_1BF",
+      "addr": "$01BF",
+      "uses": 1
+    },
+    {
+      "id": "v_1DD",
+      "addr": "$01DD",
+      "uses": 1
+    },
+    {
+      "id": "v_1DF",
+      "addr": "$01DF",
+      "uses": 1
+    },
+    {
+      "id": "v_1E3",
+      "addr": "$01E3",
+      "uses": 1
+    },
+    {
+      "id": "v_1E5",
+      "addr": "$01E5",
+      "uses": 1
+    },
+    {
+      "id": "v_1E7",
+      "addr": "$01E7",
+      "uses": 1
+    },
+    {
+      "id": "v_1E9",
+      "addr": "$01E9",
+      "uses": 1
+    },
+    {
+      "id": "v_1EB",
+      "addr": "$01EB",
+      "uses": 1
+    },
+    {
+      "id": "v_1F3",
+      "addr": "$01F3",
+      "uses": 1
+    },
+    {
+      "id": "v_1F7",
+      "addr": "$01F7",
+      "uses": 1
+    },
+    {
+      "id": "v_1FD",
+      "addr": "$01FD",
+      "uses": 4
+    },
+    {
+      "id": "v_1FF",
+      "addr": "$01FF",
+      "uses": 1
+    },
+    {
+      "id": "v_200",
+      "addr": "$0200",
+      "uses": 26
+    },
+    {
+      "id": "v_201",
+      "addr": "$0201",
+      "uses": 10
+    },
+    {
+      "id": "v_202",
+      "addr": "$0202",
+      "uses": 12
+    },
+    {
+      "id": "v_203",
+      "addr": "$0203",
+      "uses": 11
+    },
+    {
+      "id": "v_204",
+      "addr": "$0204",
+      "uses": 1
+    },
+    {
+      "id": "v_208",
+      "addr": "$0208",
+      "uses": 1
+    },
+    {
+      "id": "v_210",
+      "addr": "$0210",
+      "uses": 2
+    },
+    {
+      "id": "v_21C",
+      "addr": "$021C",
+      "uses": 1
+    },
+    {
+      "id": "v_220",
+      "addr": "$0220",
+      "uses": 1
+    },
+    {
+      "id": "v_22F",
+      "addr": "$022F",
+      "uses": 1
+    },
+    {
+      "id": "v_240",
+      "addr": "$0240",
+      "uses": 1
+    },
+    {
+      "id": "v_24C",
+      "addr": "$024C",
+      "uses": 1
+    },
+    {
+      "id": "v_255",
+      "addr": "$0255",
+      "uses": 2
+    },
+    {
+      "id": "v_266",
+      "addr": "$0266",
+      "uses": 1
+    },
+    {
+      "id": "v_280",
+      "addr": "$0280",
+      "uses": 10
+    },
+    {
+      "id": "v_288",
+      "addr": "$0288",
+      "uses": 1
+    },
+    {
+      "id": "v_295",
+      "addr": "$0295",
+      "uses": 1
+    },
+    {
+      "id": "v_2A7",
+      "addr": "$02A7",
+      "uses": 1
+    },
+    {
+      "id": "v_2AA",
+      "addr": "$02AA",
+      "uses": 1
+    },
+    {
+      "id": "v_2EB",
+      "addr": "$02EB",
+      "uses": 7
+    },
+    {
+      "id": "v_2F8",
+      "addr": "$02F8",
+      "uses": 4
+    },
+    {
+      "id": "v_2F9",
+      "addr": "$02F9",
+      "uses": 2
+    },
+    {
+      "id": "v_2FA",
+      "addr": "$02FA",
+      "uses": 2
+    },
+    {
+      "id": "v_2FB",
+      "addr": "$02FB",
+      "uses": 3
+    },
+    {
+      "id": "v_300",
+      "addr": "$0300",
+      "uses": 8
+    },
+    {
+      "id": "v_302",
+      "addr": "$0302",
+      "uses": 14
+    },
+    {
+      "id": "v_303",
+      "addr": "$0303",
+      "uses": 1
+    },
+    {
+      "id": "v_306",
+      "addr": "$0306",
+      "uses": 3
+    },
+    {
+      "id": "v_307",
+      "addr": "$0307",
+      "uses": 3
+    },
+    {
+      "id": "v_308",
+      "addr": "$0308",
+      "uses": 11
+    },
+    {
+      "id": "v_309",
+      "addr": "$0309",
+      "uses": 4
+    },
+    {
+      "id": "v_30A",
+      "addr": "$030A",
+      "uses": 5
+    },
+    {
+      "id": "v_30B",
+      "addr": "$030B",
+      "uses": 2
+    },
+    {
+      "id": "v_30C",
+      "addr": "$030C",
+      "uses": 7
+    },
+    {
+      "id": "v_30D",
+      "addr": "$030D",
+      "uses": 1
+    },
+    {
+      "id": "v_30E",
+      "addr": "$030E",
+      "uses": 1
+    },
+    {
+      "id": "v_310",
+      "addr": "$0310",
+      "uses": 2
+    },
+    {
+      "id": "v_311",
+      "addr": "$0311",
+      "uses": 4
+    },
+    {
+      "id": "v_312",
+      "addr": "$0312",
+      "uses": 7
+    },
+    {
+      "id": "v_313",
+      "addr": "$0313",
+      "uses": 1
+    },
+    {
+      "id": "v_314",
+      "addr": "$0314",
+      "uses": 1
+    },
+    {
+      "id": "v_315",
+      "addr": "$0315",
+      "uses": 4
+    },
+    {
+      "id": "v_316",
+      "addr": "$0316",
+      "uses": 15
+    },
+    {
+      "id": "v_317",
+      "addr": "$0317",
+      "uses": 2
+    },
+    {
+      "id": "v_318",
+      "addr": "$0318",
+      "uses": 3
+    },
+    {
+      "id": "v_319",
+      "addr": "$0319",
+      "uses": 2
+    },
+    {
+      "id": "v_31A",
+      "addr": "$031A",
+      "uses": 7
+    },
+    {
+      "id": "v_31B",
+      "addr": "$031B",
+      "uses": 26
+    },
+    {
+      "id": "v_322",
+      "addr": "$0322",
+      "uses": 1
+    },
+    {
+      "id": "v_323",
+      "addr": "$0323",
+      "uses": 10
+    },
+    {
+      "id": "v_32B",
+      "addr": "$032B",
+      "uses": 3
+    },
+    {
+      "id": "v_333",
+      "addr": "$0333",
+      "uses": 7
+    },
+    {
+      "id": "v_33B",
+      "addr": "$033B",
+      "uses": 8
+    },
+    {
+      "id": "v_33E",
+      "addr": "$033E",
+      "uses": 1
+    },
+    {
+      "id": "v_343",
+      "addr": "$0343",
+      "uses": 4
+    },
+    {
+      "id": "v_34B",
+      "addr": "$034B",
+      "uses": 4
+    },
+    {
+      "id": "v_34E",
+      "addr": "$034E",
+      "uses": 2
+    },
+    {
+      "id": "v_353",
+      "addr": "$0353",
+      "uses": 2
+    },
+    {
+      "id": "v_35A",
+      "addr": "$035A",
+      "uses": 1
+    },
+    {
+      "id": "v_35B",
+      "addr": "$035B",
+      "uses": 2
+    },
+    {
+      "id": "v_363",
+      "addr": "$0363",
+      "uses": 8
+    },
+    {
+      "id": "v_36B",
+      "addr": "$036B",
+      "uses": 4
+    },
+    {
+      "id": "v_373",
+      "addr": "$0373",
+      "uses": 34
+    },
+    {
+      "id": "v_37B",
+      "addr": "$037B",
+      "uses": 14
+    },
+    {
+      "id": "v_380",
+      "addr": "$0380",
+      "uses": 8
+    },
+    {
+      "id": "v_383",
+      "addr": "$0383",
+      "uses": 6
+    },
+    {
+      "id": "v_38B",
+      "addr": "$038B",
+      "uses": 5
+    },
+    {
+      "id": "v_393",
+      "addr": "$0393",
+      "uses": 6
+    },
+    {
+      "id": "v_399",
+      "addr": "$0399",
+      "uses": 1
+    },
+    {
+      "id": "v_39B",
+      "addr": "$039B",
+      "uses": 1
+    },
+    {
+      "id": "v_3A0",
+      "addr": "$03A0",
+      "uses": 1
+    },
+    {
+      "id": "v_3A3",
+      "addr": "$03A3",
+      "uses": 1
+    },
+    {
+      "id": "v_3A6",
+      "addr": "$03A6",
+      "uses": 1
+    },
+    {
+      "id": "v_3A7",
+      "addr": "$03A7",
+      "uses": 4
+    },
+    {
+      "id": "v_3A8",
+      "addr": "$03A8",
+      "uses": 1
+    },
+    {
+      "id": "v_3AA",
+      "addr": "$03AA",
+      "uses": 1
+    },
+    {
+      "id": "v_3AB",
+      "addr": "$03AB",
+      "uses": 6
+    },
+    {
+      "id": "v_3AC",
+      "addr": "$03AC",
+      "uses": 1
+    },
+    {
+      "id": "v_3B3",
+      "addr": "$03B3",
+      "uses": 7
+    },
+    {
+      "id": "v_3BB",
+      "addr": "$03BB",
+      "uses": 7
+    },
+    {
+      "id": "v_3C2",
+      "addr": "$03C2",
+      "uses": 1
+    },
+    {
+      "id": "v_3C3",
+      "addr": "$03C3",
+      "uses": 4
+    },
+    {
+      "id": "v_3C5",
+      "addr": "$03C5",
+      "uses": 2
+    },
+    {
+      "id": "v_3CB",
+      "addr": "$03CB",
+      "uses": 26
+    },
+    {
+      "id": "v_3CD",
+      "addr": "$03CD",
+      "uses": 1
+    },
+    {
+      "id": "v_3D3",
+      "addr": "$03D3",
+      "uses": 18
+    },
+    {
+      "id": "v_3DB",
+      "addr": "$03DB",
+      "uses": 9
+    },
+    {
+      "id": "v_3E3",
+      "addr": "$03E3",
+      "uses": 15
+    },
+    {
+      "id": "v_3EB",
+      "addr": "$03EB",
+      "uses": 6
+    },
+    {
+      "id": "v_3EF",
+      "addr": "$03EF",
+      "uses": 1
+    },
+    {
+      "id": "v_3F1",
+      "addr": "$03F1",
+      "uses": 1
+    },
+    {
+      "id": "v_3F3",
+      "addr": "$03F3",
+      "uses": 3
+    },
+    {
+      "id": "v_400",
+      "addr": "$0400",
+      "uses": 88
+    },
+    {
+      "id": "v_401",
+      "addr": "$0401",
+      "uses": 24
+    },
+    {
+      "id": "v_402",
+      "addr": "$0402",
+      "uses": 23
+    },
+    {
+      "id": "v_403",
+      "addr": "$0403",
+      "uses": 15
+    },
+    {
+      "id": "v_404",
+      "addr": "$0404",
+      "uses": 3
+    },
+    {
+      "id": "v_405",
+      "addr": "$0405",
+      "uses": 4
+    },
+    {
+      "id": "v_406",
+      "addr": "$0406",
+      "uses": 4
+    },
+    {
+      "id": "v_407",
+      "addr": "$0407",
+      "uses": 3
+    },
+    {
+      "id": "v_408",
+      "addr": "$0408",
+      "uses": 8
+    },
+    {
+      "id": "v_409",
+      "addr": "$0409",
+      "uses": 8
+    },
+    {
+      "id": "v_40A",
+      "addr": "$040A",
+      "uses": 4
+    },
+    {
+      "id": "v_40E",
+      "addr": "$040E",
+      "uses": 8
+    },
+    {
+      "id": "v_410",
+      "addr": "$0410",
+      "uses": 2
+    },
+    {
+      "id": "v_411",
+      "addr": "$0411",
+      "uses": 2
+    },
+    {
+      "id": "v_41C",
+      "addr": "$041C",
+      "uses": 24
+    },
+    {
+      "id": "v_41D",
+      "addr": "$041D",
+      "uses": 1
+    },
+    {
+      "id": "v_428",
+      "addr": "$0428",
+      "uses": 1
+    },
+    {
+      "id": "v_438",
+      "addr": "$0438",
+      "uses": 13
+    },
+    {
+      "id": "v_439",
+      "addr": "$0439",
+      "uses": 3
+    },
+    {
+      "id": "v_454",
+      "addr": "$0454",
+      "uses": 14
+    },
+    {
+      "id": "v_45C",
+      "addr": "$045C",
+      "uses": 1
+    },
+    {
+      "id": "v_470",
+      "addr": "$0470",
+      "uses": 38
+    },
+    {
+      "id": "v_47E",
+      "addr": "$047E",
+      "uses": 3
+    },
+    {
+      "id": "v_480",
+      "addr": "$0480",
+      "uses": 4
+    },
+    {
+      "id": "v_481",
+      "addr": "$0481",
+      "uses": 1
+    },
+    {
+      "id": "v_488",
+      "addr": "$0488",
+      "uses": 1
+    },
+    {
+      "id": "v_48C",
+      "addr": "$048C",
+      "uses": 47
+    },
+    {
+      "id": "v_4A8",
+      "addr": "$04A8",
+      "uses": 85
+    },
+    {
+      "id": "v_4A9",
+      "addr": "$04A9",
+      "uses": 5
+    },
+    {
+      "id": "v_4B3",
+      "addr": "$04B3",
+      "uses": 1
+    },
+    {
+      "id": "v_4B4",
+      "addr": "$04B4",
+      "uses": 1
+    },
+    {
+      "id": "v_4C4",
+      "addr": "$04C4",
+      "uses": 90
+    },
+    {
+      "id": "v_4E0",
+      "addr": "$04E0",
+      "uses": 171
+    },
+    {
+      "id": "v_4E1",
+      "addr": "$04E1",
+      "uses": 4
+    },
+    {
+      "id": "v_4E2",
+      "addr": "$04E2",
+      "uses": 3
+    },
+    {
+      "id": "v_4EB",
+      "addr": "$04EB",
+      "uses": 2
+    },
+    {
+      "id": "v_4EE",
+      "addr": "$04EE",
+      "uses": 3
+    },
+    {
+      "id": "v_4FC",
+      "addr": "$04FC",
+      "uses": 195
+    },
+    {
+      "id": "v_4FD",
+      "addr": "$04FD",
+      "uses": 7
+    },
+    {
+      "id": "v_4FE",
+      "addr": "$04FE",
+      "uses": 3
+    },
+    {
+      "id": "v_500",
+      "addr": "$0500",
+      "uses": 3
+    },
+    {
+      "id": "v_501",
+      "addr": "$0501",
+      "uses": 1
+    },
+    {
+      "id": "v_502",
+      "addr": "$0502",
+      "uses": 1
+    },
+    {
+      "id": "v_503",
+      "addr": "$0503",
+      "uses": 1
+    },
+    {
+      "id": "v_518",
+      "addr": "$0518",
+      "uses": 112
+    },
+    {
+      "id": "v_519",
+      "addr": "$0519",
+      "uses": 2
+    },
+    {
+      "id": "v_534",
+      "addr": "$0534",
+      "uses": 132
+    },
+    {
+      "id": "v_535",
+      "addr": "$0535",
+      "uses": 2
+    },
+    {
+      "id": "v_536",
+      "addr": "$0536",
+      "uses": 1
+    },
+    {
+      "id": "v_537",
+      "addr": "$0537",
+      "uses": 1
+    },
+    {
+      "id": "v_550",
+      "addr": "$0550",
+      "uses": 32
+    },
+    {
+      "id": "v_552",
+      "addr": "$0552",
+      "uses": 1
+    },
+    {
+      "id": "v_553",
+      "addr": "$0553",
+      "uses": 1
+    },
+    {
+      "id": "v_55E",
+      "addr": "$055E",
+      "uses": 3
+    },
+    {
+      "id": "v_56C",
+      "addr": "$056C",
+      "uses": 51
+    },
+    {
+      "id": "v_56E",
+      "addr": "$056E",
+      "uses": 2
+    },
+    {
+      "id": "v_56F",
+      "addr": "$056F",
+      "uses": 2
+    },
+    {
+      "id": "v_580",
+      "addr": "$0580",
+      "uses": 1
+    },
+    {
+      "id": "v_582",
+      "addr": "$0582",
+      "uses": 2
+    },
+    {
+      "id": "v_588",
+      "addr": "$0588",
+      "uses": 50
+    },
+    {
+      "id": "v_5A4",
+      "addr": "$05A4",
+      "uses": 67
+    },
+    {
+      "id": "v_5A7",
+      "addr": "$05A7",
+      "uses": 1
+    },
+    {
+      "id": "v_5C0",
+      "addr": "$05C0",
+      "uses": 21
+    },
+    {
+      "id": "v_5C1",
+      "addr": "$05C1",
+      "uses": 2
+    },
+    {
+      "id": "v_5DC",
+      "addr": "$05DC",
+      "uses": 53
+    },
+    {
+      "id": "v_5F8",
+      "addr": "$05F8",
+      "uses": 37
+    },
+    {
+      "id": "v_600",
+      "addr": "$0600",
+      "uses": 2
+    },
+    {
+      "id": "v_602",
+      "addr": "$0602",
+      "uses": 1
+    },
+    {
+      "id": "v_605",
+      "addr": "$0605",
+      "uses": 1
+    },
+    {
+      "id": "v_607",
+      "addr": "$0607",
+      "uses": 1
+    },
+    {
+      "id": "v_614",
+      "addr": "$0614",
+      "uses": 58
+    },
+    {
+      "id": "v_618",
+      "addr": "$0618",
+      "uses": 2
+    },
+    {
+      "id": "v_630",
+      "addr": "$0630",
+      "uses": 80
+    },
+    {
+      "id": "v_631",
+      "addr": "$0631",
+      "uses": 2
+    },
+    {
+      "id": "v_63E",
+      "addr": "$063E",
+      "uses": 3
+    },
+    {
+      "id": "v_64C",
+      "addr": "$064C",
+      "uses": 28
+    },
+    {
+      "id": "v_668",
+      "addr": "$0668",
+      "uses": 35
+    },
+    {
+      "id": "v_669",
+      "addr": "$0669",
+      "uses": 1
+    },
+    {
+      "id": "v_680",
+      "addr": "$0680",
+      "uses": 1
+    },
+    {
+      "id": "v_684",
+      "addr": "$0684",
+      "uses": 92
+    },
+    {
+      "id": "v_685",
+      "addr": "$0685",
+      "uses": 1
+    },
+    {
+      "id": "v_68F",
+      "addr": "$068F",
+      "uses": 2
+    },
+    {
+      "id": "v_6A0",
+      "addr": "$06A0",
+      "uses": 77
+    },
+    {
+      "id": "v_6A1",
+      "addr": "$06A1",
+      "uses": 4
+    },
+    {
+      "id": "v_6BC",
+      "addr": "$06BC",
+      "uses": 63
+    },
+    {
+      "id": "v_6BD",
+      "addr": "$06BD",
+      "uses": 1
+    },
+    {
+      "id": "v_6D8",
+      "addr": "$06D8",
+      "uses": 50
+    },
+    {
+      "id": "v_6DE",
+      "addr": "$06DE",
+      "uses": 3
+    },
+    {
+      "id": "v_6F4",
+      "addr": "$06F4",
+      "uses": 47
+    },
+    {
+      "id": "v_6FE",
+      "addr": "$06FE",
+      "uses": 3
+    },
+    {
+      "id": "v_701",
+      "addr": "$0701",
+      "uses": 1
+    },
+    {
+      "id": "v_705",
+      "addr": "$0705",
+      "uses": 1
+    },
+    {
+      "id": "v_707",
+      "addr": "$0707",
+      "uses": 3
+    },
+    {
+      "id": "v_710",
+      "addr": "$0710",
+      "uses": 128
+    },
+    {
+      "id": "v_711",
+      "addr": "$0711",
+      "uses": 6
+    },
+    {
+      "id": "v_72C",
+      "addr": "$072C",
+      "uses": 60
+    },
+    {
+      "id": "v_72D",
+      "addr": "$072D",
+      "uses": 11
+    },
+    {
+      "id": "v_72E",
+      "addr": "$072E",
+      "uses": 2
+    },
+    {
+      "id": "v_731",
+      "addr": "$0731",
+      "uses": 1
+    },
+    {
+      "id": "v_748",
+      "addr": "$0748",
+      "uses": 47
+    },
+    {
+      "id": "v_749",
+      "addr": "$0749",
+      "uses": 2
+    },
+    {
+      "id": "v_74A",
+      "addr": "$074A",
+      "uses": 1
+    },
+    {
+      "id": "v_764",
+      "addr": "$0764",
+      "uses": 57
+    },
+    {
+      "id": "v_765",
+      "addr": "$0765",
+      "uses": 9
+    },
+    {
+      "id": "v_766",
+      "addr": "$0766",
+      "uses": 1
+    },
+    {
+      "id": "v_77F",
+      "addr": "$077F",
+      "uses": 2
+    },
+    {
+      "id": "v_780",
+      "addr": "$0780",
+      "uses": 4
+    },
+    {
+      "id": "v_788",
+      "addr": "$0788",
+      "uses": 2
+    },
+    {
+      "id": "v_794",
+      "addr": "$0794",
+      "uses": 2
+    },
+    {
+      "id": "v_795",
+      "addr": "$0795",
+      "uses": 1
+    },
+    {
+      "id": "v_7A9",
+      "addr": "$07A9",
+      "uses": 3
+    },
+    {
+      "id": "v_7AA",
+      "addr": "$07AA",
+      "uses": 1
+    },
+    {
+      "id": "v_7BE",
+      "addr": "$07BE",
+      "uses": 3
+    },
+    {
+      "id": "v_7BF",
+      "addr": "$07BF",
+      "uses": 1
+    },
+    {
+      "id": "v_7D3",
+      "addr": "$07D3",
+      "uses": 1
+    },
+    {
+      "id": "v_7D4",
+      "addr": "$07D4",
+      "uses": 2
+    },
+    {
+      "id": "v_7E8",
+      "addr": "$07E8",
+      "uses": 3
+    },
+    {
+      "id": "v_7E9",
+      "addr": "$07E9",
+      "uses": 1
+    },
+    {
+      "id": "v_7FE",
+      "addr": "$07FE",
+      "uses": 2
+    },
+    {
+      "id": "v_7FF",
+      "addr": "$07FF",
+      "uses": 7
+    }
+  ],
+  "io_register_symbols": [
+    {
+      "id": "r_2000",
+      "addr": "$2000",
+      "uses": 14
+    },
+    {
+      "id": "r_2001",
+      "addr": "$2001",
+      "uses": 5
+    },
+    {
+      "id": "r_2002",
+      "addr": "$2002",
+      "uses": 5
+    },
+    {
+      "id": "r_2003",
+      "addr": "$2003",
+      "uses": 1
+    },
+    {
+      "id": "r_2005",
+      "addr": "$2005",
+      "uses": 6
+    },
+    {
+      "id": "r_2006",
+      "addr": "$2006",
+      "uses": 28
+    },
+    {
+      "id": "r_2007",
+      "addr": "$2007",
+      "uses": 34
+    },
+    {
+      "id": "r_2010",
+      "addr": "$2010",
+      "uses": 1
+    },
+    {
+      "id": "r_2011",
+      "addr": "$2011",
+      "uses": 1
+    },
+    {
+      "id": "r_2014",
+      "addr": "$2014",
+      "uses": 1
+    },
+    {
+      "id": "r_2019",
+      "addr": "$2019",
+      "uses": 1
+    },
+    {
+      "id": "r_201B",
+      "addr": "$201B",
+      "uses": 1
+    },
+    {
+      "id": "r_201D",
+      "addr": "$201D",
+      "uses": 4
+    },
+    {
+      "id": "r_201E",
+      "addr": "$201E",
+      "uses": 1
+    },
+    {
+      "id": "r_201F",
+      "addr": "$201F",
+      "uses": 3
+    },
+    {
+      "id": "r_2020",
+      "addr": "$2020",
+      "uses": 14
+    },
+    {
+      "id": "r_2022",
+      "addr": "$2022",
+      "uses": 4
+    },
+    {
+      "id": "r_2026",
+      "addr": "$2026",
+      "uses": 2
+    },
+    {
+      "id": "r_202C",
+      "addr": "$202C",
+      "uses": 5
+    },
+    {
+      "id": "r_2030",
+      "addr": "$2030",
+      "uses": 1
+    },
+    {
+      "id": "r_2033",
+      "addr": "$2033",
+      "uses": 2
+    },
+    {
+      "id": "r_2034",
+      "addr": "$2034",
+      "uses": 1
+    },
+    {
+      "id": "r_2040",
+      "addr": "$2040",
+      "uses": 3
+    },
+    {
+      "id": "r_2041",
+      "addr": "$2041",
+      "uses": 1
+    },
+    {
+      "id": "r_2045",
+      "addr": "$2045",
+      "uses": 1
+    },
+    {
+      "id": "r_2048",
+      "addr": "$2048",
+      "uses": 2
+    },
+    {
+      "id": "r_204F",
+      "addr": "$204F",
+      "uses": 1
+    },
+    {
+      "id": "r_2054",
+      "addr": "$2054",
+      "uses": 1
+    },
+    {
+      "id": "r_2072",
+      "addr": "$2072",
+      "uses": 1
+    },
+    {
+      "id": "r_209A",
+      "addr": "$209A",
+      "uses": 1
+    },
+    {
+      "id": "r_20C8",
+      "addr": "$20C8",
+      "uses": 1
+    },
+    {
+      "id": "r_20CF",
+      "addr": "$20CF",
+      "uses": 1
+    },
+    {
+      "id": "r_20E1",
+      "addr": "$20E1",
+      "uses": 5
+    },
+    {
+      "id": "r_20E3",
+      "addr": "$20E3",
+      "uses": 11
+    },
+    {
+      "id": "r_20E6",
+      "addr": "$20E6",
+      "uses": 1
+    },
+    {
+      "id": "r_20FF",
+      "addr": "$20FF",
+      "uses": 1
+    },
+    {
+      "id": "r_2101",
+      "addr": "$2101",
+      "uses": 1
+    },
+    {
+      "id": "r_2102",
+      "addr": "$2102",
+      "uses": 1
+    },
+    {
+      "id": "r_2110",
+      "addr": "$2110",
+      "uses": 1
+    },
+    {
+      "id": "r_2116",
+      "addr": "$2116",
+      "uses": 1
+    },
+    {
+      "id": "r_2120",
+      "addr": "$2120",
+      "uses": 7
+    },
+    {
+      "id": "r_2126",
+      "addr": "$2126",
+      "uses": 1
+    },
+    {
+      "id": "r_214C",
+      "addr": "$214C",
+      "uses": 1
+    },
+    {
+      "id": "r_2186",
+      "addr": "$2186",
+      "uses": 1
+    },
+    {
+      "id": "r_21A6",
+      "addr": "$21A6",
+      "uses": 1
+    },
+    {
+      "id": "r_21A9",
+      "addr": "$21A9",
+      "uses": 1
+    },
+    {
+      "id": "r_21B3",
+      "addr": "$21B3",
+      "uses": 2
+    },
+    {
+      "id": "r_21DD",
+      "addr": "$21DD",
+      "uses": 1
+    },
+    {
+      "id": "r_21E6",
+      "addr": "$21E6",
+      "uses": 2
+    },
+    {
+      "id": "r_2200",
+      "addr": "$2200",
+      "uses": 1
+    },
+    {
+      "id": "r_2203",
+      "addr": "$2203",
+      "uses": 1
+    },
+    {
+      "id": "r_2206",
+      "addr": "$2206",
+      "uses": 1
+    },
+    {
+      "id": "r_2216",
+      "addr": "$2216",
+      "uses": 2
+    },
+    {
+      "id": "r_221B",
+      "addr": "$221B",
+      "uses": 2
+    },
+    {
+      "id": "r_221E",
+      "addr": "$221E",
+      "uses": 11
+    },
+    {
+      "id": "r_2220",
+      "addr": "$2220",
+      "uses": 2
+    },
+    {
+      "id": "r_2221",
+      "addr": "$2221",
+      "uses": 1
+    },
+    {
+      "id": "r_2222",
+      "addr": "$2222",
+      "uses": 4
+    },
+    {
+      "id": "r_2223",
+      "addr": "$2223",
+      "uses": 3
+    },
+    {
+      "id": "r_2226",
+      "addr": "$2226",
+      "uses": 2
+    },
+    {
+      "id": "r_2227",
+      "addr": "$2227",
+      "uses": 1
+    },
+    {
+      "id": "r_2232",
+      "addr": "$2232",
+      "uses": 1
+    },
+    {
+      "id": "r_2243",
+      "addr": "$2243",
+      "uses": 3
+    },
+    {
+      "id": "r_2246",
+      "addr": "$2246",
+      "uses": 2
+    },
+    {
+      "id": "r_224C",
+      "addr": "$224C",
+      "uses": 1
+    },
+    {
+      "id": "r_2256",
+      "addr": "$2256",
+      "uses": 1
+    },
+    {
+      "id": "r_225E",
+      "addr": "$225E",
+      "uses": 1
+    },
+    {
+      "id": "r_2262",
+      "addr": "$2262",
+      "uses": 1
+    },
+    {
+      "id": "r_2263",
+      "addr": "$2263",
+      "uses": 3
+    },
+    {
+      "id": "r_2266",
+      "addr": "$2266",
+      "uses": 1
+    },
+    {
+      "id": "r_2275",
+      "addr": "$2275",
+      "uses": 1
+    },
+    {
+      "id": "r_2283",
+      "addr": "$2283",
+      "uses": 2
+    },
+    {
+      "id": "r_2286",
+      "addr": "$2286",
+      "uses": 1
+    },
+    {
+      "id": "r_228C",
+      "addr": "$228C",
+      "uses": 1
+    },
+    {
+      "id": "r_2292",
+      "addr": "$2292",
+      "uses": 1
+    },
+    {
+      "id": "r_2294",
+      "addr": "$2294",
+      "uses": 1
+    },
+    {
+      "id": "r_2295",
+      "addr": "$2295",
+      "uses": 1
+    },
+    {
+      "id": "r_22A2",
+      "addr": "$22A2",
+      "uses": 1
+    },
+    {
+      "id": "r_22A3",
+      "addr": "$22A3",
+      "uses": 2
+    },
+    {
+      "id": "r_22A6",
+      "addr": "$22A6",
+      "uses": 1
+    },
+    {
+      "id": "r_22AC",
+      "addr": "$22AC",
+      "uses": 2
+    },
+    {
+      "id": "r_22C3",
+      "addr": "$22C3",
+      "uses": 1
+    },
+    {
+      "id": "r_22CE",
+      "addr": "$22CE",
+      "uses": 1
+    },
+    {
+      "id": "r_22E3",
+      "addr": "$22E3",
+      "uses": 4
+    },
+    {
+      "id": "r_22E7",
+      "addr": "$22E7",
+      "uses": 1
+    },
+    {
+      "id": "r_22ED",
+      "addr": "$22ED",
+      "uses": 1
+    },
+    {
+      "id": "r_2314",
+      "addr": "$2314",
+      "uses": 1
+    },
+    {
+      "id": "r_231E",
+      "addr": "$231E",
+      "uses": 1
+    },
+    {
+      "id": "r_2322",
+      "addr": "$2322",
+      "uses": 2
+    },
+    {
+      "id": "r_2323",
+      "addr": "$2323",
+      "uses": 2
+    },
+    {
+      "id": "r_2327",
+      "addr": "$2327",
+      "uses": 3
+    },
+    {
+      "id": "r_2328",
+      "addr": "$2328",
+      "uses": 2
+    },
+    {
+      "id": "r_232A",
+      "addr": "$232A",
+      "uses": 1
+    },
+    {
+      "id": "r_2345",
+      "addr": "$2345",
+      "uses": 1
+    },
+    {
+      "id": "r_2346",
+      "addr": "$2346",
+      "uses": 5
+    },
+    {
+      "id": "r_2389",
+      "addr": "$2389",
+      "uses": 1
+    },
+    {
+      "id": "r_23FF",
+      "addr": "$23FF",
+      "uses": 5
+    },
+    {
+      "id": "r_2401",
+      "addr": "$2401",
+      "uses": 1
+    },
+    {
+      "id": "r_241B",
+      "addr": "$241B",
+      "uses": 1
+    },
+    {
+      "id": "r_241E",
+      "addr": "$241E",
+      "uses": 1
+    },
+    {
+      "id": "r_2420",
+      "addr": "$2420",
+      "uses": 3
+    },
+    {
+      "id": "r_2422",
+      "addr": "$2422",
+      "uses": 1
+    },
+    {
+      "id": "r_2424",
+      "addr": "$2424",
+      "uses": 2
+    },
+    {
+      "id": "r_2425",
+      "addr": "$2425",
+      "uses": 6
+    },
+    {
+      "id": "r_2431",
+      "addr": "$2431",
+      "uses": 2
+    },
+    {
+      "id": "r_2489",
+      "addr": "$2489",
+      "uses": 1
+    },
+    {
+      "id": "r_24A9",
+      "addr": "$24A9",
+      "uses": 1
+    },
+    {
+      "id": "r_2500",
+      "addr": "$2500",
+      "uses": 1
+    },
+    {
+      "id": "r_2506",
+      "addr": "$2506",
+      "uses": 2
+    },
+    {
+      "id": "r_250F",
+      "addr": "$250F",
+      "uses": 2
+    },
+    {
+      "id": "r_2519",
+      "addr": "$2519",
+      "uses": 2
+    },
+    {
+      "id": "r_251C",
+      "addr": "$251C",
+      "uses": 1
+    },
+    {
+      "id": "r_251E",
+      "addr": "$251E",
+      "uses": 1
+    },
+    {
+      "id": "r_2522",
+      "addr": "$2522",
+      "uses": 3
+    },
+    {
+      "id": "r_2523",
+      "addr": "$2523",
+      "uses": 1
+    },
+    {
+      "id": "r_2524",
+      "addr": "$2524",
+      "uses": 2
+    },
+    {
+      "id": "r_2525",
+      "addr": "$2525",
+      "uses": 15
+    },
+    {
+      "id": "r_2527",
+      "addr": "$2527",
+      "uses": 1
+    },
+    {
+      "id": "r_2528",
+      "addr": "$2528",
+      "uses": 2
+    },
+    {
+      "id": "r_252A",
+      "addr": "$252A",
+      "uses": 1
+    },
+    {
+      "id": "r_25A3",
+      "addr": "$25A3",
+      "uses": 1
+    },
+    {
+      "id": "r_25A9",
+      "addr": "$25A9",
+      "uses": 1
+    },
+    {
+      "id": "r_25AB",
+      "addr": "$25AB",
+      "uses": 1
+    },
+    {
+      "id": "r_261D",
+      "addr": "$261D",
+      "uses": 1
+    },
+    {
+      "id": "r_2622",
+      "addr": "$2622",
+      "uses": 1
+    },
+    {
+      "id": "r_2629",
+      "addr": "$2629",
+      "uses": 2
+    },
+    {
+      "id": "r_262A",
+      "addr": "$262A",
+      "uses": 1
+    },
+    {
+      "id": "r_2636",
+      "addr": "$2636",
+      "uses": 1
+    },
+    {
+      "id": "r_26A5",
+      "addr": "$26A5",
+      "uses": 1
+    },
+    {
+      "id": "r_270C",
+      "addr": "$270C",
+      "uses": 1
+    },
+    {
+      "id": "r_2716",
+      "addr": "$2716",
+      "uses": 2
+    },
+    {
+      "id": "r_271B",
+      "addr": "$271B",
+      "uses": 6
+    },
+    {
+      "id": "r_2727",
+      "addr": "$2727",
+      "uses": 4
+    },
+    {
+      "id": "r_272A",
+      "addr": "$272A",
+      "uses": 3
+    },
+    {
+      "id": "r_2739",
+      "addr": "$2739",
+      "uses": 1
+    },
+    {
+      "id": "r_275F",
+      "addr": "$275F",
+      "uses": 1
+    },
+    {
+      "id": "r_2760",
+      "addr": "$2760",
+      "uses": 1
+    },
+    {
+      "id": "r_2761",
+      "addr": "$2761",
+      "uses": 1
+    },
+    {
+      "id": "r_27E3",
+      "addr": "$27E3",
+      "uses": 8
+    },
+    {
+      "id": "r_2800",
+      "addr": "$2800",
+      "uses": 2
+    },
+    {
+      "id": "r_2801",
+      "addr": "$2801",
+      "uses": 1
+    },
+    {
+      "id": "r_2804",
+      "addr": "$2804",
+      "uses": 1
+    },
+    {
+      "id": "r_2811",
+      "addr": "$2811",
+      "uses": 1
+    },
+    {
+      "id": "r_281E",
+      "addr": "$281E",
+      "uses": 1
+    },
+    {
+      "id": "r_2821",
+      "addr": "$2821",
+      "uses": 3
+    },
+    {
+      "id": "r_2827",
+      "addr": "$2827",
+      "uses": 1
+    },
+    {
+      "id": "r_282D",
+      "addr": "$282D",
+      "uses": 1
+    },
+    {
+      "id": "r_2832",
+      "addr": "$2832",
+      "uses": 1
+    },
+    {
+      "id": "r_2836",
+      "addr": "$2836",
+      "uses": 1
+    },
+    {
+      "id": "r_2839",
+      "addr": "$2839",
+      "uses": 1
+    },
+    {
+      "id": "r_2854",
+      "addr": "$2854",
+      "uses": 1
+    },
+    {
+      "id": "r_2926",
+      "addr": "$2926",
+      "uses": 1
+    },
+    {
+      "id": "r_2928",
+      "addr": "$2928",
+      "uses": 4
+    },
+    {
+      "id": "r_2929",
+      "addr": "$2929",
+      "uses": 1
+    },
+    {
+      "id": "r_292A",
+      "addr": "$292A",
+      "uses": 12
+    },
+    {
+      "id": "r_292F",
+      "addr": "$292F",
+      "uses": 1
+    },
+    {
+      "id": "r_2932",
+      "addr": "$2932",
+      "uses": 2
+    },
+    {
+      "id": "r_293C",
+      "addr": "$293C",
+      "uses": 1
+    },
+    {
+      "id": "r_2A00",
+      "addr": "$2A00",
+      "uses": 1
+    },
+    {
+      "id": "r_2A0A",
+      "addr": "$2A0A",
+      "uses": 2
+    },
+    {
+      "id": "r_2A0F",
+      "addr": "$2A0F",
+      "uses": 2
+    },
+    {
+      "id": "r_2A15",
+      "addr": "$2A15",
+      "uses": 1
+    },
+    {
+      "id": "r_2A18",
+      "addr": "$2A18",
+      "uses": 1
+    },
+    {
+      "id": "r_2A1E",
+      "addr": "$2A1E",
+      "uses": 1
+    },
+    {
+      "id": "r_2A24",
+      "addr": "$2A24",
+      "uses": 1
+    },
+    {
+      "id": "r_2A25",
+      "addr": "$2A25",
+      "uses": 2
+    },
+    {
+      "id": "r_2A29",
+      "addr": "$2A29",
+      "uses": 1
+    },
+    {
+      "id": "r_2A2A",
+      "addr": "$2A2A",
+      "uses": 3
+    },
+    {
+      "id": "r_2A2B",
+      "addr": "$2A2B",
+      "uses": 1
+    },
+    {
+      "id": "r_2A2C",
+      "addr": "$2A2C",
+      "uses": 8
+    },
+    {
+      "id": "r_2A2D",
+      "addr": "$2A2D",
+      "uses": 2
+    },
+    {
+      "id": "r_2A2E",
+      "addr": "$2A2E",
+      "uses": 1
+    },
+    {
+      "id": "r_2A32",
+      "addr": "$2A32",
+      "uses": 2
+    },
+    {
+      "id": "r_2A55",
+      "addr": "$2A55",
+      "uses": 1
+    },
+    {
+      "id": "r_2A5A",
+      "addr": "$2A5A",
+      "uses": 1
+    },
+    {
+      "id": "r_2A5E",
+      "addr": "$2A5E",
+      "uses": 1
+    },
+    {
+      "id": "r_2A5F",
+      "addr": "$2A5F",
+      "uses": 1
+    },
+    {
+      "id": "r_2ADF",
+      "addr": "$2ADF",
+      "uses": 1
+    },
+    {
+      "id": "r_2AE3",
+      "addr": "$2AE3",
+      "uses": 8
+    },
+    {
+      "id": "r_2AEA",
+      "addr": "$2AEA",
+      "uses": 1
+    },
+    {
+      "id": "r_2AED",
+      "addr": "$2AED",
+      "uses": 1
+    },
+    {
+      "id": "r_2B02",
+      "addr": "$2B02",
+      "uses": 1
+    },
+    {
+      "id": "r_2B15",
+      "addr": "$2B15",
+      "uses": 1
+    },
+    {
+      "id": "r_2B1B",
+      "addr": "$2B1B",
+      "uses": 1
+    },
+    {
+      "id": "r_2B25",
+      "addr": "$2B25",
+      "uses": 1
+    },
+    {
+      "id": "r_2B28",
+      "addr": "$2B28",
+      "uses": 1
+    },
+    {
+      "id": "r_2B2A",
+      "addr": "$2B2A",
+      "uses": 2
+    },
+    {
+      "id": "r_2B2C",
+      "addr": "$2B2C",
+      "uses": 3
+    },
+    {
+      "id": "r_2B2D",
+      "addr": "$2B2D",
+      "uses": 1
+    },
+    {
+      "id": "r_2B2E",
+      "addr": "$2B2E",
+      "uses": 1
+    },
+    {
+      "id": "r_2B33",
+      "addr": "$2B33",
+      "uses": 2
+    },
+    {
+      "id": "r_2BDF",
+      "addr": "$2BDF",
+      "uses": 1
+    },
+    {
+      "id": "r_2C00",
+      "addr": "$2C00",
+      "uses": 6
+    },
+    {
+      "id": "r_2C0F",
+      "addr": "$2C0F",
+      "uses": 1
+    },
+    {
+      "id": "r_2C20",
+      "addr": "$2C20",
+      "uses": 1
+    },
+    {
+      "id": "r_2C22",
+      "addr": "$2C22",
+      "uses": 1
+    },
+    {
+      "id": "r_2C28",
+      "addr": "$2C28",
+      "uses": 1
+    },
+    {
+      "id": "r_2C2A",
+      "addr": "$2C2A",
+      "uses": 2
+    },
+    {
+      "id": "r_2C2C",
+      "addr": "$2C2C",
+      "uses": 9
+    },
+    {
+      "id": "r_2C2E",
+      "addr": "$2C2E",
+      "uses": 4
+    },
+    {
+      "id": "r_2C2F",
+      "addr": "$2C2F",
+      "uses": 7
+    },
+    {
+      "id": "r_2C31",
+      "addr": "$2C31",
+      "uses": 1
+    },
+    {
+      "id": "r_2C38",
+      "addr": "$2C38",
+      "uses": 1
+    },
+    {
+      "id": "r_2C3C",
+      "addr": "$2C3C",
+      "uses": 1
+    },
+    {
+      "id": "r_2C54",
+      "addr": "$2C54",
+      "uses": 1
+    },
+    {
+      "id": "r_2C83",
+      "addr": "$2C83",
+      "uses": 1
+    },
+    {
+      "id": "r_2CDF",
+      "addr": "$2CDF",
+      "uses": 1
+    },
+    {
+      "id": "r_2CE1",
+      "addr": "$2CE1",
+      "uses": 3
+    },
+    {
+      "id": "r_2CE3",
+      "addr": "$2CE3",
+      "uses": 1
+    },
+    {
+      "id": "r_2CE5",
+      "addr": "$2CE5",
+      "uses": 1
+    },
+    {
+      "id": "r_2CE7",
+      "addr": "$2CE7",
+      "uses": 1
+    },
+    {
+      "id": "r_2D00",
+      "addr": "$2D00",
+      "uses": 2
+    },
+    {
+      "id": "r_2D01",
+      "addr": "$2D01",
+      "uses": 1
+    },
+    {
+      "id": "r_2D12",
+      "addr": "$2D12",
+      "uses": 1
+    },
+    {
+      "id": "r_2D1E",
+      "addr": "$2D1E",
+      "uses": 1
+    },
+    {
+      "id": "r_2D22",
+      "addr": "$2D22",
+      "uses": 1
+    },
+    {
+      "id": "r_2D23",
+      "addr": "$2D23",
+      "uses": 1
+    },
+    {
+      "id": "r_2D26",
+      "addr": "$2D26",
+      "uses": 1
+    },
+    {
+      "id": "r_2D29",
+      "addr": "$2D29",
+      "uses": 1
+    },
+    {
+      "id": "r_2D2A",
+      "addr": "$2D2A",
+      "uses": 1
+    },
+    {
+      "id": "r_2D2C",
+      "addr": "$2D2C",
+      "uses": 1
+    },
+    {
+      "id": "r_2D2D",
+      "addr": "$2D2D",
+      "uses": 3
+    },
+    {
+      "id": "r_2D30",
+      "addr": "$2D30",
+      "uses": 1
+    },
+    {
+      "id": "r_2D32",
+      "addr": "$2D32",
+      "uses": 2
+    },
+    {
+      "id": "r_2D4E",
+      "addr": "$2D4E",
+      "uses": 1
+    },
+    {
+      "id": "r_2D65",
+      "addr": "$2D65",
+      "uses": 1
+    },
+    {
+      "id": "r_2DBC",
+      "addr": "$2DBC",
+      "uses": 1
+    },
+    {
+      "id": "r_2E1F",
+      "addr": "$2E1F",
+      "uses": 2
+    },
+    {
+      "id": "r_2E2A",
+      "addr": "$2E2A",
+      "uses": 4
+    },
+    {
+      "id": "r_2E2D",
+      "addr": "$2E2D",
+      "uses": 4
+    },
+    {
+      "id": "r_2E2F",
+      "addr": "$2E2F",
+      "uses": 1
+    },
+    {
+      "id": "r_2E32",
+      "addr": "$2E32",
+      "uses": 1
+    },
+    {
+      "id": "r_2E33",
+      "addr": "$2E33",
+      "uses": 1
+    },
+    {
+      "id": "r_2E35",
+      "addr": "$2E35",
+      "uses": 1
+    },
+    {
+      "id": "r_2E36",
+      "addr": "$2E36",
+      "uses": 1
+    },
+    {
+      "id": "r_2E4D",
+      "addr": "$2E4D",
+      "uses": 1
+    },
+    {
+      "id": "r_2E8F",
+      "addr": "$2E8F",
+      "uses": 1
+    },
+    {
+      "id": "r_2E9A",
+      "addr": "$2E9A",
+      "uses": 1
+    },
+    {
+      "id": "r_2EDC",
+      "addr": "$2EDC",
+      "uses": 3
+    },
+    {
+      "id": "r_2EE3",
+      "addr": "$2EE3",
+      "uses": 2
+    },
+    {
+      "id": "r_2EEA",
+      "addr": "$2EEA",
+      "uses": 1
+    },
+    {
+      "id": "r_2F10",
+      "addr": "$2F10",
+      "uses": 1
+    },
+    {
+      "id": "r_2F11",
+      "addr": "$2F11",
+      "uses": 1
+    },
+    {
+      "id": "r_2F21",
+      "addr": "$2F21",
+      "uses": 1
+    },
+    {
+      "id": "r_2F22",
+      "addr": "$2F22",
+      "uses": 1
+    },
+    {
+      "id": "r_2F2A",
+      "addr": "$2F2A",
+      "uses": 1
+    },
+    {
+      "id": "r_2F2C",
+      "addr": "$2F2C",
+      "uses": 2
+    },
+    {
+      "id": "r_2F2E",
+      "addr": "$2F2E",
+      "uses": 5
+    },
+    {
+      "id": "r_2F2F",
+      "addr": "$2F2F",
+      "uses": 1
+    },
+    {
+      "id": "r_2F31",
+      "addr": "$2F31",
+      "uses": 4
+    },
+    {
+      "id": "r_2F36",
+      "addr": "$2F36",
+      "uses": 1
+    },
+    {
+      "id": "r_2F48",
+      "addr": "$2F48",
+      "uses": 1
+    },
+    {
+      "id": "r_2F89",
+      "addr": "$2F89",
+      "uses": 1
+    },
+    {
+      "id": "r_2FA5",
+      "addr": "$2FA5",
+      "uses": 1
+    },
+    {
+      "id": "r_2FE1",
+      "addr": "$2FE1",
+      "uses": 3
+    },
+    {
+      "id": "r_2FE3",
+      "addr": "$2FE3",
+      "uses": 1
+    },
+    {
+      "id": "r_2FF1",
+      "addr": "$2FF1",
+      "uses": 1
+    },
+    {
+      "id": "r_3000",
+      "addr": "$3000",
+      "uses": 3
+    },
+    {
+      "id": "r_3010",
+      "addr": "$3010",
+      "uses": 3
+    },
+    {
+      "id": "r_3015",
+      "addr": "$3015",
+      "uses": 1
+    },
+    {
+      "id": "r_3016",
+      "addr": "$3016",
+      "uses": 2
+    },
+    {
+      "id": "r_3023",
+      "addr": "$3023",
+      "uses": 1
+    },
+    {
+      "id": "r_3027",
+      "addr": "$3027",
+      "uses": 2
+    },
+    {
+      "id": "r_302B",
+      "addr": "$302B",
+      "uses": 1
+    },
+    {
+      "id": "r_302D",
+      "addr": "$302D",
+      "uses": 1
+    },
+    {
+      "id": "r_302E",
+      "addr": "$302E",
+      "uses": 1
+    },
+    {
+      "id": "r_302F",
+      "addr": "$302F",
+      "uses": 3
+    },
+    {
+      "id": "r_3030",
+      "addr": "$3030",
+      "uses": 2
+    },
+    {
+      "id": "r_3031",
+      "addr": "$3031",
+      "uses": 1
+    },
+    {
+      "id": "r_303C",
+      "addr": "$303C",
+      "uses": 1
+    },
+    {
+      "id": "r_3040",
+      "addr": "$3040",
+      "uses": 1
+    },
+    {
+      "id": "r_3084",
+      "addr": "$3084",
+      "uses": 1
+    },
+    {
+      "id": "r_30E1",
+      "addr": "$30E1",
+      "uses": 4
+    },
+    {
+      "id": "r_30EB",
+      "addr": "$30EB",
+      "uses": 2
+    },
+    {
+      "id": "r_3108",
+      "addr": "$3108",
+      "uses": 2
+    },
+    {
+      "id": "r_3124",
+      "addr": "$3124",
+      "uses": 1
+    },
+    {
+      "id": "r_312A",
+      "addr": "$312A",
+      "uses": 2
+    },
+    {
+      "id": "r_312C",
+      "addr": "$312C",
+      "uses": 1
+    },
+    {
+      "id": "r_312F",
+      "addr": "$312F",
+      "uses": 4
+    },
+    {
+      "id": "r_3130",
+      "addr": "$3130",
+      "uses": 4
+    },
+    {
+      "id": "r_3131",
+      "addr": "$3131",
+      "uses": 1
+    },
+    {
+      "id": "r_3133",
+      "addr": "$3133",
+      "uses": 2
+    },
+    {
+      "id": "r_3134",
+      "addr": "$3134",
+      "uses": 2
+    },
+    {
+      "id": "r_3135",
+      "addr": "$3135",
+      "uses": 2
+    },
+    {
+      "id": "r_3182",
+      "addr": "$3182",
+      "uses": 1
+    },
+    {
+      "id": "r_319A",
+      "addr": "$319A",
+      "uses": 1
+    },
+    {
+      "id": "r_31BB",
+      "addr": "$31BB",
+      "uses": 1
+    },
+    {
+      "id": "r_31E1",
+      "addr": "$31E1",
+      "uses": 3
+    },
+    {
+      "id": "r_3202",
+      "addr": "$3202",
+      "uses": 1
+    },
+    {
+      "id": "r_3218",
+      "addr": "$3218",
+      "uses": 1
+    },
+    {
+      "id": "r_3219",
+      "addr": "$3219",
+      "uses": 1
+    },
+    {
+      "id": "r_3221",
+      "addr": "$3221",
+      "uses": 1
+    },
+    {
+      "id": "r_322D",
+      "addr": "$322D",
+      "uses": 1
+    },
+    {
+      "id": "r_32E1",
+      "addr": "$32E1",
+      "uses": 1
+    },
+    {
+      "id": "r_332A",
+      "addr": "$332A",
+      "uses": 1
+    },
+    {
+      "id": "r_3331",
+      "addr": "$3331",
+      "uses": 2
+    },
+    {
+      "id": "r_3335",
+      "addr": "$3335",
+      "uses": 1
+    },
+    {
+      "id": "r_33E9",
+      "addr": "$33E9",
+      "uses": 1
+    },
+    {
+      "id": "r_3424",
+      "addr": "$3424",
+      "uses": 1
+    },
+    {
+      "id": "r_3431",
+      "addr": "$3431",
+      "uses": 2
+    },
+    {
+      "id": "r_3435",
+      "addr": "$3435",
+      "uses": 1
+    },
+    {
+      "id": "r_3438",
+      "addr": "$3438",
+      "uses": 1
+    },
+    {
+      "id": "r_347E",
+      "addr": "$347E",
+      "uses": 1
+    },
+    {
+      "id": "r_34E5",
+      "addr": "$34E5",
+      "uses": 1
+    },
+    {
+      "id": "r_3500",
+      "addr": "$3500",
+      "uses": 1
+    },
+    {
+      "id": "r_3530",
+      "addr": "$3530",
+      "uses": 1
+    },
+    {
+      "id": "r_3531",
+      "addr": "$3531",
+      "uses": 7
+    },
+    {
+      "id": "r_3538",
+      "addr": "$3538",
+      "uses": 1
+    },
+    {
+      "id": "r_353F",
+      "addr": "$353F",
+      "uses": 1
+    },
+    {
+      "id": "r_3616",
+      "addr": "$3616",
+      "uses": 2
+    },
+    {
+      "id": "r_361C",
+      "addr": "$361C",
+      "uses": 1
+    },
+    {
+      "id": "r_3624",
+      "addr": "$3624",
+      "uses": 1
+    },
+    {
+      "id": "r_3632",
+      "addr": "$3632",
+      "uses": 2
+    },
+    {
+      "id": "r_3633",
+      "addr": "$3633",
+      "uses": 1
+    },
+    {
+      "id": "r_3635",
+      "addr": "$3635",
+      "uses": 3
+    },
+    {
+      "id": "r_3637",
+      "addr": "$3637",
+      "uses": 2
+    },
+    {
+      "id": "r_3638",
+      "addr": "$3638",
+      "uses": 5
+    },
+    {
+      "id": "r_372D",
+      "addr": "$372D",
+      "uses": 1
+    },
+    {
+      "id": "r_372E",
+      "addr": "$372E",
+      "uses": 1
+    },
+    {
+      "id": "r_3736",
+      "addr": "$3736",
+      "uses": 1
+    },
+    {
+      "id": "r_3738",
+      "addr": "$3738",
+      "uses": 6
+    },
+    {
+      "id": "r_3800",
+      "addr": "$3800",
+      "uses": 2
+    },
+    {
+      "id": "r_3806",
+      "addr": "$3806",
+      "uses": 3
+    },
+    {
+      "id": "r_380F",
+      "addr": "$380F",
+      "uses": 1
+    },
+    {
+      "id": "r_381C",
+      "addr": "$381C",
+      "uses": 1
+    },
+    {
+      "id": "r_382C",
+      "addr": "$382C",
+      "uses": 1
+    },
+    {
+      "id": "r_382F",
+      "addr": "$382F",
+      "uses": 1
+    },
+    {
+      "id": "r_3838",
+      "addr": "$3838",
+      "uses": 8
+    },
+    {
+      "id": "r_383A",
+      "addr": "$383A",
+      "uses": 2
+    },
+    {
+      "id": "r_383B",
+      "addr": "$383B",
+      "uses": 6
+    },
+    {
+      "id": "r_387A",
+      "addr": "$387A",
+      "uses": 1
+    },
+    {
+      "id": "r_38BA",
+      "addr": "$38BA",
+      "uses": 1
+    },
+    {
+      "id": "r_38E1",
+      "addr": "$38E1",
+      "uses": 2
+    },
+    {
+      "id": "r_38E5",
+      "addr": "$38E5",
+      "uses": 1
+    },
+    {
+      "id": "r_3902",
+      "addr": "$3902",
+      "uses": 1
+    },
+    {
+      "id": "r_3919",
+      "addr": "$3919",
+      "uses": 1
+    },
+    {
+      "id": "r_391D",
+      "addr": "$391D",
+      "uses": 1
+    },
+    {
+      "id": "r_3932",
+      "addr": "$3932",
+      "uses": 1
+    },
+    {
+      "id": "r_3936",
+      "addr": "$3936",
+      "uses": 2
+    },
+    {
+      "id": "r_3938",
+      "addr": "$3938",
+      "uses": 1
+    },
+    {
+      "id": "r_393A",
+      "addr": "$393A",
+      "uses": 1
+    },
+    {
+      "id": "r_393C",
+      "addr": "$393C",
+      "uses": 4
+    },
+    {
+      "id": "r_3A00",
+      "addr": "$3A00",
+      "uses": 5
+    },
+    {
+      "id": "r_3A06",
+      "addr": "$3A06",
+      "uses": 1
+    },
+    {
+      "id": "r_3A08",
+      "addr": "$3A08",
+      "uses": 2
+    },
+    {
+      "id": "r_3A0E",
+      "addr": "$3A0E",
+      "uses": 1
+    },
+    {
+      "id": "r_3A21",
+      "addr": "$3A21",
+      "uses": 1
+    },
+    {
+      "id": "r_3A34",
+      "addr": "$3A34",
+      "uses": 1
+    },
+    {
+      "id": "r_3A3B",
+      "addr": "$3A3B",
+      "uses": 2
+    },
+    {
+      "id": "r_3A88",
+      "addr": "$3A88",
+      "uses": 1
+    },
+    {
+      "id": "r_3AE1",
+      "addr": "$3AE1",
+      "uses": 3
+    },
+    {
+      "id": "r_3AE5",
+      "addr": "$3AE5",
+      "uses": 1
+    },
+    {
+      "id": "r_3AE7",
+      "addr": "$3AE7",
+      "uses": 1
+    },
+    {
+      "id": "r_3AE9",
+      "addr": "$3AE9",
+      "uses": 1
+    },
+    {
+      "id": "r_3AEB",
+      "addr": "$3AEB",
+      "uses": 1
+    },
+    {
+      "id": "r_3B00",
+      "addr": "$3B00",
+      "uses": 5
+    },
+    {
+      "id": "r_3B2B",
+      "addr": "$3B2B",
+      "uses": 2
+    },
+    {
+      "id": "r_3B38",
+      "addr": "$3B38",
+      "uses": 2
+    },
+    {
+      "id": "r_3B3A",
+      "addr": "$3B3A",
+      "uses": 5
+    },
+    {
+      "id": "r_3B3D",
+      "addr": "$3B3D",
+      "uses": 3
+    },
+    {
+      "id": "r_3B6E",
+      "addr": "$3B6E",
+      "uses": 1
+    },
+    {
+      "id": "r_3BE1",
+      "addr": "$3BE1",
+      "uses": 2
+    },
+    {
+      "id": "r_3C00",
+      "addr": "$3C00",
+      "uses": 1
+    },
+    {
+      "id": "r_3C01",
+      "addr": "$3C01",
+      "uses": 2
+    },
+    {
+      "id": "r_3C02",
+      "addr": "$3C02",
+      "uses": 1
+    },
+    {
+      "id": "r_3C04",
+      "addr": "$3C04",
+      "uses": 2
+    },
+    {
+      "id": "r_3C29",
+      "addr": "$3C29",
+      "uses": 1
+    },
+    {
+      "id": "r_3C2B",
+      "addr": "$3C2B",
+      "uses": 2
+    },
+    {
+      "id": "r_3C35",
+      "addr": "$3C35",
+      "uses": 1
+    },
+    {
+      "id": "r_3C3B",
+      "addr": "$3C3B",
+      "uses": 1
+    },
+    {
+      "id": "r_3C3C",
+      "addr": "$3C3C",
+      "uses": 1
+    },
+    {
+      "id": "r_3C3D",
+      "addr": "$3C3D",
+      "uses": 2
+    },
+    {
+      "id": "r_3C5A",
+      "addr": "$3C5A",
+      "uses": 1
+    },
+    {
+      "id": "r_3CE5",
+      "addr": "$3CE5",
+      "uses": 2
+    },
+    {
+      "id": "r_3D00",
+      "addr": "$3D00",
+      "uses": 9
+    },
+    {
+      "id": "r_3D31",
+      "addr": "$3D31",
+      "uses": 1
+    },
+    {
+      "id": "r_3D38",
+      "addr": "$3D38",
+      "uses": 5
+    },
+    {
+      "id": "r_3D3C",
+      "addr": "$3D3C",
+      "uses": 4
+    },
+    {
+      "id": "r_3D3D",
+      "addr": "$3D3D",
+      "uses": 2
+    },
+    {
+      "id": "r_3D3F",
+      "addr": "$3D3F",
+      "uses": 1
+    },
+    {
+      "id": "r_3DA9",
+      "addr": "$3DA9",
+      "uses": 1
+    },
+    {
+      "id": "r_3DAF",
+      "addr": "$3DAF",
+      "uses": 1
+    },
+    {
+      "id": "r_3DE3",
+      "addr": "$3DE3",
+      "uses": 1
+    },
+    {
+      "id": "r_3E01",
+      "addr": "$3E01",
+      "uses": 1
+    },
+    {
+      "id": "r_3E08",
+      "addr": "$3E08",
+      "uses": 1
+    },
+    {
+      "id": "r_3E2F",
+      "addr": "$3E2F",
+      "uses": 1
+    },
+    {
+      "id": "r_3E30",
+      "addr": "$3E30",
+      "uses": 1
+    },
+    {
+      "id": "r_3F00",
+      "addr": "$3F00",
+      "uses": 3
+    },
+    {
+      "id": "r_3F06",
+      "addr": "$3F06",
+      "uses": 1
+    },
+    {
+      "id": "r_3F3E",
+      "addr": "$3F3E",
+      "uses": 1
+    },
+    {
+      "id": "r_3F3F",
+      "addr": "$3F3F",
+      "uses": 1
+    },
+    {
+      "id": "r_3F40",
+      "addr": "$3F40",
+      "uses": 3
+    },
+    {
+      "id": "r_4000",
+      "addr": "$4000",
+      "uses": 3
+    },
+    {
+      "id": "r_4001",
+      "addr": "$4001",
+      "uses": 3
+    },
+    {
+      "id": "r_4002",
+      "addr": "$4002",
+      "uses": 1
+    },
+    {
+      "id": "r_4003",
+      "addr": "$4003",
+      "uses": 2
+    },
+    {
+      "id": "r_4004",
+      "addr": "$4004",
+      "uses": 1
+    },
+    {
+      "id": "r_4005",
+      "addr": "$4005",
+      "uses": 1
+    },
+    {
+      "id": "r_4007",
+      "addr": "$4007",
+      "uses": 1
+    },
+    {
+      "id": "r_4008",
+      "addr": "$4008",
+      "uses": 2
+    },
+    {
+      "id": "r_4009",
+      "addr": "$4009",
+      "uses": 1
+    },
+    {
+      "id": "r_400A",
+      "addr": "$400A",
+      "uses": 1
+    },
+    {
+      "id": "r_400B",
+      "addr": "$400B",
+      "uses": 2
+    },
+    {
+      "id": "r_400C",
+      "addr": "$400C",
+      "uses": 2
+    },
+    {
+      "id": "r_400E",
+      "addr": "$400E",
+      "uses": 1
+    },
+    {
+      "id": "r_400F",
+      "addr": "$400F",
+      "uses": 1
+    },
+    {
+      "id": "r_4010",
+      "addr": "$4010",
+      "uses": 2
+    },
+    {
+      "id": "r_4011",
+      "addr": "$4011",
+      "uses": 2
+    },
+    {
+      "id": "r_4012",
+      "addr": "$4012",
+      "uses": 2
+    },
+    {
+      "id": "r_4013",
+      "addr": "$4013",
+      "uses": 1
+    },
+    {
+      "id": "r_4014",
+      "addr": "$4014",
+      "uses": 1
+    },
+    {
+      "id": "r_4015",
+      "addr": "$4015",
+      "uses": 5
+    },
+    {
+      "id": "r_4016",
+      "addr": "$4016",
+      "uses": 3
+    },
+    {
+      "id": "r_4017",
+      "addr": "$4017",
+      "uses": 1
+    }
+  ],
+  "data_tables": [
+    {
+      "id": "t_000",
+      "bank": 1,
+      "cpu": "$AD64-$B18A",
+      "prg": "0x02D64-0x0318A",
+      "size": 1063,
+      "xref_count": 6
+    },
+    {
+      "id": "t_001",
+      "bank": 1,
+      "cpu": "$B2A4-$BFFF",
+      "prg": "0x032A4-0x03FFF",
+      "size": 3420,
+      "xref_count": 4
+    },
+    {
+      "id": "t_002",
+      "bank": 2,
+      "cpu": "$8678-$9FFF",
+      "prg": "0x04678-0x05FFF",
+      "size": 6536,
+      "xref_count": 4
+    },
+    {
+      "id": "t_003",
+      "bank": 5,
+      "cpu": "$8F8D-$9FFF",
+      "prg": "0x0AF8D-0x0BFFF",
+      "size": 4211,
+      "xref_count": 2
+    },
+    {
+      "id": "t_004",
+      "bank": 6,
+      "cpu": "$93A8-$9FFF",
+      "prg": "0x0D3A8-0x0DFFF",
+      "size": 3160,
+      "xref_count": 6
+    },
+    {
+      "id": "t_005",
+      "bank": 8,
+      "cpu": "$ADD0-$BFFF",
+      "prg": "0x10DD0-0x11FFF",
+      "size": 4656,
+      "xref_count": 4
+    },
+    {
+      "id": "t_006",
+      "bank": 10,
+      "cpu": "$97B0-$97BA",
+      "prg": "0x157B0-0x157BA",
+      "size": 11,
+      "xref_count": 2
+    },
+    {
+      "id": "t_007",
+      "bank": 15,
+      "cpu": "$FD2A-$FFFF",
+      "prg": "0x1FD2A-0x1FFFF",
+      "size": 726,
+      "xref_count": 8
+    }
+  ],
+  "known_data_candidates": [
+    {
+      "name": "charmap/字形索引表 A",
+      "prg": "0x01190-0x01220",
+      "evidence": "docs/findings/rom-forensics.md §4（A 级字节）"
+    },
+    {
+      "name": "charmap/字形索引表 B",
+      "prg": "0x01830-0x018F8",
+      "evidence": "docs/findings/rom-forensics.md §4"
+    },
+    {
+      "name": "文本记录区（标题/版权）",
+      "prg": "0x0109E-0x01123",
+      "evidence": "docs/findings/rom-forensics.md §4；记录格式 {PPU地址,tile码,FE/FF}"
+    },
+    {
+      "name": "文本记录区（剧情）",
+      "prg": "0x02CDC-0x02F8B",
+      "evidence": "docs/findings/rom-forensics.md §4"
+    },
+    {
+      "name": "文本记录区（结局）",
+      "prg": "0x02FE4-0x03155",
+      "evidence": "docs/findings/rom-forensics.md §4"
+    },
+    {
+      "name": "STAFF 字幕区",
+      "prg": "0x01959-0x01BC0",
+      "evidence": "docs/findings/rom-forensics.md §4（含 @2011 JIUBAN 签名 0x01BB2）"
+    },
+    {
+      "name": "大字模文本块",
+      "prg": "0x1FF00-0x1FFEF",
+      "evidence": "docs/findings/rom-forensics.md §4"
+    }
+  ],
+  "cross_checks_s0": {
+    "far_call_sites_18": {
+      "expect": 18,
+      "actual": 18,
+      "pass": true
+    },
+    "bank11_entry_table": {
+      "expect": "bank11:$8000 起 7 条 JMP",
+      "actual": 7,
+      "pass": true
+    },
+    "fixed_windows": {
+      "expect": "bank14=$C000 bank15=$E000",
+      "actual": "bank14 base=0xC000 bank15 base=0xE000",
+      "pass": true
+    },
+    "vectors": {
+      "expect": "NMI=$EF85 RESET=$E000 IRQ=$F20B",
+      "actual": "NMI=$EF85, RESET=$E000, IRQ=$F20B",
+      "pass": true
+    }
+  }
+}
