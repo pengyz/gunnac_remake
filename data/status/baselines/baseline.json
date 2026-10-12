@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "project": "gunnac-remake",
+  "metrics": {
+    "rom_files_verified": 1,
+    "seed_projection_files": 1,
+    "naming_ledger_entries": 0,
+    "assets_manifest_entries": 0,
+    "knowledge_entries": 5,
+    "rust_test_count": 0,
+    "completeness_cells": 0
+  },
+  "assets": {},
+  "seed": {
+    "reference/seed/gunnac.asm": {
+      "sha256": "96b2c071b78ae3d31d231be879251f2a1ec283d6419f643f4a257801ed73721e",
+      "lines": 91601
+    }
+  },
+  "tolerated": [],
+  "established": {
+    "seed-integrity": true,
+    "knowledge-format": true
+  }
+}
