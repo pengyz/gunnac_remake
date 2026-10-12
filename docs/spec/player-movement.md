@@ -32,10 +32,11 @@
 
 ## 2. 行为规则 —— R-move-*
 
-### R-move-1: 输入位图语义：`controller_held`=$18（bit0=R, bit1=L, bit2=D, bit3=U, bit7=A），`controller_pressed`=$16 为边沿脉冲
+### R-move-1: 输入位图语义：`controller_held`=$18（bit0=R, bit1=L, bit2=D, bit3=U, **bit6=B**, bit7=A），`controller_pressed`=$16 为边沿脉冲
 - 证据: `bank03:A084-A0E8` 移动例程读 `$18` 位、`bank03:A2B4 LDA $16/AND #$80` 边沿用法 + `trace:analysis/traces/gameplay-stage1.frames.jsonl`（逐帧 zp watch 与 6 段 hold 一一对应：right 段 bit0=1…A 段 bit7=128）；`docs/findings/ram-watch-s3.md` §3
 - 可判定性: 机器可判定（L3 帧级 trace diff：输入位图 ∈ 状态向量逐 tick 比对）
-- 关联: B-SYS-MOVE、B-SYS-FIRE、N-0018、N-0019
+- 关联: B-SYS-MOVE、B-SYS-FIRE、N-0018、N-0019、N-0072（bit6=B）
+- 【2026-10-12 t56 更正（t52/N-0072）】补 **bit6=B 键**（trace 实测 f1501 `press 1500 b` → `$18=$42`=bit1+bit6）；原四位图缺 B 位，B 长按连发门控依赖此位（R-shot-gen-2）
 
 ### R-move-2: 六段 hold 方向相关性：位移符号与方向位完全吻合（right/left/right/down/up/right 六段无一例外）
 - 证据: `scenario:analysis/traces/gameplay-stage1`（hold 1300-1450 R / 1470-1620 L / 1650-1800 R / 1830-1950 D / 1980-2100 U / 2130-2280 R）+ probe RAM diff（`gameplay-stage1_f*_probe.ram.hex`）：X 右段 184→243、左段→14、Y 段恒 128；Y 下段 160→174→223、上段 223→54→37、X 段恒 160（`docs/findings/ram-watch-s3.md` §1）
@@ -125,7 +126,7 @@
 
 ## 4. 待取证空位（留空，禁止发明）
 
-- [x] ~~主武器射击例程本体未定位/分工机制未证（H-14）~~ → **【2026-10-12 t36 收口】**：主武器=计数器驱动自动连射（`bank3:$A1FD-$A22B`，R-shot-gen-1..3）/A 边沿=投放（R-fire-1）/B=弹种切换；详见 [shot-system.md](shot-system.md)；H-14 同步收口
+- [x] ~~主武器射击例程本体未定位/分工机制未证（H-14）~~ → 【t36 收口】→ **【2026-10-12 t56 更正（t52 F1 冲击波）】t36 定谳文本两处有误，正确分工**：**A 边沿=投放**（R-fire-1 ✓）/**B 长按=主武器连发**（`$18` bit6→`$39/$3A` 计时器→`$32` bit2 门，R-shot-gen-2）/**弹种切换=拾取字母圈触发**（R-bomb-2/3，非 B 键）；~~"主武器=计数器驱动自动连射/B=弹种切换"~~ 作废（N-0072/N-0073）；详见 [shot-system.md](shot-system.md)
 - [ ] `game_action_mode`（$0401）除 0/7 外的值域语义（N-0024 同址多用途）→ **H-15**
 - [ ] **受击判定（hit-test）本身未证**（判定盒/触发条件/无敌窗口）→ **H-16**；t25 `oracle/scenarios/hit-test.txt` 场景可重跑取证（t25 W3：hit-test 未进实机，退出路径 run 间分岔）
 - [ ] **死亡语义**（残机扣除/游戏结束条件）未证不写（残机 var 仍 W3 `_todo_`）
