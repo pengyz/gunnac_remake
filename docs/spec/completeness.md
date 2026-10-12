@@ -435,6 +435,24 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | H-14 | A 边沿同时驱动主武器射击（press_every 段实测出弹）与投放例程（bank03:A2B4）的分工机制 | C | S1 射击例程定位 + S2 单键场景 |
 | H-15 | `game_action_mode`（$0401）除 0/7 外的值域语义（N-0024 同址多用途） | C | S2 多场景 $0401 采样 |
 | H-16 | 受击判定（hit-test）本身未证：判定盒/触发条件/无敌窗口/受击到重生的事件内时序（t24 L3 窗口内细分未证） | C | t25 `oracle/scenarios/hit-test.txt` 场景重跑（静止受击设计 + $0401 采样）；死亡语义（残机扣除/结束条件）同域未证（W3） |
+| N-0037 | `_todo_slot_letter_binding`：HUD 行 1 字母位来源未定（letter-bank 或查表）——N-0032"字母=weapon_slot($34)"绑定已证伪撤回（f2220 分离事件：$34=3 而字母仍 'A'，位图 rows 40-51） | C | S2/S3 字形表查表考证 + 像素级绑定证明（pattern-visual-binding-needs-pixel-proof） |
+| Q1 | `$34` 与 `$0190` 同写语义（f2220 拾『W』同写 3：弹/武器共用索引？） | C | S2 分化拾取场景 |
+| Q2 | HUD 字母位来源（letter-bank 或查表；与 N-0037 同域） | C | S2/S3 |
+| Q3 | N-0036 的 $0401 窗口时间线需在干净 run 重采（akey-role 列入防踩踏后重跑清单） | C | 下批 S2（串行锁下重跑） |
+| Q4 | 注入 **+1 帧延迟**约定写入 `oracle/scenarios/README.md`（差分比对需按此对齐） | B | 建议 t12/t24 owner 补文档 |
+
+### 7.1 假设索引（H / W / Q 三系列互通 —— 2026-10-12 t30 整理）
+
+> 本节为**集中索引**（主表）；各系列明细留在其登记文件，改状态须同步本表。
+
+| 系列 | 明细位置 | 条目与状态 |
+|---|---|---|
+| **H**（矩阵假设） | 本节上表 | H-01..H-16 + N-0037/Q1..Q4（上表即主登记） |
+| **W**（RAM watch 假设） | `docs/findings/ram-watch-s3.md` §7/§8.4/§9.5 | W1 证伪（真源 $E0-$E6）｜W2 观察中｜W3 未闭环（等级/残机 _todo_）｜W4 未闭环（slot 偏移）｜**W5 收口**（=重生坐标重置）｜W6 B 级维持（速度查表分划）｜W7 → [gotcha-parallel-read-image-order-unreliable](../knowledge/gotcha-parallel-read-image-order-unreliable.md)｜**W8 证伪**（孤儿 run 干扰，非游戏内虚拟输入）→ [gotcha-concurrent-mesen-output-corruption](../knowledge/gotcha-concurrent-mesen-output-corruption.md) |
+| **Q**（t28 孤儿 run 复核遗留） | `docs/findings/orphan-run-recheck.md` §四 | Q1..Q4（上表已集中登记；Q4 为 B 级文档待办） |
+
+> 知识沉淀去向：被证伪/收口的方法论教训入 `docs/knowledge/`（并行不可信家族 ×2、视觉绑定模式），
+> 假设本身留在本表——**知识条目 ≠ 假设**，两者引用互见但不混写。
 
 ---
 
