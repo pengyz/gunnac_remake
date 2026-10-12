@@ -21,8 +21,8 @@
     "rule": {
       "denominator": 47,
       "covered_cells": 7,
-      "rule_entries": 21,
-      "note": "规则面分母=行为格数×1 下限；条目数为 shop-economy 13 + ui-flow 8（completeness.md §5）"
+      "rule_entries": 42,
+      "note": "规则面分母=行为格数×1 下限；条目数为 player-movement 16 + shop-economy 18 + ui-flow 8（2026-10-12 t34 机械计数修正：旧值 21 为 t20 硬编码遗留，现由 docs/spec/*.md 的 ### R-* 定义行机械计数，与 data/status/coverage_map.json.stats.rules_total 一致）"
     },
     "symbol": {
       "status": "S1 机械导出已建立（2026-10-12 t7，completeness.md §3）",

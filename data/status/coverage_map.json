@@ -1,0 +1,1060 @@
+{
+  "schema": 1,
+  "generated": "2026-10-12",
+  "task": "t34",
+  "kind": "coverage-map",
+  "sources": {
+    "rules": "docs/spec/*.md（### R-* 定义行）",
+    "l2": "oracle/subroutines/l2_cases.jsonl",
+    "l3": "oracle/traces/*.player.jsonl + *.weapons.jsonl",
+    "l3_align": "state(N)=tick(state(N-1),held(N))"
+  },
+  "stats": {
+    "rules_total": 42,
+    "covered": 12,
+    "partial": 7,
+    "uncovered": 23,
+    "l2_cases": 54,
+    "l2_subroutines": 9,
+    "l2_cases_without_rule": 7,
+    "l3_frames": 1848,
+    "l3_segments": 7,
+    "l3_weapon_events": {
+      "gameplay-stage1": 3,
+      "weapon-pickup": 0
+    }
+  },
+  "rules": [
+    {
+      "id": "R-move-1",
+      "spec": "docs/spec/player-movement.md",
+      "line": 35,
+      "summary": "输入位图语义 $18 bit0=R/1=L/2=D/3=U/7=A，$16 边沿脉冲",
+      "status": "covered",
+      "l2_cases": [
+        "mt-01-noinput",
+        "mt-02-right",
+        "mt-07-left",
+        "mt-10-down",
+        "mt-12-up",
+        "mt-14-diagonal"
+      ],
+      "l3_evidence": "oracle/traces/{gameplay-stage1,weapon-pickup}.player.jsonl 共 1848 帧 / 7 段（gameplay-stage1 955 帧 4 段：1260-1830/1917-2046/2102-2130/2176-2400；weapon-pickup 893 帧 3 段：1260-1720/1790-1955/2085-2350）；对齐约定 state(N)=tick(state(N-1),held(N))",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-move-2",
+      "spec": "docs/spec/player-movement.md",
+      "line": 40,
+      "summary": "六段 hold 方向相关性：位移符号与方向位完全吻合",
+      "status": "covered",
+      "l2_cases": [
+        "mt-02-right",
+        "mt-07-left",
+        "mt-10-down",
+        "mt-12-up",
+        "mt-14-diagonal"
+      ],
+      "l3_evidence": "oracle/traces/{gameplay-stage1,weapon-pickup}.player.jsonl 共 1848 帧 / 7 段（gameplay-stage1 955 帧 4 段：1260-1830/1917-2046/2102-2130/2176-2400；weapon-pickup 893 帧 3 段：1260-1720/1790-1955/2085-2350）；对齐约定 state(N)=tick(state(N-1),held(N))",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-move-3",
+      "spec": "docs/spec/player-movement.md",
+      "line": 45,
+      "summary": "X 钳制 $0E-$F3；触钳时 $0470 归零",
+      "status": "covered",
+      "l2_cases": [
+        "x-hi-1",
+        "x-hi-2",
+        "x-hi-3",
+        "x-hi-4",
+        "x-lo-1",
+        "x-lo-2",
+        "x-lo-3",
+        "mt-04-right-clamp",
+        "mt-05-x-overflow",
+        "mt-08-left-clamp",
+        "mt-09-left-underflow"
+      ],
+      "l3_evidence": "L3 间接（clamp 在 tick 内，mt-* 逐帧含钳制点）",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-move-4",
+      "spec": "docs/spec/player-movement.md",
+      "line": 50,
+      "summary": "Y 钳制 $14-$DF；触钳时 $048C 归零",
+      "status": "covered",
+      "l2_cases": [
+        "y-hi-1",
+        "y-hi-2",
+        "y-hi-3",
+        "y-lo-1",
+        "y-lo-2",
+        "mt-11-down-clamp",
+        "mt-13-up-clamp"
+      ],
+      "l3_evidence": "L3 间接（同上）；mt-06-y-wrap-quirk 为 wrap quirk 例外（D4 保真）",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-move-5",
+      "spec": "docs/spec/player-movement.md",
+      "line": 55,
+      "summary": "亚像素累积：ADC <subpix> + 速度对整数项进位修正",
+      "status": "covered",
+      "l2_cases": [
+        "mt-02-right",
+        "mt-03-right-carry",
+        "mt-07-left"
+      ],
+      "l3_evidence": "L3 逐帧 sx/sy 字段",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-move-6",
+      "spec": "docs/spec/player-movement.md",
+      "line": 60,
+      "summary": "速度对复利：(亚像素,有符号整数) 合成；无输入归 (0,0)",
+      "status": "covered",
+      "l2_cases": [
+        "mt-01-noinput",
+        "mt-02-right",
+        "mt-07-left",
+        "mt-10-down",
+        "mt-12-up",
+        "mt-14-diagonal"
+      ],
+      "l3_evidence": "oracle/traces/{gameplay-stage1,weapon-pickup}.player.jsonl 共 1848 帧 / 7 段（gameplay-stage1 955 帧 4 段：1260-1830/1917-2046/2102-2130/2176-2400；weapon-pickup 893 帧 3 段：1260-1720/1790-1955/2085-2350）；对齐约定 state(N)=tick(state(N-1),held(N))",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-fire-1",
+      "spec": "docs/spec/player-movement.md",
+      "line": 67,
+      "summary": "A 边沿触发（$16 bit7 脉冲门）",
+      "status": "covered",
+      "l2_cases": [
+        "bd-6"
+      ],
+      "l3_evidence": "无（L3 状态向量不含投放事件）",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-fire-2",
+      "spec": "docs/spec/player-movement.md",
+      "line": 72,
+      "summary": "投放前置校验链：$0401==0 → $018F≠0",
+      "status": "covered",
+      "l2_cases": [
+        "bd-1",
+        "bd-2",
+        "bd-3",
+        "bd-4",
+        "bd-5",
+        "bd-7",
+        "bd-8",
+        "bd-9"
+      ],
+      "l3_evidence": "无",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-fire-3",
+      "spec": "docs/spec/player-movement.md",
+      "line": 77,
+      "summary": "消耗表 $A336,Y=[1,2,3,2] + 类型表 $A33A,Y 写 $0765；不足回退 Y=1",
+      "status": "covered",
+      "l2_cases": [
+        "cons-1",
+        "cons-2",
+        "cons-3",
+        "cons-4",
+        "cons-5",
+        "cons-6",
+        "cons-7",
+        "bd-1",
+        "bd-2",
+        "bd-3",
+        "bd-4",
+        "bd-5",
+        "bd-9"
+      ],
+      "l3_evidence": "无",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-fire-4",
+      "spec": "docs/spec/player-movement.md",
+      "line": 82,
+      "summary": "消耗量与现有弹药取小，经 $ED03 扣减回写 $018F（压缩 BCD 逐半字节借位）",
+      "status": "covered",
+      "l2_cases": [
+        "bd-1",
+        "bd-2",
+        "bd-3",
+        "bd-4",
+        "bd-5",
+        "bd-9"
+      ],
+      "l3_evidence": "无",
+      "gap_grade": "bd-1/bd-5 的 BCD 20→19、10→09 已逐例核算=消耗 1",
+      "note": ""
+    },
+    {
+      "id": "R-fire-5",
+      "spec": "docs/spec/player-movement.md",
+      "line": 87,
+      "summary": "投放坐标快照 $04E0→$04E1、$04FC→$04FD",
+      "status": "covered",
+      "l2_cases": [
+        "bd-1",
+        "bd-2",
+        "bd-3",
+        "bd-4",
+        "bd-5",
+        "bd-9"
+      ],
+      "l3_evidence": "无",
+      "gap_grade": "",
+      "note": ""
+    },
+    {
+      "id": "R-fire-6",
+      "spec": "docs/spec/player-movement.md",
+      "line": 92,
+      "summary": "投放后 $0401:=7；主武器弹药无限",
+      "status": "covered",
+      "l2_cases": [
+        "bd-1",
+        "bd-2",
+        "bd-3",
+        "bd-4",
+        "bd-5",
+        "bd-9"
+      ],
+      "l3_evidence": "无",
+      "gap_grade": "『主武器弹药无限』子句无用例断言（B 级反向观测），仅 mode:=7 已覆盖",
+      "note": ""
+    },
+    {
+      "id": "R-respawn-1",
+      "spec": "docs/spec/player-movement.md",
+      "line": 103,
+      "summary": "死亡/重生事件窗口存在（三段帧域被遮蔽）",
+      "status": "partial",
+      "l2_cases": [],
+      "l3_evidence": "L3 段缺口即窗口存在性：gameplay-stage1 skip(1831-1916/2047-2101/2131-2175)、weapon-pickup skip(1721-1789/1956-2084)",
+      "gap_grade": "需新场景",
+      "note": "存在性由缺口体现但 diff 显式剔除窗口，窗口内部无断言"
+    },
+    {
+      "id": "R-respawn-2",
+      "spec": "docs/spec/player-movement.md",
+      "line": 108,
+      "summary": "事件期间移动冻结",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无（窗口内帧不入 golden）",
+      "gap_grade": "需新场景",
+      "note": "completeness v0.6 记『L3 已可判』，实际被 diff_traces.py SCENES.skip 整体剔除=未断言（FA-2）"
+    },
+    {
+      "id": "R-respawn-3",
+      "spec": "docs/spec/player-movement.md",
+      "line": 114,
+      "summary": "重生坐标重置 (128,160)",
+      "status": "partial",
+      "l2_cases": [],
+      "l3_evidence": "段首观测：f1260 全 (128,160,sx=0,sy=0)；f1917 x=128（y=165 为窗后已移动）",
+      "gap_grade": "需新场景",
+      "note": "重置帧本身在剔除窗内，段首观测≠断言（FA-2）"
+    },
+    {
+      "id": "R-respawn-4",
+      "spec": "docs/spec/player-movement.md",
+      "line": 120,
+      "summary": "重生弹药回满 $018F:=4",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无（L3 状态向量字段仅 f/held/x/y/sx/sy，无弹药）",
+      "gap_grade": "需新场景",
+      "note": "FA-2"
+    },
+    {
+      "id": "R-shop-1",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 31,
+      "summary": "商店价目 4 条编号商品记录（$10/$6/$4）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无（oracle/scenarios/shop.txt 有场景脚本，无 trace 采集）",
+      "gap_grade": "需新场景",
+      "note": ""
+    },
+    {
+      "id": "R-shop-2",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 36,
+      "summary": "持有额+货币符显示行（破折号填充 + $）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "仅视觉 L4",
+      "note": ""
+    },
+    {
+      "id": "R-shop-3",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 41,
+      "summary": "面板尾部 A/B 键提示；图形码+ASCII 混排",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "仅视觉 L4",
+      "note": ""
+    },
+    {
+      "id": "R-shop-4",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 46,
+      "summary": "商店出现在关卡之间（B 级）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "需新场景",
+      "note": ""
+    },
+    {
+      "id": "R-shop-5",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 53,
+      "summary": "商店画面静态屏（无输入保持不变）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "需新场景",
+      "note": "帧级可判（静态=状态向量/画面零变化）但需 shop trace"
+    },
+    {
+      "id": "R-shop-6",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 58,
+      "summary": "B 键单击切换信息页",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "需新场景",
+      "note": ""
+    },
+    {
+      "id": "R-shop-7",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 63,
+      "summary": "两连 B 退出商店（近黑过渡→实机）",
+      "status": "partial",
+      "l2_cases": [],
+      "l3_evidence": "L1 截图流程序列 f1080(商店)→f1200(近黑)→f1260(关卡开始)（ui-flow R-ui-6 证据），L3 未断言",
+      "gap_grade": "需新场景",
+      "note": ""
+    },
+    {
+      "id": "R-shop-8",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 68,
+      "summary": "Start 在商店内无效果（负例）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "需新场景",
+      "note": ""
+    },
+    {
+      "id": "R-money-1",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 73,
+      "summary": "金钱独立显示行（你有 ──￥）；位数/占位未证",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "仅视觉 L4",
+      "note": ""
+    },
+    {
+      "id": "R-money-2",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 78,
+      "summary": "获取=关内拾取/掉落，消费=关间商店（B 级）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "需新场景",
+      "note": ""
+    },
+    {
+      "id": "R-money-3",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 83,
+      "summary": "数值串 10000000000 存在（登记不解释）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "登记类（无需差分断言）",
+      "note": "覆盖判据=存在性核对 rom:4759，不进 L2-L5 差分面"
+    },
+    {
+      "id": "R-money-4",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 88,
+      "summary": "显示值本体=money_counter_bcd $E0-$E6 7 位 BCD + 前导零抑制",
+      "status": "partial",
+      "l2_cases": [
+        "digit-1",
+        "digit-2",
+        "digit-3",
+        "digit-4",
+        "digit-5"
+      ],
+      "l3_evidence": "无",
+      "gap_grade": "纯函数可 L2",
+      "note": "digit-* 仅覆盖『取位一步』（bank00:9DE8）；7 位布局与前导零抑制未断言（FA-5）"
+    },
+    {
+      "id": "R-money-5",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 94,
+      "summary": "入账加法器 bank14:DBCE：类型×6 加数表 + BCD 进位 + 封顶 999999",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "纯函数可 L2",
+      "note": "纯计算无 I/O，理想 L2 目标"
+    },
+    {
+      "id": "R-money-6",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 99,
+      "summary": "extend 阈值检查：与 $E7-$EC(=008000) 逐位比较，达标置 $ED=$40",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "纯函数可 L2",
+      "note": ""
+    },
+    {
+      "id": "R-item-1",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 104,
+      "summary": "弹药存量上限（导弹 20 上限）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无（weapons 事件 golden 不含弹药字段）",
+      "gap_grade": "需新场景",
+      "note": "可先以 L2 常量断言补上限值，再以 shop/信息页场景证显示"
+    },
+    {
+      "id": "R-bomb-1",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 109,
+      "summary": "bomb_type_index $0190 四值域 0-3，初始化由 RNG 决定",
+      "status": "partial",
+      "l2_cases": [],
+      "l3_evidence": "gameplay-stage1.weapons.jsonl 3 事件（f2175 slot 0→3 含 slot 切换）",
+      "gap_grade": "纯函数可 L2 + 需新场景",
+      "note": "$0190 本身不在 L2 in/out（pk-* 断言的是 $0033/$0034，见 FA-1）；RNG 初始化需场景"
+    },
+    {
+      "id": "R-bomb-2",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 114,
+      "summary": "拾取字母圈三方同步（$0190 + HUD + $018F 同帧段）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无（weapon-pickup.weapons.jsonl 为 0 行，事件 golden 缺失，FA-3）",
+      "gap_grade": "需新场景",
+      "note": ""
+    },
+    {
+      "id": "R-bomb-3",
+      "spec": "docs/spec/shop-economy.md",
+      "line": 119,
+      "summary": "索引↔字母映射 0=F/3=W 实测、1=B/2=T 推定",
+      "status": "partial",
+      "l2_cases": [],
+      "l3_evidence": "f2175 slot 0→3 事件旁证（weapon-pickup 场景 f2220 $0034=3 与 $0190 同值，orphan-run-recheck）",
+      "gap_grade": "纯函数可 L2",
+      "note": "映射表 0=F/3=W 可直接 L2 断言；1=B/2=T 待证"
+    },
+    {
+      "id": "R-ui-1",
+      "spec": "docs/spec/ui-flow.md",
+      "line": 35,
+      "summary": "标题 HI SCORE/SCORE 计分显示位",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "仅视觉 L4",
+      "note": ""
+    },
+    {
+      "id": "R-ui-2",
+      "spec": "docs/spec/ui-flow.md",
+      "line": 40,
+      "summary": "标题四行版权文本与 ROM 文本库逐字一致",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "仅视觉 L4",
+      "note": "文本库逐字比对可半自动（L4 渲染 + 文本库）"
+    },
+    {
+      "id": "R-ui-3",
+      "spec": "docs/spec/ui-flow.md",
+      "line": 45,
+      "summary": "标题菜单两选项（开始/设置）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "仅视觉 L4",
+      "note": ""
+    },
+    {
+      "id": "R-ui-4",
+      "spec": "docs/spec/ui-flow.md",
+      "line": 50,
+      "summary": "文本库含 GAME OVER/CONTINUE/HI SCORE/SCORE 串",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "登记类（无需差分断言）",
+      "note": ""
+    },
+    {
+      "id": "R-ui-5",
+      "spec": "docs/spec/ui-flow.md",
+      "line": 55,
+      "summary": "文本库含开场/结局文本（是否显示未证）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "登记类（无需差分断言）",
+      "note": ""
+    },
+    {
+      "id": "R-ui-6",
+      "spec": "docs/spec/ui-flow.md",
+      "line": 62,
+      "summary": "流程序列段：菜单→商店(f1080)→两连B→近黑(f1200)→关卡(f1260)→实机(f1500+)",
+      "status": "partial",
+      "l2_cases": [],
+      "l3_evidence": "L3 gameplay trace 自 f1260 起覆盖关卡开始→实机；f1260 前（菜单/商店/过渡）无 trace",
+      "gap_grade": "需新场景",
+      "note": ""
+    },
+    {
+      "id": "R-ui-7",
+      "spec": "docs/spec/ui-flow.md",
+      "line": 67,
+      "summary": "开机序列黑场(f180)→标题(f360)→菜单态(f540-f900)",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无（L3 start=1260，开机段不在比对面）",
+      "gap_grade": "需新场景",
+      "note": "title-menu.txt 场景脚本已在，缺 trace 采集"
+    },
+    {
+      "id": "R-ui-8",
+      "spec": "docs/spec/ui-flow.md",
+      "line": 72,
+      "summary": "实机 HUD 观测登记（语义留台账）",
+      "status": "uncovered",
+      "l2_cases": [],
+      "l3_evidence": "无",
+      "gap_grade": "登记类（无需差分断言）",
+      "note": ""
+    }
+  ],
+  "l2_cases": [
+    {
+      "id": "x-hi-1",
+      "subroutine": "player_x_clamp_hi",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "x-hi-2",
+      "subroutine": "player_x_clamp_hi",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "x-hi-3",
+      "subroutine": "player_x_clamp_hi",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "x-hi-4",
+      "subroutine": "player_x_clamp_hi",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "x-lo-1",
+      "subroutine": "player_x_clamp_lo",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "x-lo-2",
+      "subroutine": "player_x_clamp_lo",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "x-lo-3",
+      "subroutine": "player_x_clamp_lo",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "y-hi-1",
+      "subroutine": "player_y_clamp_hi",
+      "rules": [
+        "R-move-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "y-hi-2",
+      "subroutine": "player_y_clamp_hi",
+      "rules": [
+        "R-move-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "y-hi-3",
+      "subroutine": "player_y_clamp_hi",
+      "rules": [
+        "R-move-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "y-lo-1",
+      "subroutine": "player_y_clamp_lo",
+      "rules": [
+        "R-move-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "y-lo-2",
+      "subroutine": "player_y_clamp_lo",
+      "rules": [
+        "R-move-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "digit-1",
+      "subroutine": "digit_conversion",
+      "rules": [
+        "R-money-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "digit-2",
+      "subroutine": "digit_conversion",
+      "rules": [
+        "R-money-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "digit-3",
+      "subroutine": "digit_conversion",
+      "rules": [
+        "R-money-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "digit-4",
+      "subroutine": "digit_conversion",
+      "rules": [
+        "R-money-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "digit-5",
+      "subroutine": "digit_conversion",
+      "rules": [
+        "R-money-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "cons-1",
+      "subroutine": "consumption_lookup",
+      "rules": [
+        "R-fire-3",
+        "R-fire-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "cons-2",
+      "subroutine": "consumption_lookup",
+      "rules": [
+        "R-fire-3",
+        "R-fire-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "cons-3",
+      "subroutine": "consumption_lookup",
+      "rules": [
+        "R-fire-3",
+        "R-fire-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "cons-4",
+      "subroutine": "consumption_lookup",
+      "rules": [
+        "R-fire-3",
+        "R-fire-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "cons-5",
+      "subroutine": "consumption_lookup",
+      "rules": [
+        "R-fire-3",
+        "R-fire-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "cons-6",
+      "subroutine": "consumption_lookup",
+      "rules": [
+        "R-fire-3",
+        "R-fire-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "cons-7",
+      "subroutine": "consumption_lookup",
+      "rules": [
+        "R-fire-3",
+        "R-fire-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "bd-1",
+      "subroutine": "bomb_drop",
+      "rules": [
+        "R-fire-2",
+        "R-fire-3",
+        "R-fire-4",
+        "R-fire-5",
+        "R-fire-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "bd-2",
+      "subroutine": "bomb_drop",
+      "rules": [
+        "R-fire-2",
+        "R-fire-3",
+        "R-fire-4",
+        "R-fire-5",
+        "R-fire-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "bd-3",
+      "subroutine": "bomb_drop",
+      "rules": [
+        "R-fire-2",
+        "R-fire-3",
+        "R-fire-4",
+        "R-fire-5",
+        "R-fire-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "bd-4",
+      "subroutine": "bomb_drop",
+      "rules": [
+        "R-fire-2",
+        "R-fire-3",
+        "R-fire-4",
+        "R-fire-5",
+        "R-fire-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "bd-5",
+      "subroutine": "bomb_drop",
+      "rules": [
+        "R-fire-2",
+        "R-fire-3",
+        "R-fire-4",
+        "R-fire-5",
+        "R-fire-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "bd-6",
+      "subroutine": "bomb_drop",
+      "rules": [
+        "R-fire-1",
+        "R-fire-2"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "bd-7",
+      "subroutine": "bomb_drop",
+      "rules": [
+        "R-fire-2"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "bd-8",
+      "subroutine": "bomb_drop",
+      "rules": [
+        "R-fire-2"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "bd-9",
+      "subroutine": "bomb_drop",
+      "rules": [
+        "R-fire-2",
+        "R-fire-3",
+        "R-fire-4",
+        "R-fire-5",
+        "R-fire-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-01-noinput",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-02-right",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-1",
+        "R-move-2",
+        "R-move-5",
+        "R-move-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-03-right-carry",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-5"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-04-right-clamp",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-05-x-overflow",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-06-y-wrap-quirk",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-4",
+        "R-move-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-07-left",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-1",
+        "R-move-2",
+        "R-move-5",
+        "R-move-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-08-left-clamp",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-09-left-underflow",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-3"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-10-down",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-1",
+        "R-move-2",
+        "R-move-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-11-down-clamp",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-12-up",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-1",
+        "R-move-2",
+        "R-move-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-13-up-clamp",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-4"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "mt-14-diagonal",
+      "subroutine": "movement_tick",
+      "rules": [
+        "R-move-1",
+        "R-move-2",
+        "R-move-6"
+      ],
+      "rule_gap": false
+    },
+    {
+      "id": "pk-1-same-0to1",
+      "subroutine": "pickup_handler",
+      "rules": [],
+      "rule_gap": true
+    },
+    {
+      "id": "pk-2-same-5to6",
+      "subroutine": "pickup_handler",
+      "rules": [],
+      "rule_gap": true
+    },
+    {
+      "id": "pk-3-same-b2c",
+      "subroutine": "pickup_handler",
+      "rules": [],
+      "rule_gap": true
+    },
+    {
+      "id": "pk-4-wrap-ffto0c",
+      "subroutine": "pickup_handler",
+      "rules": [],
+      "rule_gap": true
+    },
+    {
+      "id": "pk-5-same-0cto0d",
+      "subroutine": "pickup_handler",
+      "rules": [],
+      "rule_gap": true
+    },
+    {
+      "id": "pk-6-switch-1to3",
+      "subroutine": "pickup_handler",
+      "rules": [],
+      "rule_gap": true
+    },
+    {
+      "id": "pk-7-switch-0to5",
+      "subroutine": "pickup_handler",
+      "rules": [],
+      "rule_gap": true
+    }
+  ],
+  "findings": [
+    "FA-1",
+    "FA-2",
+    "FA-3",
+    "FA-4",
+    "FA-5"
+  ],
+  "discipline": "本映射只登记现状；禁止为凑覆盖改用例/阈值（AGENTS.md §5）"
+}
