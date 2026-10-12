@@ -645,3 +645,86 @@ pub fn money_events_legal(events: &[MoneyEvent]) -> Vec<String> {
     }
     problems
 }
+
+/// 流程序列行（capture 标签锚定）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlowRow {
+    pub f: u32,
+    pub mode: String,
+}
+
+/// 解析流程序列 golden JSONL。
+pub fn parse_flow_rows(jsonl: &str) -> Result<Vec<FlowRow>, String> {
+    let mut out = Vec::new();
+    for (lineno, line) in jsonl.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        let v = crate::l2::parse_json(line).map_err(|e| format!("第 {} 行: {e}", lineno + 1))?;
+        let obj = match v { Json::Obj(o) => o, _ => return Err(format!("第 {} 行非对象", lineno + 1)) };
+        let mode = match obj.iter().find(|(k, _)| k == "mode") {
+            Some((_, Json::Str(s))) => s.clone(),
+            _ => return Err(format!("第 {} 行缺 mode", lineno + 1)),
+        };
+        out.push(FlowRow { f: obj_num(&obj, "f")? as u32, mode });
+    }
+    if out.is_empty() {
+        return Err("流程序列 golden 为空".into());
+    }
+    Ok(out)
+}
+
+/// 流程序列合法性：相邻模式转移必须 ∈ 已证边集（game_core::flow 状态机同源）。
+/// 首行=播种模式；违规明细空=全合法。
+pub fn flow_sequence_legal(rows: &[FlowRow]) -> Vec<String> {
+    use game_core::flow::{FlowState, Mode, ModeEvent};
+    fn to_event(m: &str) -> Option<ModeEvent> {
+        Some(match m {
+            "Black" => ModeEvent::Black,
+            "Title" => ModeEvent::Title,
+            "Menu" => ModeEvent::Menu,
+            "Shop" => ModeEvent::ShopArrival,
+            "ShopInfo" => ModeEvent::ShopPage,
+            "Transition" => ModeEvent::ExitTransition,
+            "StageStart" => ModeEvent::StageStart,
+            "Combat" => ModeEvent::MidCombat,
+            "DeathRespawn" => ModeEvent::DeathRespawn,
+            _ => return None,
+        })
+    }
+    fn to_mode(m: &str) -> Option<Mode> {
+        Some(match m {
+            "Black" => Mode::Black, "Title" => Mode::Title, "Menu" => Mode::Menu,
+            "Shop" => Mode::Shop, "ShopInfo" => Mode::ShopInfo,
+            "Transition" => Mode::Transition, "StageStart" => Mode::StageStart,
+            "Combat" => Mode::Combat, "DeathRespawn" => Mode::DeathRespawn,
+            _ => return None,
+        })
+    }
+    let mut problems = Vec::new();
+    let first = &rows[0];
+    let Some(mode0) = to_mode(&first.mode) else {
+        return vec![format!("f{}: 未知模式 {}", first.f, first.mode)];
+    };
+    let mut st = FlowState { mode: mode0, data: Default::default() };
+    for cur in &rows[1..] {
+        let Some(ev) = to_event(&cur.mode) else {
+            problems.push(format!("f{}: 未知模式 {}", cur.f, cur.mode));
+            continue;
+        };
+        match st.advance(ev) {
+            Ok(next) => {
+                let expected = to_mode(&cur.mode).expect("已解析");
+                if next.mode != expected {
+                    problems.push(format!("f{}: 转移后模式 {:?} ≠ 观测 {}", cur.f, next.mode, cur.mode));
+                }
+                st = next;
+            }
+            Err(e) => problems.push(format!("f{}: {}", cur.f, e)),
+        }
+        if problems.len() >= 10 {
+            problems.push("…（截断）".to_string());
+            break;
+        }
+    }
+    problems
+}
