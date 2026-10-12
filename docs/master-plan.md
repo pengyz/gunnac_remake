@@ -25,8 +25,8 @@
 
 | 里程碑 | 内容 | 完成判据 | 状态 |
 |---|---|---|---|
-| **M0 基建** | 团队组建 + gates/cli.py 门禁骨架 + hooks + 完备性矩阵 v0 | `gates/cli.py status/check/rom` 可跑，矩阵 v0 建立 | 本轮启动 |
-| **M1 取证与投影** | S0 ROM 取证、S1 IDA+Ghidra 双投影（seed 冻结）、S2 Mesen2 oracle 场景化 | rom-forensics 落档；seed 门禁启用；≥3 个可复现场景 | |
+| **M0 基建** | 团队组建 + gates/cli.py 门禁骨架 + hooks + 完备性矩阵 v0 | `gates/cli.py status/check/rom` 可跑，矩阵 v0 建立 | ✅ 2026-10-12（t15 review pass：门禁骨架经 R1/F1/F2 三轮攻防实测达标；矩阵 v0.1；4 成员四技能运转） |
+| **M1 取证与投影** | S0 ROM 取证、S1 IDA+Ghidra 双投影（seed 冻结）、S2 Mesen2 oracle 场景化 | rom-forensics 落档；seed 门禁启用；≥3 个可复现场景 | ✅ 2026-10-12（S0 rom-forensics｜S1 seed 冻结 91,601 行+双投影｜S2 3 场景 4930 帧 trace、确定性 sha 实证、gameplay 实机画面采齐） |
 | **M2 核心系统** | S3–S5：玩家移动/射击、5 武器升级、道具/金钱/商店 —— 规格+移植+L2 差分 | 核心系统规格齐备；L2 用例全绿 | |
 | **M3 全内容** | 8 关关卡时间线、敌人生成、Boss、汉化文本 | 全关卡可玩；矩阵四维持续收敛 | |
 | **M4 = Stage A** | 差分收敛 + 通关验证 | L1–L3/L5 全绿、L4 白名单外像素一致、L5 全关卡自动通关 | |
