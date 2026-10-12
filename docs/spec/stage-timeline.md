@@ -67,7 +67,7 @@
 ## 2.5 行为规则 —— R-spawn-*（spawn 节律观察规则，2026-10-12 t49 新格准入）
 
 > 格子 **B-SYS-SPAWNRHYTHM** 按约束①准入（t47 证据包：trace A 级 104 spawn 事件）；
-> 事件定义 = 对象槽 `$0400+n×$1C` 激活（0→非 0）。可判定性标注 **L2→L3 部分**。
+> 事件定义 = 对象槽激活（0→非 0）【2026-10-12 t67 寻址更正（N-0086）】槽 n 的类型字段地址 = **`$0400+n`（stride 1）**——原测址口径 `$0400+n×$1C` 系槽寻址误读；t47 事件集的簇帧点（R-spawn-1/2）为已实测素材，按新口径重采复核挂账。可判定性标注 **L2→L3 部分**。
 
 ### R-spawn-1: spawn 节律 = 16 帧周期连发（三段实测：f1471-1551、f1655-1731、f1804-1900，各段 +1/16f）
 - 证据: `docs/findings/wave-semantics-s1.md` §2 spawn 节律旁证（gameplay-stage1 对象槽激活事件 104 个，逐帧 iram 28 槽位 0→非 0 检测）+ `analysis/traces/gameplay-stage1.frames.jsonl`
