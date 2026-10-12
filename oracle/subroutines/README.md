@@ -26,7 +26,7 @@ cargo test -p game-oracle --test l2_cases  # 同一差分引擎（rust-tests 门
   （可见的比对面裁剪；栈压入/弹出恒不入写集——但栈页里的**游戏变量**照常记录，如 $018E/$018F）。
 - 差分面 = regs{a,x,y} + 写集；P 为执行副产物不入比对面（输入 P 影响分支，仍进 `in`）。
 
-## 用例覆盖（74 条，先写用例再实现）
+## 用例覆盖（78 条，先写用例再实现）
 
 | 子程序 | ROM 位置 | 证据 | 用例 |
 |---|---|---|---|
@@ -43,6 +43,7 @@ cargo test -p game-oracle --test l2_cases  # 同一差分引擎（rust-tests 门
 | shot_script_fetch（脚本机取指/跳转） | bank2:$87BD-$87D8 | R-shot-motion-1、C-action-stream/durations | ss-4..5 |
 | shot_lut_accumulate（16 向 LUT 累加） | bank2:$87DA-$881B | R-shot-motion-2（BMI 负向 quirk） | ss-6..9 |
 | shot_config_loader（配置流逐对填充） | bank2:$937C-$938F | R-shot-level-1/2、C-shot-cfg-stream | ss-10..11 |
+| shot_slot_alloc（弹槽首次适应分配） | bank2:$888D-$88BA | t48 定谳（20 槽 4 组×5、组距 $1C、满载 A=Y=$F0）；t50 转 game-core 同名函数对拍 | shot-alloc-1..4 |
 
 数值表（A 级，`docs/spec/constants.md` v2）：消耗量 `$A336-$A339`=[1,2,3,2]、
 类型 `$A33A-$A33D`=[2,3,4,4]（**登记不解释**，语义=H-11 待证）；`$018F` 为压缩 BCD，

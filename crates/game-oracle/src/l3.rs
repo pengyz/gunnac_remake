@@ -235,10 +235,11 @@ pub fn bomb_events_legal(events: &[TraceEvent]) -> Vec<String> {
     problems
 }
 
-/// 弹对象轨迹帧（L3 对拍；slot 全覆盖+帧降采样口径见 oracle/traces/README）。
+/// 弹对象轨迹帧（L3 对拍；slot 全覆盖+帧降采样口径见 tools/diff_traces.py 抽取注释）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShotFrame {
     pub f: u32,
+    pub slot: u8,
     pub lifetime: u8,
     pub script_ptr: u8,
     pub pos_x: u8,
@@ -247,7 +248,7 @@ pub struct ShotFrame {
     pub shot_type: u8,
 }
 
-/// 解析弹轨迹 golden JSONL。
+/// 解析弹轨迹 golden JSONL（逐槽行）。
 pub fn parse_shot_frames(jsonl: &str) -> Result<Vec<ShotFrame>, String> {
     let mut out = Vec::new();
     for (lineno, line) in jsonl.lines().enumerate() {
@@ -259,6 +260,7 @@ pub fn parse_shot_frames(jsonl: &str) -> Result<Vec<ShotFrame>, String> {
         let obj = match v { Json::Obj(o) => o, _ => return Err(format!("第 {} 行非对象", lineno + 1)) };
         out.push(ShotFrame {
             f: obj_num(&obj, "f")? as u32,
+            slot: obj_num(&obj, "slot")? as u8,
             lifetime: obj_num(&obj, "lifetime")? as u8,
             script_ptr: obj_num(&obj, "script_ptr")? as u8,
             pos_x: obj_num(&obj, "pos_x")? as u8,
@@ -273,51 +275,117 @@ pub fn parse_shot_frames(jsonl: &str) -> Result<Vec<ShotFrame>, String> {
     Ok(out)
 }
 
-/// 弹轨迹对拍：出生帧为种子，此后逐帧 tick（脚本机+LUT 累加）比对；
-/// 死亡帧（tick 返回 None）为未证域边界，不入比对面（样本窗口=出生帧..死亡帧前一帧）。
+/// 弹轨迹对拍（逐槽存活段）：出生帧为种子，此后逐帧 tick（脚本机+LUT 累加）比对；
+/// 死亡帧（tick 返回 None）为未证域边界，不入比对面。帧缺口=分段重播种。
 pub fn diff_shot_trajectory(frames: &[ShotFrame]) -> Result<(usize, Vec<String>), String> {
     use game_core::shot::{tick, ShotObject};
-    if frames.is_empty() {
-        return Err("轨迹为空".into());
-    }
-    let mut obj = ShotObject {
-        lifetime: frames[0].lifetime,
-        script_ptr: frames[0].script_ptr,
-        pos_x: frames[0].pos_x,
-        pos_y: frames[0].pos_y,
-        motion_code: frames[0].motion_code,
-        shot_type: frames[0].shot_type,
-    };
-    let mut problems = Vec::new();
-    let mut compared = 0usize;
-    for w in frames.windows(2) {
-        let (prev, cur) = (w[0], w[1]);
-        if cur.f != prev.f + 1 {
-            // 帧缺口 = 分段（死亡/重生窗口），以新段首帧重播种
-            obj = ShotObject {
-                lifetime: cur.lifetime, script_ptr: cur.script_ptr,
-                pos_x: cur.pos_x, pos_y: cur.pos_y,
-                motion_code: cur.motion_code, shot_type: cur.shot_type,
-            };
-            continue;
-        }
-        // 帧降采样窗口内逐帧推进（采样步长=帧差，golden 口径声明于抽取端）
-        for _ in prev.f..cur.f {
-            if tick(&mut obj).is_none() {
-                problems.push(format!("f{}: 对象提前死亡（比对窗口应止于死亡帧前）", cur.f));
-                return Ok((compared, problems));
+    use std::collections::BTreeMap;
+
+    fn advance(o: &mut ShotObject, n: u32) -> bool {
+        for _ in 0..n {
+            if tick(o).is_none() {
+                return false;
             }
         }
-        compared += 1;
-        let got = (obj.lifetime, obj.script_ptr, obj.pos_x, obj.pos_y, obj.motion_code, obj.shot_type);
-        let exp = (cur.lifetime, cur.script_ptr, cur.pos_x, cur.pos_y, cur.motion_code, cur.shot_type);
-        if got != exp {
-            problems.push(format!("f{}: sim={:?} oracle={:?}", cur.f, got, exp));
-            if problems.len() >= 10 {
-                problems.push("…（失配过多，截断显示）".to_string());
-                break;
+        true
+    }
+
+    let mut by_slot: BTreeMap<u8, Vec<&ShotFrame>> = BTreeMap::new();
+    for r in frames.iter().filter(|r| r.lifetime != 0) {
+        by_slot.entry(r.slot).or_default().push(r);
+    }
+    let mut problems = Vec::new();
+    let mut compared = 0usize;
+    for (_slot, rows) in &by_slot {
+        let mut obj: Option<ShotObject> = None;
+        for w in rows.windows(2) {
+            let (prev, cur) = (*w[0], *w[1]);
+            if cur.f <= prev.f {
+                return Err(format!("槽 {} 帧序乱序", cur.slot));
+            }
+            if cur.f != prev.f + 1 {
+                obj = None; // 帧缺口 = 新段，以 cur 前一行（prev=段首）重播种
+            }
+            let ok = {
+                let o = obj.get_or_insert(ShotObject {
+                    lifetime: prev.lifetime, script_ptr: prev.script_ptr,
+                    pos_x: prev.pos_x, pos_y: prev.pos_y,
+                    motion_code: prev.motion_code, shot_type: prev.shot_type,
+                });
+                advance(o, cur.f - prev.f)
+            };
+            if !ok {
+                problems.push(format!("slot={} f{}: 对象提前死亡（比对窗口应止于死亡帧前）", cur.slot, cur.f));
+                obj = None;
+                continue;
+            }
+            compared += 1;
+            let o = obj.as_ref().expect("已播种");
+            let got = (o.lifetime, o.script_ptr, o.pos_x, o.pos_y, o.motion_code, o.shot_type);
+            let exp = (cur.lifetime, cur.script_ptr, cur.pos_x, cur.pos_y, cur.motion_code, cur.shot_type);
+            if got != exp {
+                problems.push(format!("slot={} f{}: sim={:?} oracle={:?}", cur.slot, cur.f, got, exp));
+                if problems.len() >= 10 {
+                    problems.push("…（失配过多，截断显示）".to_string());
+                    return Ok((compared, problems));
+                }
             }
         }
     }
     Ok((compared, problems))
+}
+
+/// 槽位分配语义断言（R-shot-gen-1..3 + t48 首次适应）：出生帧的槽集必须等于
+/// 当帧状态向量下首次适应的前 |S| 个空槽（shot_slot_alloc 同源）。
+/// 同帧既有出生又有死亡的帧跳过（帧内生成/回收顺序未证，不发明）。
+pub fn alloc_events_legal(frames: &[ShotFrame]) -> Vec<String> {
+    use game_core::shot::{shot_slot_alloc, SlotAlloc};
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut state: BTreeMap<u32, BTreeMap<u8, u8>> = BTreeMap::new(); // f → slot → lifetime
+    for r in frames {
+        state.entry(r.f).or_default().insert(r.slot, r.lifetime);
+    }
+    let mut problems = Vec::new();
+    let mut prev: BTreeMap<u8, u8> = BTreeMap::new();
+    for (f, cur) in &state {
+        if cur.len() != 20 {
+            continue; // 非全向量帧（窗口采样帧）不断言分配
+        }
+        let mut spawns = BTreeSet::new();
+        let mut deaths = BTreeSet::new();
+        for (slot, lt) in cur {
+            let before = prev.get(slot).copied().unwrap_or(0);
+            if before == 0 && *lt != 0 {
+                spawns.insert(*slot);
+            } else if before != 0 && *lt == 0 {
+                deaths.insert(*slot);
+            }
+        }
+        if !spawns.is_empty() && deaths.is_empty() {
+            // 出生帧：以当帧向量为"生成后"视图，出生槽回填 0 得生成前可用集；
+            // 首次适应连续取 |S| 个，结果集合必须 == spawns
+            let mut probe = [0u8; 0x100];
+            for (slot, lt) in cur {
+                probe[*slot as usize] = if spawns.contains(slot) { 0 } else { *lt };
+            }
+            let mut expected = BTreeSet::new();
+            for _ in 0..spawns.len() {
+                match shot_slot_alloc(&probe) {
+                    SlotAlloc::Found { slot, .. } => {
+                        expected.insert(slot);
+                        probe[slot as usize] = 1;
+                    }
+                    SlotAlloc::Full => break,
+                }
+            }
+            if expected != spawns {
+                problems.push(format!(
+                    "f{}: 出生槽集 {:?} ≠ 首次适应期望 {:?}（槽位分配语义违例）",
+                    f, spawns, expected
+                ));
+            }
+        }
+        prev = cur.clone();
+    }
+    problems
 }

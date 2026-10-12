@@ -115,59 +115,80 @@ def extract_weapon_events(scene: str) -> int:
 # 弹对象 SoA 字段（t32 $70 间距网格；watch_range 0400-06ff 的分列解释）
 SHOT_FIELDS = [("lifetime", 0x0E), ("script_ptr", 0x7E), ("pos_x", 0xEE),
                ("pos_y", 0x15E), ("motion_code", 0x1CE), ("shot_type", 0x23E)]
-SHOT_SLOTS = 0x70  # 字段间距 = 槽容量（slot 步长 1 字节）
+# 槽位偏移集（t48 定谳 docs/findings/shot-slot-geometry.md：4 组×5 槽，组距 $1C）
+SHOT_SLOTS = [0x80, 0x81, 0x82, 0x83, 0x84,
+              0x9C, 0x9D, 0x9E, 0x9F, 0xA0,
+              0xB8, 0xB9, 0xBA, 0xBB, 0xBC,
+              0xD4, 0xD5, 0xD6, 0xD7, 0xD8]
 SHOT_SAMPLE_N = 4  # 帧降采样（声明口径，可复现）
 
 
 def extract_shot_trajectories(scene: str) -> int:
-    """弹对象轨迹 golden（分列命名：lifetime/script_ptr/pos_x/pos_y/motion_code/shot_type）。
+    """弹对象轨迹/slot state 向量 golden（分列命名六数组；slot 全覆盖）。
 
-    采样口径（显式声明，可复现）：slot 全覆盖（0..0x6F）；每个存活窗口（lifetime≠0 连续段）
-    首帧+每 SHOT_SAMPLE_N 帧+末帧入 golden；出生帧=种子，比对=逐帧 tick（R-shot-motion-1/2）；
-    死亡帧（lifetime 归 0）为未证域边界不入比对面。数据源=shot_objs watch blob（$0400-$06FF）
-    按数组分列解析——为 enemy 轨迹（$1C 网格）留结构。
+    采样口径（显式声明，可复现，t50 转正）：
+    ①slot 全覆盖 = t48 定谳 20 槽偏移集（$80-$84/$9C-$A0/$B8-$BC/$D4-$D8），state==0 空槽；
+    ②每个存活窗口（state≠0 连续段）首帧 + 每 SHOT_SAMPLE_N 帧 + 末帧入 golden；
+    ③**出生帧（任一槽 state 0→非0）补全 20 槽行**（首次适应分配断言的当帧状态向量源）；
+    ④比对=出生帧播种 + 逐帧 tick（R-shot-motion-1/2）；死亡帧（state 归 0）为
+    未证域边界不入轨迹比对面（边界判定未证），但 state 向量行保留供分配断言。
     """
     src = ROOT / "analysis" / "traces" / f"{scene}.frames.jsonl"
     dst = ROOT / "oracle" / "traces" / f"{scene}.shots.jsonl"
     if not src.is_file():
         print(f"oracle 全量 trace 缺失：{src}", file=sys.stderr)
         return 2
-    # 逐 slot 收集存活窗口
-    segments: dict[int, list[dict]] = {}
-    open_seg: dict[int, list] = {}
+    rows_by_frame: list[tuple[int, dict]] = []
     for line in src.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         rec = json.loads(line)
-        blob_w = rec["w"].get("shot_objs")
+        w = rec["w"]
+        # 六数组最高位 $063E+$D8=$0716 ⊂ iram watch（$0300-$07FF）——按 iram 列解析
+        blob_w = w.get("iram")
         if blob_w is None:
-            print(f"  {scene} 缺 shot_objs watch（$0400-06ff）", file=sys.stderr)
-            return 2
+            print(f"  {scene} 无 iram watch——跳过弹轨迹抽取（仅 gameplay-stage1 覆盖）")
+            return 0
         blob = bytes.fromhex(blob_w)
-        f = rec["f"]
-        for slot in range(SHOT_SLOTS):
-            fields = {name: blob[off + slot] for name, off in SHOT_FIELDS}
-            alive = fields["lifetime"] != 0
-            if alive:
-                open_seg.setdefault(slot, []).append({"f": f, "slot": slot, **fields})
-            elif slot in open_seg:
-                segments.setdefault(slot, []).append(open_seg.pop(slot))
-    for slot, seg in open_seg.items():
-        segments.setdefault(slot, []).append(seg)
-    # 帧降采样 + 落盘
+        base = 0x300  # iram blob 首地址
+        slots = {}
+        for slot in SHOT_SLOTS:
+            fields = {name: blob[(0x400 + off + slot) - base] for name, off in SHOT_FIELDS}
+            slots[slot] = fields
+        rows_by_frame.append((rec["f"], slots))
+    # 出生帧检测（membership 变化）+ 存活窗口采样
+    emit: set[tuple[int, int]] = set()
+    prev_alive = {}
+    for f, slots in rows_by_frame:
+        alive = {slot for slot, fl in slots.items() if fl["lifetime"] != 0}
+        spawns = alive - set(prev_alive)
+        if spawns:
+            for slot in SHOT_SLOTS:  # 出生帧补全 20 槽行
+                emit.add((f, slot))
+        prev_alive = alive
+    for slot in SHOT_SLOTS:
+        window: list[int] = []
+        for f, slots in rows_by_frame:
+            if slots[slot]["lifetime"] != 0:
+                window.append(f)
+            elif window:
+                for i, wf in enumerate(window):
+                    if i % SHOT_SAMPLE_N == 0 or i == len(window) - 1:
+                        emit.add((wf, slot))
+                window = []
+        for i, wf in enumerate(window):
+            if i % SHOT_SAMPLE_N == 0 or i == len(window) - 1:
+                emit.add((wf, slot))
     n_rows = 0
     with open(dst, "w", encoding="utf-8") as out:
-        for slot in sorted(segments):
-            for seg in segments[slot]:
-                keep = [i for i in range(len(seg)) if i % SHOT_SAMPLE_N == 0]
-                if len(seg) - 1 not in keep:
-                    keep.append(len(seg) - 1)  # 末帧必留
-                for i in keep:
-                    out.write(json.dumps(seg[i]) + "\n")
+        for f, slots in rows_by_frame:
+            for slot in SHOT_SLOTS:
+                if (f, slot) in emit:
+                    out.write(json.dumps({"f": f, "slot": slot, **slots[slot]}) + "\n")
                     n_rows += 1
-    n_seg = sum(len(v) for v in segments.values())
-    print(f"弹轨迹抽取：{scene} {n_seg} 个存活窗口 / {n_rows} 行（slot 全覆盖，帧降采样 n={SHOT_SAMPLE_N}）→ {dst.relative_to(ROOT)}")
+    print(f"弹轨迹/slot 向量抽取：{scene} {n_rows} 行（20 槽全覆盖，帧降采样 n={SHOT_SAMPLE_N} + 出生帧全向量）→ {dst.relative_to(ROOT)}")
     return 0
+
 
 def extract() -> int:
     rc = 0
@@ -216,10 +237,11 @@ def run_diff() -> int:
 
 def main() -> int:
     if "--shots-extract" in sys.argv:
-        # 【实验性】弹轨迹抽取：槽位几何未证（见 oracle/traces/README t45 发现——
-        # t32 $70 间距仅锚定字段基址，槽位步长/容量/分配器 $888D 属 B5/A5 未证域；
-        # 命中数据含跨系统串扰迹象，不得作为 golden 入库）——decomp-analyst 取证后启用。
+        # 【实验性·t50 发现】20 槽几何已定谳（t48），但 gameplay-stage1 全程无生成器活动
+        # （$072E,X 计数恒 0、无 R-shot-gen-3 五字段写入链）——槽 state 值为 B5 交错区静态
+        # 他系统数据（t48 §3 churn 解读被反证）。真弹对象归因需生成器门控取证后启用。
         return extract_shot_trajectories("gameplay-stage1")
+
     if "--extract" in sys.argv:
         rc = extract()
         return rc if rc else run_diff()

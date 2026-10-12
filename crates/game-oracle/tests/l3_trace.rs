@@ -107,7 +107,7 @@ fn l3_shot_replay_machine_self_consistent() {
     use game_core::shot::{script_fetch, spawn_init, tick, ShotObject, ACTION_DURATIONS, ACTION_STREAM};
     let mut obj = spawn_init(0, 2, 0, 100, 50, 0x0C);
     let mut frames = vec![game_oracle::l3::ShotFrame {
-        f: 1, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
+        f: 1, slot: 0x80, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
         pos_y: obj.pos_y, motion_code: obj.motion_code, shot_type: obj.shot_type,
     }];
     for f in 2..40u32 {
@@ -115,7 +115,7 @@ fn l3_shot_replay_machine_self_consistent() {
             break;
         }
         frames.push(game_oracle::l3::ShotFrame {
-            f, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
+            f, slot: 0x80, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
             pos_y: obj.pos_y, motion_code: obj.motion_code, shot_type: obj.shot_type,
         });
     }
@@ -127,4 +127,30 @@ fn l3_shot_replay_machine_self_consistent() {
     assert_eq!((dur, code, ptr), (0x0A, 7, 3), "0 时长跳转到 action[0]=2 再取");
     let _ = ACTION_DURATIONS[0];
     let _ = ACTION_STREAM[0];
+}
+
+#[test]
+fn l3_alloc_first_fit_semantics() {
+    use game_core::shot::{shot_slot_alloc, SlotAlloc};
+    // 首次适应：组序×组内序，低偏移优先；满载 Full
+    let mut probe = [0u8; 0x100];
+    assert_eq!(shot_slot_alloc(&probe), SlotAlloc::Found { slot: 0x80, a: 0 });
+    probe[0x80] = 1;
+    probe[0x81] = 1;
+    assert_eq!(shot_slot_alloc(&probe), SlotAlloc::Found { slot: 0x82, a: 0 });
+    for slot in [0x80, 0x81, 0x82, 0x83, 0x84, 0x9C, 0x9D, 0x9E, 0x9F, 0xA0,
+                 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8] {
+        probe[slot] = 1;
+    }
+    assert_eq!(shot_slot_alloc(&probe), SlotAlloc::Full, "20 槽全占必须满载");
+    // L3 分配断言：合成出生帧全向量（槽 $80/$81 出生）= 首次适应前二空槽 ✓
+    let rows: Vec<game_oracle::l3::ShotFrame> = (0u8..20).map(|i| {
+        let slot = [0x80u8,0x81,0x82,0x83,0x84,0x9C,0x9D,0x9E,0x9F,0xA0,0xB8,0xB9,0xBA,0xBB,0xBC,0xD4,0xD5,0xD6,0xD7,0xD8][i as usize];
+        let lt = if slot <= 0x81 { 1 } else { 0 };
+        game_oracle::l3::ShotFrame {
+            f: 10, slot, lifetime: lt, script_ptr: 0, pos_x: 0, pos_y: 0,
+            motion_code: 0, shot_type: 0,
+        }
+    }).collect();
+    assert!(game_oracle::l3::alloc_events_legal(&rows).is_empty(), "合法出生帧被误判");
 }
