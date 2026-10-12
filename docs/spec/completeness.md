@@ -474,18 +474,22 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | Q3 | N-0036 的 $0401 窗口时间线需在干净 run 重采（akey-role 列入防踩踏后重跑清单） | C | 下批 S2（串行锁下重跑） |
 | Q4 | 注入 **+1 帧延迟**约定写入 `oracle/scenarios/README.md`（差分比对需按此对齐） | B | 建议 t12/t24 owner 补文档 |
 
-### 7.1 假设索引（H / W / Q 三系列互通 —— 2026-10-12 t30 整理）
+### 7.1 假设索引（H / W / Q 三系列互通 —— 2026-10-12 t30 整理；**t41 刷新**）
 
 > 本节为**集中索引**（主表）；各系列明细留在其登记文件，改状态须同步本表。
 
 | 系列 | 明细位置 | 条目与状态 |
 |---|---|---|
-| **H**（矩阵假设） | 本节上表 | H-01..H-16 + N-0037/Q1..Q4（上表即主登记） |
-| **W**（RAM watch 假设） | `docs/findings/ram-watch-s3.md` §7/§8.4/§9.5 | W1 证伪（真源 $E0-$E6）｜W2 观察中｜W3 未闭环（等级/残机 _todo_）｜W4 未闭环（slot 偏移）｜**W5 收口**（=重生坐标重置）｜W6 B 级维持（速度查表分划）｜W7 → [gotcha-parallel-read-image-order-unreliable](../knowledge/gotcha-parallel-read-image-order-unreliable.md)｜**W8 证伪**（孤儿 run 干扰，非游戏内虚拟输入）→ [gotcha-concurrent-mesen-output-corruption](../knowledge/gotcha-concurrent-mesen-output-corruption.md) |
-| **Q**（t28 孤儿 run 复核遗留） | `docs/findings/orphan-run-recheck.md` §四 | Q1..Q4（上表已集中登记；Q4 为 B 级文档待办） |
+| **H**（矩阵假设） | 本节上表 + `docs/findings/upgrade-branch-h02.md` | **H-01/H-02 收口**（t25 两说合一 + t35 深路径定谳：同型/异型 × $018C==$FF 2×2 + $32 bit2 门控；kernel 回卷 $0C / deep 裸 INC 回卷 $00 **两路径语义分野**，范围收窄见 shot-behavior §1.2 更正 + N-0058）｜H-03..H-13、H-15、H-16 见上表｜**H-14 收口**（t36 三线分工定谳）｜**H-A 新立**（t35）：$33 可越 12（deep 路径）→ `$9457` 越界索引行为 = 必答项 |
+| **W**（RAM watch 假设） | `docs/findings/ram-watch-s3.md` §7/§8.4/§9.5 | W1 证伪（真源 $E0-$E6）｜W2 观察中｜W3 未闭环（等级/残机 _todo_）｜W4 未闭环（slot 偏移）｜**W5 收口**（=重生坐标重置）｜W6 B 级维持（速度查表分划）｜W7 → [gotcha-parallel-read-image-order-unreliable](../knowledge/gotcha-parallel-read-image-order-unreliable.md)｜**W8 证伪**（孤儿 run 干扰）→ [gotcha-concurrent-mesen-output-corruption](../knowledge/gotcha-concurrent-mesen-output-corruption.md) |
+| **Q**（t28 孤儿 run 复核遗留） | `docs/findings/orphan-run-recheck.md` §四 | Q1 **收口**（t29：$0190 拾取处理器 + $3B 连收计数）｜Q2 → N-0037 同域｜Q3 干净重跑已做（t29 akey-role）｜Q4 已落地（`oracle/scenarios/README.md` +1 帧约定） |
 
-> 知识沉淀去向：被证伪/收口的方法论教训入 `docs/knowledge/`（并行不可信家族 ×2、视觉绑定模式），
+> 知识沉淀去向：被证伪/收口的方法论教训入 `docs/knowledge/`（并行不可信家族 ×3：read_image 错序 /
+> Mesen 共写 / git 索引卷入；采样双陷阱：粒度伪造不变量 / 栈页 watch 盲区；视觉绑定模式），
 > 假设本身留在本表——**知识条目 ≠ 假设**，两者引用互见但不混写。
+>
+> 【t41 挂账】R-item-2 / R-shot-level-3 的"回卷 $0C"措辞待按 kernel/deep **路径 scope 标注**
+> （t35 已证两路径回卷不同：kernel FF→$0C vs deep FF→$00）——spec 文字修订归下一张 spec 卡。
 
 ---
 
