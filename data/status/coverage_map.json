@@ -466,7 +466,7 @@
       "id": "R-item-2",
       "spec": "docs/spec/shop-economy.md",
       "line": 114,
-      "summary": "同型圈连收升级：$33 +1 递增；溢出 255 回卷 12（$0C=回卷目标非上限）",
+      "summary": "同型圈连收升级：$33 +1 递增；溢出回卷路径分野——kernel(slot==0) FF→$0C / deep(slot≠0) 裸 INC FF→$00",
       "status": "covered",
       "l2_cases": [
         "pk-1-same-0to1",
@@ -477,7 +477,7 @@
       ],
       "l3_evidence": "无（weapons 事件 golden 仅 slot/type）",
       "gap_grade": "已 L2 实证",
-      "note": "t37 FA-1 补规则；深路径 pk-8/9（$925F）另挂 R-shot-level-4 待证"
+      "note": "t37 FA-1 补规则；t43 scope 标注（kernel/deep 分野，t35 定谳）；deep wrap 用例 pk-10 待 t39 补入；H-A（deep 越 12 → $9457 越界）"
     },
     {
       "id": "R-item-3",

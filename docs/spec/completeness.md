@@ -347,6 +347,27 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 备注: FA-2 闭环（可判≠已判）；真覆盖需求=窄窗重生场景 + $018F/$04E0 watch（证据轨道变更→单独 commit 需求交 porter/analyst，未擅动）
 ```
 
+#### 2.4.8 分子登记记录（L3 升格 + t39 规则同步；t44 2026-10-12）
+
+> 格式按 §6.2；FA-2 真覆盖登记（t40 采证 → t44 登记）：R-respawn-2/3/4 升 **L3 已判**；
+> 追加范围（t39 同步）：R-shot-level-3 公式勘误/A1 闭合/R-shot-level-4 转正。
+
+```
+格: B-SYS-RESPAWN
+强度: L2（覆盖实质已达 L3 已判：三条规则断言均有逐帧向量实证）
+证据: scenario:oracle/scenarios/respawn-window.txt（240 窄窗全采样，capture_every 10）+ trace:analysis/traces/respawn-window.frames.jsonl（逐帧 $018F/$04E0/$04FC + zp/iram/wram）+ docs/findings/respawn-window.md §3（E1 f1831-1915：冻结 85f→f1915 弹药:=4→f1916 坐标复位；E2 f2046-2174：冻结 129f→f2174 弹药:=4→f2175 坐标复位；时序定谳=冻结→N-1 弹药回满→N 坐标复位）
+工件: docs/spec/player-movement.md#R-respawn-1..4（FA-2 降级注撤销、t27 分段遮蔽观察升 A 级）
+日期: 2026-10-12
+备注: FA-2 闭环（真覆盖需求两项由 t40 落齐）；残余=E1/E2 窗长差异（86 vs 129）→ H-16 续问、死亡语义 W3
+
+格: B-SYS-FIRE
+强度: L2
+证据: 原 L2/§2.4.6 证据 + t39 同步：ha-1..4（索引变换 ROM 实证 级 12→索引 4/X=26）+ pk-10/11/12（deep 溢出/不加级/回 kernel）L2 三方全等 63/63
+工件: docs/spec/shot-system.md#R-shot-level-3（公式勘误 4+((级-4)&7)、值域 [0,11] 无越界）/R-shot-level-4（转正）
+日期: 2026-10-12
+备注: A1 闭合（越界疑虑随公式勘误消解）；$018A 奖励链数值实现属移植面挂账
+```
+
 ### 2.5 分母统计（v0）
 
 | 面 | 格数 | 备注 |
@@ -467,7 +488,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | H-13 | 商店进入/离开的完整条件（菜单序列各输入的独立作用、关间序列、GAME OVER 后路径） | C | S2 单变量场景矩阵 |
 | H-14 | A 边沿/主武器/炸弹键分工机制——【2026-10-12 t36 收口】**定谳**：主武器=计数器驱动自动连射（`bank3:$A1FD-$A22B` 无按键判断，R-shot-gen-2）、A 边沿=投放（R-fire-1）、B=弹种切换（N-0030 路径）；齐射型由 `$34` 分派（R-shot-gen-4） | ~~C~~ | 已收口（t25 静态定谳 + t29/t36 规格化） |
 | H-15 | `game_action_mode`（$0401）除 0/7 外的值域语义（N-0024 同址多用途） | C | S2 多场景 $0401 采样 |
-| H-16 | 受击判定（hit-test）本身未证：判定盒/触发条件/无敌窗口/受击到重生的事件内时序（t24 L3 窗口内细分未证） | C | t25 `oracle/scenarios/hit-test.txt` 场景重跑（静止受击设计 + $0401 采样）；死亡语义（残机扣除/结束条件）同域未证（W3） |
+| H-16 | 受击判定（hit-test）本身未证：判定盒/触发条件/无敌窗口——【2026-10-12 t44 更新】事件内时序**已定谳**（t40：冻结→N-1 弹药回满→N 坐标复位）；**残项=E1/E2 窗长差异（86 vs 129）影响因子** + 判定盒/触发条件 | C（残项） | t25 `oracle/scenarios/hit-test.txt` 重跑 + 窗长差异对照（受击时刻/无敌帧/演出？）；死亡语义（残机/结束条件）同域未证（W3） |
 | N-0037 | `_todo_slot_letter_binding`：HUD 行 1 字母位来源未定（letter-bank 或查表）——N-0032"字母=weapon_slot($34)"绑定已证伪撤回（f2220 分离事件：$34=3 而字母仍 'A'，位图 rows 40-51） | C | S2/S3 字形表查表考证 + 像素级绑定证明（pattern-visual-binding-needs-pixel-proof） |
 | Q1 | `$34` 与 `$0190` 同写语义（f2220 拾『W』同写 3：弹/武器共用索引？） | C | S2 分化拾取场景 |
 | Q2 | HUD 字母位来源（letter-bank 或查表；与 N-0037 同域） | C | S2/S3 |
@@ -540,6 +561,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 `v0.6 (2026-10-12, t27) 死亡/重生事件规格化：B-SYS-RESPAWN 按约束①准入（证据 oracle/traces/gameplay-stage1.player.jsonl 帧域 f1831-1916/f2047-2101/f2131-2175 + t24 L3 发现），行为面 46→47，L2（§2.4.5）；R-respawn-1..4（窗口/移动冻结/坐标重置 128/160/弹药回满 4，L3 已可判）入 player-movement.md；W5 收口（=重生坐标重置，ram-watch-s3 §7 原地更正）；新增 H-16（hit-test 未证域，关联 t25 hit-test.txt）；死亡语义未证不写。`
 `v0.7 (2026-10-12, t36) 弹丸系统规格化（关键路径解锁）：R-shot-gen-1..4/R-shot-motion-1..3/R-shot-level-1..4（11 条）入 docs/spec/shot-system.md（B-SYS-FIRE 证据扩充 §2.4.6，覆盖只增）；constants.md v4 弹丸六表逐值（级表/配置流/双 LUT/动作流/时长表，seed 逐字节核）；H-02/H-14 收口；残项 A1-A5 + $925F 分支（t35 在考）如实留空；t29 样本列错位更正（指针标签经代码级复核正确）。`
 `v0.8 (2026-10-12, t37) t34 审计处置：FA-1 反向规则 R-item-2/3 补齐（pk-1..7 对拍用例获承载，coverage_map 回填 l2_cases_without_rule 7→0）；FA-2 声明降级（R-respawn-2/3/4 "L3 已可判"→"L3 部分"，真覆盖需求=窄窗重生场景+$018F/$04E0 watch，列单独 commit 需求未擅动）；FA-5 digit-* 部分覆盖如实现状登记（R-money-4 注）；R-shot-level-3 "级上限 $0C" 证伪更正（pk-5 实测 12→13，$0C=回卷目标）；§2.4.7 登记。`
+`v0.9 (2026-10-12, t44) FA-2 真覆盖登记：R-respawn-2/3/4 升 L3 已判（t40 证据包 respawn-window.md §3：双事件逐帧向量+240 窄窗 capture+时序定谳），FA-2 降级注撤销、t27 分段遮蔽观察升 A 级；追加范围（t39 同步）：R-shot-level-3 公式勘误 3+→4+((级-4)&7)（ha-2 实证，值域 [0,11] 无越界，A1 闭合）、R-shot-level-4 转正（t35+t39 双定谳）、R-item-2 deep 用例 pk-10/11/12 转正；残余转注 E1/E2 窗长差异→H-16 续问、死亡语义 W3；§2.4.8 登记。`
 
 ---
 
