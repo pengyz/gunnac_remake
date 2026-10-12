@@ -1,0 +1,54 @@
+# docs/knowledge/ — 跨会话知识库
+
+> 用途（AGENTS.md §8）：跨会话共享已确认的知识——平台坑、门禁失效、被纠正的方法、确认有效的取舍。
+> **写入的是"已确认的教训"，不是"看起来有理的猜想"**；引用任何条目前必须验证其证据指针仍然成立。
+
+## 1. 六类（type，文件名前缀 = type）
+
+| type | 收什么 | 反例（不收） |
+|---|---|---|
+| `architecture` | 结构/层次/数据流的长期事实 | 一次性调试记录 |
+| `gotcha` | 坑与反直觉陷阱（做 X 会静默得到坏结果） | 尚未踩实的担忧 |
+| `pattern` | 反复验证有效的做法/协作机制 | 只成功一次的尝试 |
+| `debug` | 排查诊断经验（症状→定位→修复） | 与诊断无关的用法说明 |
+| `decision` | 决策及理由（含被否决的选项） | 未定论的讨论 |
+| `reference` | 事实速查（命令/格式/语义/约定） | 教程长文 |
+
+## 2. 写入规则（准入硬约束）
+
+1. **文件名**：`<type>-<kebab-case-标题>.md`（门禁校验：文件名必须以 `type` 值 + `-` 前缀开头）。
+2. **frontmatter**：文件必须以 `---` 开头的 frontmatter 块开始，且含 `type:` 行（值 ∈ 六类）。推荐字段：
+
+   ```markdown
+   ---
+   type: gotcha
+   title: 一句话标题
+   date: YYYY-MM-DD
+   status: confirmed          # confirmed | superseded
+   ---
+   ```
+
+3. **正文结构**（缺一不可）：`现象` / `为什么` / `何时使用` 三节 + `证据指针`。
+4. **证据指针**：必须指向可复现物——轮次日志（`docs/rounds/round-NNN.md` §小节）、commit hash、
+   命令输出、门禁输出。无指针不入条目（同 AGENTS.md §3 证据纪律）。
+5. **只收已确认教训**：假设/猜想进 `docs/findings/` 假设区；被推翻的条目**原地加日期更正**
+   （`> 【YYYY-MM-DD 更正】…`），`status: superseded`，**不删历史**。
+6. **引用前必须验证**：命令/路径/文件是否仍存在（AGENTS.md §8）；引用失效 = 引用者义务。
+7. 知识条目**不写实现细节**（代码怎么写），只写可迁移的判断与事实。
+
+## 3. 门禁
+
+- `gates/cli.py check` 的 **knowledge-format** 项校验：frontmatter 存在、`type` 合法、文件名前缀匹配。
+  建立本目录后该项从"0 检对象"转为实际校验。
+- `knowledge_entries` ratchet 计数只升不降（新增条目合法；删除条目需 commit 说明）。
+
+## 4. 条目清单
+
+| 条目 | type | 一句话 |
+|---|---|---|
+| [gotcha-reusable-tools-belong-in-tools.md](gotcha-reusable-tools-belong-in-tools.md) | gotcha | 可复用工具入 `tools/`（入库），`analysis/` 只放可再生产出——同类路径坑已踩两次 |
+| [pattern-cross-scope-conflict-escalation.md](pattern-cross-scope-conflict-escalation.md) | pattern | 触碰 inScope 之外的文件：不越界不变通，带选项上报裁定 |
+| [gotcha-rate-limit-is-infrastructure-not-diff-routing.md](gotcha-rate-limit-is-infrastructure-not-diff-routing.md) | gotcha | 429/限流是基础设施故障，不进四分类差异路由 |
+| [reference-gate-usage-and-skip-semantics.md](reference-gate-usage-and-skip-semantics.md) | reference | 门禁子命令速查 + SKIP/TOLERATED 语义（SKIP ≠ 通过） |
+| [pattern-evidence-spotcheck-independent-reproduction.md](pattern-evidence-spotcheck-independent-reproduction.md) | pattern | 验收 = 独立复现证据指针，不看报告写得对不对 |
+| [decision-baseline-raise-policy.md](decision-baseline-raise-policy.md) | decision | 基线分级：进度类上调 captain 验收后代执行；下调/放宽/白名单仍须用户确认 |
