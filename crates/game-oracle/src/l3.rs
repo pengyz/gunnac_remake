@@ -759,20 +759,52 @@ pub fn parse_appear_rows(jsonl: &str) -> Result<Vec<AppearRow>, String> {
     Ok(out)
 }
 
-/// 出现事件检查（t84 ④，**声明容差**）：硬面=事件非空 + 槽/坐标网格域；
-/// 记录集 x-match 率为观测（W12 桥未证不入断言）；时刻层容差 W28（节律 8-10f）不入硬断言。
+/// tick 事件硬断言（t86 升格，R-stage-tick-1..3）：
+/// - **硬**：每 tick 事件数分布 == {1:73, 2:8, 3:1, 5:4}（R-stage-tick-3）+ tick 总数 86
+///   + 顺序/槽域（帧序单调、槽<28）；
+/// - **硬（网格子集）**：干净单轨段 A/C/E（1341-1391@10 / 1597-1657@15 / 1981-2011@10）
+///   域内 tick 必落 `起帧+k×档` 网格（R-stage-tick-1）；
+/// - **观测**（打印不入断言）：混轨段 B/D/F（t83『混突发』+ 段 F 平行 +4 轨迹——报
+///   spec-writer 细化）与记录集 x 对齐率（W12 桥未证）。
 /// 返回 (违规, 记录集命中数, 总数)。
 pub fn appear_records_check(rows: &[AppearRow]) -> (Vec<String>, usize, usize) {
+    use std::collections::{BTreeSet, HashMap};
     const REC_X: [u8; 8] = [175, 123, 139, 119, 119, 117, 117, 128];
+    const CLEAN_DOMAINS: [(u32, u32, u32); 3] = [(1341, 1391, 10), (1597, 1657, 15), (1981, 2011, 10)];
     let mut problems = Vec::new();
     let mut match_n = 0usize;
-    for r in rows {
+    let mut per_tick: HashMap<u32, usize> = HashMap::new();
+    let mut last_f = 0u32;
+    for (i, r) in rows.iter().enumerate() {
+        if i > 0 && r.f < last_f {
+            problems.push(format!("f{}: 帧序倒退（顺序断言）", r.f));
+        }
+        last_f = r.f;
         if r.slot >= 28 {
             problems.push(format!("f{}: 槽 {} 越 28 槽网格", r.f, r.slot));
         }
+        for (start, end, step) in CLEAN_DOMAINS {
+            if (start..=end).contains(&r.f) && (r.f - start) % step != 0 {
+                problems.push(format!("f{}: 非网格帧（R-stage-tick-1 干净段 [{}-{}]@{})", r.f, start, end, step));
+            }
+        }
+        *per_tick.entry(r.f).or_default() += 1;
         if REC_X.contains(&r.x) {
             match_n += 1;
         }
+    }
+    // R-stage-tick-3 分布 + tick 总数 86
+    let mut dist: HashMap<usize, usize> = HashMap::new();
+    for (_f, n) in &per_tick {
+        *dist.entry(*n).or_default() += 1;
+    }
+    let expected: HashMap<usize, usize> = HashMap::from([(1, 73), (2, 8), (3, 1), (5, 4)]);
+    if dist != expected {
+        problems.push(format!("每 tick 事件数分布 {:?} ≠ R-stage-tick-3 期望 {:?}", dist, expected));
+    }
+    let ticks: BTreeSet<u32> = per_tick.keys().copied().collect();
+    if ticks.len() != 86 {
+        problems.push(format!("tick 总数 {} ≠ 86（R-stage-tick-1 实录）", ticks.len()));
     }
     (problems, match_n, rows.len())
 }

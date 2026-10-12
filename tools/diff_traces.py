@@ -413,12 +413,13 @@ def extract_flow_sequence(scene: str) -> int:
 
 
 def extract_appearances(scene: str) -> int:
-    """敌出现事件 golden（t84 ④：时刻/位置 vs 生成记录装载结果）。
-    口径（声明）：从 .enemy.jsonl churn golden 变换 placed 转变（(x,y)≠(0,0)）——
-    事件驱动全采；**时刻层容差 W28 注记**（帧换算未证，节律 8-10f 参数化）、
-    **位置层 W12 桥未证**（VM $A4 → $04xx 网格写链待考）——比对为观测面（match 率记录）。
+    """敌出现/tick 事件 golden（t86 硬断言面）。
+    判据（t83 正寻址激活）：**$0400+槽 state 0→非0**（112 事件/86 tick 帧实证）。
+    口径（声明）：原始 trace 全分辨率事件驱动全采；比对面 = R-stage-tick-1（tick 网格）
+    + R-stage-tick-3（每 tick 事件数分布）+ 位置/顺序（golden 逐值）；记录集 x 对齐为
+    W12 桥观测（VM $A4→$04xx 写链未证）。
     """
-    src = ROOT / "oracle" / "traces" / f"{scene}.enemy.jsonl"
+    src = ROOT / "analysis" / "traces" / f"{scene}.frames.jsonl"
     dst = ROOT / "oracle" / "traces" / f"{scene}.stage-appear.jsonl"
     if not src.is_file():
         return 0
@@ -428,22 +429,28 @@ def extract_appearances(scene: str) -> int:
         if not line.strip():
             continue
         rec = json.loads(line)
-        st = bytes.fromhex(rec["state"])
-        xs = bytes.fromhex(rec["x"])
-        ys = bytes.fromhex(rec["y"])
-        cur = [(xs[i], ys[i]) != (0, 0) for i in range(28)]
+        if rec["f"] < 1260:
+            continue
+        w = rec["w"]
+        blob_w = w.get("iram")
+        if blob_w is None:
+            return 0
+        blob = bytes.fromhex(blob_w)
+        cur = list(blob[0x100:0x11C])  # $0400 状态字段（正寻址 28 槽）
         if prev is not None:
             for i in range(28):
-                if cur[i] and not prev[i]:
-                    events.append({"f": rec["f"], "slot": i, "x": xs[i], "y": ys[i]})
+                if cur[i] != 0 and prev[i] == 0:
+                    events.append({"f": rec["f"], "slot": i,
+                                   "x": blob[0x1E0 + i], "y": blob[0x1FC + i]})
         prev = cur
     with open(dst, "w", encoding="utf-8") as out:
         for e in events:
             out.write(json.dumps(e) + "\n")
     rec_x = [175, 123, 139, 119, 119, 117, 117, 128]
     match = sum(1 for e in events if e["x"] in rec_x)
-    print(f"敌出现事件：{scene} {len(events)} 事件（x∈记录集 {match}/{len(events)}——W12/W28 注记观测面）→ {dst.relative_to(ROOT)}")
+    print(f"tick 事件抽取：{scene} {len(events)} 事件（记录集 x 对齐 {match}——W12 观测）→ {dst.relative_to(ROOT)}")
     return 0
+
 
 
 def extract() -> int:

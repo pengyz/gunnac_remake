@@ -239,3 +239,24 @@ fn l3_money_events_negative_selfproof() {
     ];
     assert!(money_events_legal(&good).is_empty(), "合法事件被误判");
 }
+
+#[test]
+fn l3_tick_hard_assertions_and_negatives() {
+    use game_oracle::l3::{appear_records_check, AppearRow};
+    // 合法样例（小域）：干净段 A 网格 2 tick 各 1 事件——但分布/86 校验需全量；
+    // 负向自证 1：干净段非网格帧必红
+    let bad = vec![AppearRow { f: 1342, slot: 0, x: 0, y: 0 }];
+    let (problems, _, _) = appear_records_check(&bad);
+    assert!(problems.iter().any(|p| p.contains("非网格帧")), "非网格帧必红：{problems:?}");
+    // 负向自证 2：帧序倒退必红
+    let bad2 = vec![
+        AppearRow { f: 1351, slot: 0, x: 0, y: 0 },
+        AppearRow { f: 1341, slot: 1, x: 0, y: 0 },
+    ];
+    let (problems2, _, _) = appear_records_check(&bad2);
+    assert!(problems2.iter().any(|p| p.contains("倒退")), "顺序违例必红");
+    // 负向自证 3：槽越界必红
+    let bad3 = vec![AppearRow { f: 1341, slot: 28, x: 0, y: 0 }];
+    let (problems3, _, _) = appear_records_check(&bad3);
+    assert!(problems3.iter().any(|p| p.contains("28 槽")), "槽越界必红");
+}
