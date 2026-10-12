@@ -101,6 +101,7 @@ def parse_scenario(path: Path) -> dict:
         "watch": [],
         "watch_ranges": [],
         "ramframe": False,
+        "probe_mem": [],
     }
     for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         line = raw.split("#", 1)[0].strip()
@@ -172,6 +173,10 @@ def parse_scenario(path: Path) -> dict:
             if len(addr) != 4 or any(c not in "0123456789abcdef" for c in addr):
                 raise err(f"地址须为 4 位 hex（如 0320），实际 {args[0]!r}")
             plan["watch"].append({"addr": addr, "label": args[1] if len(args) == 2 else addr})
+        elif op == "probe_mem":
+            if len(args) != 2:
+                raise err("probe_mem 用法: probe_mem <lo> <hi>（16 进制，NMI 级写点插桩）")
+            plan["probe_mem"].append([args[0], args[1]])
         elif op == "watch_range":
             # watch_range <hex 起>-<hex 止> [标签]
             if len(args) not in (1, 2) or "-" not in args[0]:
