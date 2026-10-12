@@ -680,7 +680,7 @@
     "B-STG-01-BOSS": {
       "id": "B-STG-01-BOSS",
       "face": "behavior",
-      "content": "STG-01 BOSS 生成链：**三分区**——✅链定位/脚本格式/EN 族分立；⚠条数展开/实体未分；❌出场触发/逐条语义",
+      "content": "STG-01 BOSS 生成链：**三分区更新（t91）**——✅链定位/脚本格式/EN 族分立/**出场触发**（VM 流推进+$865C 生成链）/**巡逻语义**（R-boss-patrol-1/2/3 升格）；⚠条数展开/W32 实体识别/W30 flow 对齐；❌逐条语义",
       "evidence": [],
       "strength": "L2",
       "bindings": {
