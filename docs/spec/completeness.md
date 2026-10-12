@@ -193,6 +193,8 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | B-SYS-BOSS | Boss 系统：最终 Boss 多相（E-W07 "first phase of the last boss"）；各关 Boss 子格按 §2.3 规则登记 | E-W07, E-R09 | B | L0 |
 | B-SYS-UI | 流程系统：标题/菜单（开始·设置）/DEMO/GAME OVER/CONTINUE/结局文本 | E-R01, E-R10, E-R11, E-S01, E-S03, + S2: title-menu/shop/gameplay-stage1 | A | **L2**（R-ui-1..8，§2.4.2） |
 | B-SYS-SCORE | 计分/最高分系统（`HI SCORE`/`SCORE` 显示） | E-R01, E-S01 | A | L0 |
+| B-SYS-MOVE | 自机移动：输入位图→位移 / X·Y 钳制 / 亚像素累积 / 速度对（2026-10-12 t23 按约束①准入） | N-0011..0016, bank03:A084-A0E8, ram-watch-s3 §1, scenario: gameplay-stage1 | A | **L2**（R-move-1..6，§2.4.3） |
+| B-SYS-FIRE | 射击/投放：A 边沿投放例程流 / 消耗查表 / 坐标快照 / mode:=7 / 主武器弹药 | N-0017..0021/N-0024, bank03:A2B4-A2FA, ram-watch-s3 §3-4, scenario: gameplay-stage1 | A | **L2**（R-fire-1..6，§2.4.3） |
 
 #### 2.4.1 分子登记记录（L1，规则面覆盖；t6 2026-10-12）
 
@@ -257,12 +259,33 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 备注: H-06（开场/结局显示条件）、H-12（HUD 语义）、H-13（序列中各输入独立作用未隔离）
 ```
 
+#### 2.4.3 分子登记记录（L2，S4 行为规则第一批；t23 2026-10-12）
+
+> 格式按 §6.2；L2 = 绑定可复现场景 + trace/RAM diff + bank:addr 双向证据（升 L3 待 Rust 侧差分）。
+> 未证语义（红圈/等级/分工）继续留空（H-11/H-12/H-14/H-15），**未发明**。
+
+```
+格: B-SYS-MOVE
+强度: L2
+证据: scenario:analysis/traces/gameplay-stage1（6 段 hold + 60 帧 probe RAM）、trace:analysis/traces/gameplay-stage1#f1300-f2280（hold 段逐段位移）、bank03:A084-A0E8（移动例程）、data/naming/ledger.jsonl N-0011..N-0016
+工件: docs/spec/player-movement.md#R-move-1..6、docs/spec/constants.md#C-vel-h/C-clamp-x
+日期: 2026-10-12
+备注: W6（速度查表 $A2FB/$A30B 分划）、W5（up 后 Y 回中）、H-15（$0401 值域）
+
+格: B-SYS-FIRE
+强度: L2
+证据: scenario:analysis/traces/gameplay-stage1（press_every 12 A + press 1500 b）、trace:analysis/traces/gameplay-stage1#f2160/f2280（$018F 3→4 HUD 同步）、bank03:A2B4-A2FA（投放例程）、bank03:A336-A33D（消耗/类型表）、data/naming/ledger.jsonl N-0017..N-0021/N-0024
+工件: docs/spec/player-movement.md#R-fire-1..6、docs/spec/constants.md#C-bomb-consume
+日期: 2026-10-12
+备注: H-11（类型表映射）、H-14（A 射击/投放分工）、H-15（$0401 值域）
+```
+
 ### 2.5 分母统计（v0）
 
 | 面 | 格数 | 备注 |
 |---|---|---|
-| 行为面/内容面（§2） | 25 + 4 + 8 + 7 = **44** | 武器 25 / 炸弹 4 / 关卡 8 / 系统 7；子格未计 |
-| 规则面（§5） | 44（下限，按行为格派生） | 每格 ≥1 条 R- 规则 |
+| 行为面/内容面（§2） | 25 + 4 + 8 + 9 = **46** | 武器 25 / 炸弹 4 / 关卡 8 / 系统 9（t23 +B-SYS-MOVE/B-SYS-FIRE）；子格未计 |
+| 规则面（§5） | 46（下限，按行为格派生） | 每格 ≥1 条 R- 规则 |
 | 符号面（§3） | **未计**（占位） | S1 后机械导出 |
 | 数据面（§4） | **未计**（占位） | S1 后机械导出 |
 
@@ -270,7 +293,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 
 | 候选格 | 缺什么证据 |
 |---|---|
-| 自机移动/射击手感、判定点 | 【2026-10-12 入口解锁】gameplay-stage1 场景已采实机画面（星域/自机/敌机/弹幕，f1260/f1500/f2349）；判定点数值/手感规则仍缺 L3 trace → 场景就绪，可按约束①准入 |
+| 判定点/受击盒 | 移动/射击已按约束①准入（B-SYS-MOVE/B-SYS-FIRE，t23）；判定点数值仍缺——待 hitbox 观测场景 |
 | 命数/死亡重生/CONTINUE 语义 | 仅 `CONTINUE` 串（E-R11），行为未观测（gameplay-stage1 f2349 为运行中止于战斗态，非 GAME OVER） |
 | 音频（APU）行为 | 按 pipeline R5 先 scope-decision，不入行为面 |
 | 各关主题/名称、各关 Boss | 见 §2.3 与 H-06/H-07 |
@@ -304,7 +327,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 
 | 分母项 | 计数 | 说明 |
 |---|---|---|
-| 机械数据表 | **8** | t_000–t_007，见 `data/naming/remap-table.json` `data_tables`（含 bank:addr/PRG 偏移/xref 计数/长度） |
+| 机械数据表 | **5** | t_000/t_001/t_005/t_006/t_007，见 `data/naming/remap-table.json` `data_tables`；【2026-10-12 更正（t18）】原 8 张经种子反汇编重分类：t_002/t_003/t_004 branch-align 84-97% ⇒ mixed_code（移出分母，`mixed_regions` 字段），t_007 边界修正 `$FD2A-$FFF9`（向量表移出） |
 | 已知数据锚点候选 | **7**（不入分母） | charmap 表 ×2 + 文本记录区 ×5，登记于 `remap-table.json` `known_data_candidates` |
 | CHR 资源 | **128 × 1KB bank** | 字模区 bank124–127（file 0x3F010–0x40010，汉字字模）；空 bank 42,43,47,51,64–71,80–83（S0 §5） |
 
@@ -375,6 +398,8 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | H-11 | 「导弹」↔ 炸弹字母（F/B/T/W）映射、20 上限对应弹种、其余弹种上限 | C | S2 弹种切换场景 + 台账 |
 | H-12 | 实机 HUD 语义（左上字母+数字行含义、F↔W 字母切换归因、红圈数字）——留命名台账，禁入规则结论 | C | t18 RAM diff 动态取证 |
 | H-13 | 商店进入/离开的完整条件（菜单序列各输入的独立作用、关间序列、GAME OVER 后路径） | C | S2 单变量场景矩阵 |
+| H-14 | A 边沿同时驱动主武器射击（press_every 段实测出弹）与投放例程（bank03:A2B4）的分工机制 | C | S1 射击例程定位 + S2 单键场景 |
+| H-15 | `game_action_mode`（$0401）除 0/7 外的值域语义（N-0024 同址多用途） | C | S2 多场景 $0401 采样 |
 
 ---
 
@@ -420,6 +445,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 `v0.1 (2026-10-12, t6) B-SYS-SHOP/MONEY/UI 规则面覆盖（R-shop-1..4、R-money-1..3、R-ui-1..5 → docs/spec/shop-economy.md、ui-flow.md），三格分子登记 L1（§2.4.1，web 证据封顶）；constants.md 建立（C-shop-p1..p3、C-money-template、C-money-unk 不解释）；E-R04 指针精确化为 rom:8516–8523。`
 `v0.2 (2026-10-12, t17) S2 证据回填：R-shop-5..8、R-money-4、R-item-1、R-ui-6..8 入规则（绑 scenario:analysis/traces/<id>+帧号）；B-SYS-SHOP/MONEY/ITEM/UI 四格升 L2（§2.4.2）；空位闭环状态更新（部分闭环 3 项），新增 H-09..H-13（未闭环项）；§2.6 自机 gameplay 入口解锁。`
 `v0.3 (2026-10-12, t20) 机器可读镜像 data/status/completeness_matrix.json 建立（44 行为面格 + 四面计数按现状：规则面 44 下限/21 条目/覆盖 4，符号面 276+3+18+7+560+414，数据面 8+7+128）；tools/matrix_sync.py --check 机械一致性自检（格 ID/强度/证据引用/content/绑定）；§2.4.2 记录补 trace: 指针；completeness-ratchet 门禁激活。`
+`v0.4 (2026-10-12, t23) S4 行为规则第一批：B-SYS-MOVE/B-SYS-FIRE 按约束①准入（证据 N-0011..0024 + bank03:A084-A0E8/A2B4-A2FA + gameplay-stage1 RAM diff），行为面 44→46，两格 L2（§2.4.3）；R-move-1..6/R-fire-1..6 入 docs/spec/player-movement.md（规则面 21→33 条目）；constants.md v2（速度对 ±2.8125、钳制 $0E-$F3/$14-$DF、消耗表 $A336,Y=[1,2,3,2] 逐值；类型表/速度查表登记不解释）；新增 H-14/H-15；§2.6 判定点留守。`
 
 ---
 

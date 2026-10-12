@@ -15,12 +15,12 @@
   ],
   "faces": {
     "behavior": {
-      "denominator": 44,
-      "covered": 4
+      "denominator": 46,
+      "covered": 6
     },
     "rule": {
-      "denominator": 44,
-      "covered_cells": 4,
+      "denominator": 46,
+      "covered_cells": 6,
       "rule_entries": 21,
       "note": "规则面分母=行为格数×1 下限；条目数为 shop-economy 13 + ui-flow 8（completeness.md §5）"
     },
@@ -722,6 +722,44 @@
       "strength": "L0",
       "bindings": {},
       "covered": false
+    },
+    "B-SYS-MOVE": {
+      "id": "B-SYS-MOVE",
+      "face": "behavior",
+      "content": "自机移动：输入位图→位移 / X·Y 钳制 / 亚像素累积 / 速度对（2026-10-12 t23 按约束①准入）",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {
+        "scenario": [
+          "scenario:analysis/traces/gameplay-stage1"
+        ],
+        "trace": [
+          "trace:analysis/traces/gameplay-stage1#f1300-f2280"
+        ],
+        "rule": [
+          "R-move-1..6"
+        ]
+      },
+      "covered": true
+    },
+    "B-SYS-FIRE": {
+      "id": "B-SYS-FIRE",
+      "face": "behavior",
+      "content": "射击/投放：A 边沿投放例程流 / 消耗查表 / 坐标快照 / mode:=7 / 主武器弹药",
+      "evidence": [],
+      "strength": "L2",
+      "bindings": {
+        "scenario": [
+          "scenario:analysis/traces/gameplay-stage1"
+        ],
+        "trace": [
+          "trace:analysis/traces/gameplay-stage1#f2160/f2280"
+        ],
+        "rule": [
+          "R-fire-1..6"
+        ]
+      },
+      "covered": true
     }
   }
 }
