@@ -1,6 +1,6 @@
-//! game-core::enemy 单测（t62）：装载机 quirk + VM 内核 + 输出表界。
+//! game-core::terrain 单测（t71 自 enemy 迁移，行为零变化）：装载机 quirk + VM 内核 + 输出表界。
 
-use game_core::enemy::*;
+use game_core::terrain::*;
 
 #[test]
 fn load_record_x_is_p0_minus_10_quirk() {

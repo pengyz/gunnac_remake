@@ -562,11 +562,11 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
                 game_core::shot::SlotAlloc::Full => (0xF0, x_in, 0xF0), // 满载：A=Y=$F0
             }
         }
-        "enemy_load_record" => {
+        "terrain_load_record" => {
             let (p0, p1, p2, p3) = (ram(0x0300), ram(0x0301), ram(0x0302), ram(0x0303));
             let slot_off = |slot: u8| slot as u16;
-            match game_core::enemy::load_record(p0, p1, p2, p3) {
-                game_core::enemy::LoadEffect::Spawn { slot, x, loop_cnt, pc_lo, pc_hi } => {
+            match game_core::terrain::load_record(p0, p1, p2, p3) {
+                game_core::terrain::LoadEffect::Spawn { slot, x, loop_cnt, pc_lo, pc_hi } => {
                     writes.insert(0x00C2 + slot_off(slot), loop_cnt);
                     writes.insert(0x00A4 + slot_off(slot), x);
                     writes.insert(0x0197 + slot_off(slot), pc_lo);
@@ -574,37 +574,37 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
                     writes.insert(0x00B0 + slot_off(slot), 0);
                     (0, slot, y_in + 4)
                 }
-                game_core::enemy::LoadEffect::Disable { slot, loop_cnt } => {
+                game_core::terrain::LoadEffect::Disable { slot, loop_cnt } => {
                     writes.insert(0x00C2 + slot_off(slot), loop_cnt);
                     writes.insert(0x019D + slot_off(slot), 0);
                     (0, slot, y_in + 2)
                 }
-                game_core::enemy::LoadEffect::Segment { count } => {
+                game_core::terrain::LoadEffect::Segment { count } => {
                     writes.insert(0x00A3, count);
                     (count, x_in, y_in)
                 }
-                game_core::enemy::LoadEffect::End => {
+                game_core::terrain::LoadEffect::End => {
                     writes.insert(0x00A2, 0);
                     (0, x_in, y_in)
                 }
             }
         }
-        "enemy_x_adjust" => {
+        "terrain_x_adjust" => {
             let slot_off = x_in as u16;
-            let (new_x, exit) = game_core::enemy::vm_x_adjust(ram(0x00A4 + slot_off), ram(0x0300));
+            let (new_x, exit) = game_core::terrain::vm_x_adjust(ram(0x00A4 + slot_off), ram(0x0300));
             writes.insert(0x00A4 + slot_off, new_x);
             exit_at = if exit { 0x8462 } else { 0x845E };
             if exit { (0, x_in, y_in + 1) } else { (new_x, x_in, y_in + 1) }
         }
-        "enemy_loop_load" => {
+        "terrain_loop_load" => {
             let slot_off = x_in as u16;
-            let c = game_core::enemy::vm_loop_load(ram(0x0300));
+            let c = game_core::terrain::vm_loop_load(ram(0x0300));
             writes.insert(0x00C2 + slot_off, c);
             (c, x_in, y_in + 1)
         }
-        "enemy_loop_step" => {
+        "terrain_loop_step" => {
             let slot_off = x_in as u16;
-            let (c, taken, _lo, _hi) = game_core::enemy::vm_loop_step(
+            let (c, taken, _lo, _hi) = game_core::terrain::vm_loop_step(
                 ram(0x00C2 + slot_off), ram(0x0300), ram(0x0301),
             );
             writes.insert(0x00C2 + slot_off, c);
@@ -616,11 +616,11 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
                 (a_in, x_in, y_in + 2) // 跳过 2B
             }
         }
-        "enemy_fetch_params" => {
+        "terrain_fetch_params" => {
             let slot_off = x_in as u16;
             // （$14),Y 间接寻址：流基址=$14/$15；入口 Y 起三次取参（两次 INY）；TYA 处 Y=入+2
             let base = ram(0x0014) as u16 | (ram(0x0015) as u16) << 8;
-            let (p0, p1, p2, lo, hi) = game_core::enemy::vm_fetch_params(
+            let (p0, p1, p2, lo, hi) = game_core::terrain::vm_fetch_params(
                 ram(0x0014), ram(0x0015), y_in + 2, ram(base + y_in as u16),
                 ram(base + y_in as u16 + 1), ram(base + y_in as u16 + 2),
             );
