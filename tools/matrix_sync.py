@@ -36,7 +36,7 @@ CELL_ROW_RE = re.compile(r"^\|\s*(B-[A-Za-z0-9-]+)\s*\|")
 EREF_RE = re.compile(r"E-[RSW][0-9]+[a-z]?")
 STRENGTH_RE = re.compile(r"L([0-4])")
 SCEN_RE = re.compile(r"(scenario|trace):([^\s（）、；]+)")
-RULE_RE = re.compile(r"(R-(?:shop|money|item|ui|move|fire)-[0-9]+(?:\.\.[0-9]+)?)")
+RULE_RE = re.compile(r"(R-(?:shop|money|item|ui|move|fire|bomb)-[0-9]+(?:\.\.[0-9]+)?)")
 REQUIRED_KEYS = ("id", "face", "content", "evidence", "strength", "bindings", "covered")
 
 
@@ -72,8 +72,8 @@ def parse_md() -> tuple[dict[str, dict], dict[str, dict]]:
             "covered": f"L{sm.group(1)}" != "L0",
         }
 
-    # §2.4.x 分子登记记录（``` 块内 格:/证据:/工件:），后记录覆盖先记录（升级留痕）
-    records: dict[str, dict] = {}
+    # §2.4.x 分子登记记录（``` 块内 格:/证据:/工件:）——同格多条记录全部保留（L1→L2 增补证据，绑定取并集）
+    records: dict[str, list[dict]] = {}
     cur: dict | None = None
     for line in text.splitlines():
         if line.startswith("格: "):
@@ -83,26 +83,30 @@ def parse_md() -> tuple[dict[str, dict], dict[str, dict]]:
         elif cur is not None and line.startswith("工件:"):
             cur["artifacts"] = line[3:]
         elif cur is not None and line.strip() == "" and "artifacts" in cur:
-            records[cur["id"]] = cur
+            records.setdefault(cur["id"], []).append(cur)
             cur = None
     if cur is not None and "artifacts" in cur:
-        records[cur["id"]] = cur
+        records.setdefault(cur["id"], []).append(cur)
     return cells, records
 
 
-def bindings_from_records(records: dict[str, dict]) -> dict[str, dict]:
+def bindings_from_records(records: dict[str, list[dict]]) -> dict[str, dict]:
     out: dict[str, dict] = {}
-    for cid, rec in records.items():
-        ev = rec.get("evidence_line", "")
-        arts = rec.get("artifacts", "")
-        scen = [f"{k}:{v}" for k, v in SCEN_RE.findall(ev)]
-        rules = sorted(set(RULE_RE.findall(arts)))
-        if scen or rules:
-            out[cid] = {
-                "scenario": sorted(s for s in scen if s.startswith("scenario:")),
-                "trace": sorted(s for s in scen if s.startswith("trace:")),
-                "rule": rules,
-            }
+    for cid, recs in records.items():
+        for rec in recs:
+            ev = rec.get("evidence_line", "")
+            arts = rec.get("artifacts", "")
+            scen = [f"{k}:{v}" for k, v in SCEN_RE.findall(ev)]
+            rules = set(RULE_RE.findall(arts))
+            slot = out.setdefault(cid, {"scenario": [], "trace": [], "rule": []})
+            for s in scen:  # 多记录取并集（覆盖只增：增补证据不丢历史绑定）
+                key = "trace" if s.startswith("trace:") else "scenario"
+                if s not in slot[key]:
+                    slot[key].append(s)
+            slot["rule"] = sorted(set(slot["rule"]) | rules)
+    for cid in out:
+        out[cid]["scenario"] = sorted(out[cid]["scenario"])
+        out[cid]["trace"] = sorted(out[cid]["trace"])
     return out
 
 

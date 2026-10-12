@@ -187,8 +187,8 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | 格 ID | 内容单元 | 证据指针 | 级 | 分子 |
 |---|---|---|---|---|
 | B-SYS-SHOP | 商店系统：进出时机（关间）、货架商品、价目、购买流程、按键切换 | E-W06, E-R05, E-R04, E-S02, + S2: shop/exp-shop-* | A/B | **L2**（R-shop-1..8，§2.4.2） |
-| B-SYS-MONEY | 金钱系统：获取/显示/累计/上限/消费 | E-W06, E-R04, E-S02（`你有 ──￥`）, E-R05（价目）, E-R02（`10000000000` 待证 → H-03）, + S2: shop f1140 | A/B | **L2**（R-money-1..4；增减时机仍空 H-09） |
-| B-SYS-ITEM | 道具系统：编号圈（换武器）、字母圈（换炸弹）、升级圈、翼装 wing（E-W05：多挨一击+武器可继续升级） | E-W02, E-W03, E-W04, E-W05, E-S02, + S2: shop f1140（导弹20上限） | A/B | **L2**（R-item-1；映射 H-11 仍空） |
+| B-SYS-MONEY | 金钱系统：获取/显示/累计/上限/消费 | E-W06, E-R04, E-S02, E-R05, E-R02（`10000000000` 不解释 → H-03）, + S2: shop f1140, + t22: N-0028/0029, bank14:DBCE/DAE7/D009 | A/B | **L2**（R-money-1..6；消费侧仍空 H-09 残项） |
+| B-SYS-ITEM | 道具系统：编号圈（换武器）、字母圈（换炸弹）、升级圈、翼装 wing（E-W05：多挨一击+武器可继续升级） | E-W02, E-W03, E-W04, E-W05, E-S02, + S2: shop f1140（导弹20上限）, + t22: N-0030（bomb_type_index 拾取三方同步） | A/B | **L2**（R-item-1、R-bomb-1..3；映射 1=B/2=T 推定 H-11 残项） |
 | B-SYS-DROP | 掉落系统：关内随机浮动金钱、被毁对象/敌人掉钱、道具掉落 | E-W06, E-W02 | B | L0 |
 | B-SYS-BOSS | Boss 系统：最终 Boss 多相（E-W07 "first phase of the last boss"）；各关 Boss 子格按 §2.3 规则登记 | E-W07, E-R09 | B | L0 |
 | B-SYS-UI | 流程系统：标题/菜单（开始·设置）/DEMO/GAME OVER/CONTINUE/结局文本 | E-R01, E-R10, E-R11, E-S01, E-S03, + S2: title-menu/shop/gameplay-stage1 | A | **L2**（R-ui-1..8，§2.4.2） |
@@ -278,6 +278,26 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 工件: docs/spec/player-movement.md#R-fire-1..6、docs/spec/constants.md#C-bomb-consume
 日期: 2026-10-12
 备注: H-11（类型表映射）、H-14（A 射击/投放分工）、H-15（$0401 值域）
+```
+
+#### 2.4.4 分子登记记录（L2 增补证据；t26 2026-10-12）
+
+> 格式按 §6.2；t22 证据消化增补 B-SYS-MONEY/ITEM 的 bindings（强度仍 L2，仅证据扩充，覆盖只增）。
+
+```
+格: B-SYS-MONEY
+强度: L2
+证据: 原 L2 证据 + bank14:DBCE-DBFF（加法器）、bank14:DAE7-DAFC（阈值）、bank14:D009-D046（渲染）、data/naming/ledger.jsonl N-0028/0029/0031（N-0025/W1 证伪撤回留档）、trace:analysis/traces/gameplay-stage1#f2160/f2220/f2280/f2340（BCD 计数器逐帧值 4400/5700/6800/7200）
+工件: docs/spec/shop-economy.md#R-money-1..6、docs/spec/constants.md#C-money-bcd/C-money-addend-tbl/C-money-cap/C-extend-threshold
+日期: 2026-10-12
+备注: H-09 残项（消费侧）、H-03 残项（达上限行为）；显示值 f2280=6800（并行读图错序教训 → knowledge gotcha-parallel-read-image-order-unreliable）
+
+格: B-SYS-ITEM
+强度: L2
+证据: 原 L2 证据 + bank15:E138-E13D（bomb_type_index 初始化）、data/naming/ledger.jsonl N-0030、trace:analysis/traces/gameplay-stage1#f2220（拾『W』$0190 0→3/HUD F→W/$018F 3→4 三方同步）
+工件: docs/spec/shop-economy.md#R-bomb-1..3、docs/spec/constants.md#C-bomb-type-index
+日期: 2026-10-12
+备注: H-11 残项（1=B/2=T 推定、上限映射）、H-12 残项（等级/残机/红圈 slot）
 ```
 
 ### 2.5 分母统计（v0）
@@ -393,10 +413,10 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | H-06 | 美版删改（E-W07：最终 Boss 第一形态、intro、ending）与本汉化 ROM 的实际差异——注意 E-R09/E-R10 的 intro/ending 文本**确实存在于 ROM**，是否显示未证 | C | S2 全流程场景（intro/ending/Boss 相位） |
 | H-07 | 各关主题（动物/植物/工厂等，E-R09 暗示）与关名 | C | S2 逐关场景 + S1 关卡表 |
 | H-08 | 汉化版相对美版的行为差异（文本字模、断行、结算数值） | C | L4 视觉差分 + 文本表考证（AGENTS.md R4） |
-| H-09 | 金钱增减的精确时机与数值（拾取 +?、击毁掉落 +?、购买 −?、死亡惩罚、过关结算）——S2 仅证显示行存在且初始为 0 | C | S2 拾取/购买/结算场景 + RAM diff（金钱地址待 t18 台账） |
+| H-09 | 金钱增减的精确时机与数值——【2026-10-12 t26 更新】增加侧已证（事件加数表 type 1..10=10/30/100/150/250/400/600/800/1000/2000、逐位进位、封顶 999999，R-money-5）；**残项=消费侧（购买扣减）/死亡惩罚/过关结算** | C（残项） | S2 购买/结算场景 + RAM diff（$E0-$E6） |
 | H-10 | 商店内 A 键单击与"购买确认"的效果（采样帧 trace f1180/f1340 留证但效果未定） | C | S2 单变量场景（隔离 A/B/Start） |
-| H-11 | 「导弹」↔ 炸弹字母（F/B/T/W）映射、20 上限对应弹种、其余弹种上限 | C | S2 弹种切换场景 + 台账 |
-| H-12 | 实机 HUD 语义（左上字母+数字行含义、F↔W 字母切换归因、红圈数字）——留命名台账，禁入规则结论 | C | t18 RAM diff 动态取证 |
+| H-11 | 「导弹」↔ 炸弹字母映射——【2026-10-12 t26 更新】bomb_type_index $0190 收口（0=F/3=W 实测 A 级，R-bomb-3）；**残项=1=B/2=T 推定（B 级）、20 上限对应弹种、其余弹种上限** | C（残项） | S2 单字母拾取场景实测 1=B/2=T |
+| H-12 | 实机 HUD 语义——【2026-10-12 t26 更新】字母行归因**已收口**（= bomb_type_index $0190，f2220 拾「W」三方同步，R-bomb-2）；**残项=等级 var、残机 var（W3）、红圈掉落物 slot 偏移（W4）**，继续留命名台账 | C（残项） | t18 后续 RAM diff / object slot trace |
 | H-13 | 商店进入/离开的完整条件（菜单序列各输入的独立作用、关间序列、GAME OVER 后路径） | C | S2 单变量场景矩阵 |
 | H-14 | A 边沿同时驱动主武器射击（press_every 段实测出弹）与投放例程（bank03:A2B4）的分工机制 | C | S1 射击例程定位 + S2 单键场景 |
 | H-15 | `game_action_mode`（$0401）除 0/7 外的值域语义（N-0024 同址多用途） | C | S2 多场景 $0401 采样 |
@@ -446,6 +466,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 `v0.2 (2026-10-12, t17) S2 证据回填：R-shop-5..8、R-money-4、R-item-1、R-ui-6..8 入规则（绑 scenario:analysis/traces/<id>+帧号）；B-SYS-SHOP/MONEY/ITEM/UI 四格升 L2（§2.4.2）；空位闭环状态更新（部分闭环 3 项），新增 H-09..H-13（未闭环项）；§2.6 自机 gameplay 入口解锁。`
 `v0.3 (2026-10-12, t20) 机器可读镜像 data/status/completeness_matrix.json 建立（44 行为面格 + 四面计数按现状：规则面 44 下限/21 条目/覆盖 4，符号面 276+3+18+7+560+414，数据面 8+7+128）；tools/matrix_sync.py --check 机械一致性自检（格 ID/强度/证据引用/content/绑定）；§2.4.2 记录补 trace: 指针；completeness-ratchet 门禁激活。`
 `v0.4 (2026-10-12, t23) S4 行为规则第一批：B-SYS-MOVE/B-SYS-FIRE 按约束①准入（证据 N-0011..0024 + bank03:A084-A0E8/A2B4-A2FA + gameplay-stage1 RAM diff），行为面 44→46，两格 L2（§2.4.3）；R-move-1..6/R-fire-1..6 入 docs/spec/player-movement.md（规则面 21→33 条目）；constants.md v2（速度对 ±2.8125、钳制 $0E-$F3/$14-$DF、消耗表 $A336,Y=[1,2,3,2] 逐值；类型表/速度查表登记不解释）；新增 H-14/H-15；§2.6 判定点留守。`
+`v0.5 (2026-10-12, t26) t22 证据消化：R-money-4 扩写（money_counter_bcd $E0-$E6=显示值本体+前导零抑制渲染）+ R-money-5/6（加法器 bank14:DBCE 逐值加数表 10..2000/进位/封顶 999999、extend 阈值 8000→$ED=$40）+ R-bomb-1..3（bomb_type_index $0190 四值域、拾取三方同步、映射 0=F/3=W 实测 1=B/2=T 推定）；constants.md v3；H-09/H-11/H-12 原地更新残项（H-12 字母归因收口）；N-0025/W1 证伪留档；知识条目 gotcha-parallel-read-image-order-unreliable 入库（§2.4.4 增补记录）。`
 
 ---
 

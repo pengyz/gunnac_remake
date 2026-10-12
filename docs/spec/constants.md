@@ -17,6 +17,11 @@
 | C-clamp-x | `$0E`–`$F3`（14–243） | 玩家 X 钳制范围（触钳亚像素归零） | `bank03:A0D0-A0E3` + probe diff | A | R-move-3 |
 | C-clamp-y | `$14`–`$DF`（20–223） | 玩家 Y 钳制范围（触钳亚像素归零） | `bank03:A09D-A0B0` + probe diff | A | R-move-4 |
 | C-bomb-consume | `$A336,Y` = **[1, 2, 3, 2]**（Y=0..3） | 炸弹消耗量表逐值（投放按 $3B 索引；不足回退 Y=1） | `bank03:A336-A339` seed 字节 `01 02 03 02` | A | R-fire-3 |
+| C-money-bcd | `money_counter_bcd` = `$E0-$E6` 7 位 BCD（$E0=最高位；值=显示值） | `bank14:D009-D046` 渲染 + probe f2160=4400/f2220=5700/f2280=6800/f2340=7200 | A | R-money-4 |
+| C-money-addend-tbl | 加数表 `$DCCF+type×6` 逐值：type 1..10 = **+10/+30/+100/+150/+250/+400/+600/+800/+1000/+2000**（行 6 字节 BCD，倒序配对 $E5..$E0）；type 0 = no-op | `bank14:$DCD0-$DD0F` seed 字节逐行 | A | R-money-5 |
+| C-money-cap | 溢出封顶 **999999**（$E0-$E5 全 9） | `bank14:DBF1-DBFD` | A | R-money-5 |
+| C-extend-threshold | `extend_threshold_bcd` = `$E7-$EC` = **008000（8000）**，达标置 `$ED=$40` | `bank14:DAE7-DAFC` + probe 恒 0,0,8,0,0,0 | A | R-money-6 |
+| C-bomb-type-index | `bomb_type_index` = `$0190` 值域 **0-3**（四弹种）；映射 0=F/3=W 实测、1=B/2=T 推定 | `bank15:E138-E13D` + probe f2220 拾「W」0→3 | A（值域）/B（映射 1=B、2=T） | R-bomb-1、R-bomb-3 |
 
 ## 2. 登记不解释（存在性已证，含义未证）
 
@@ -30,3 +35,4 @@
 
 - `v1 (2026-10-12) 建立：C-shop-p1..p3、C-money-template、C-money-unk（后者不解释）`
 - `v2 (2026-10-12, t23) 移动/射击常量：C-vel-h、C-vel-h-neg、C-clamp-x、C-clamp-y、C-bomb-consume（逐值）；C-bomb-type-tbl、C-vel-tables 入登记不解释`
+- `v3 (2026-10-12, t26) 金钱/炸弹常量：C-money-bcd（$E0-$E6 七位 BCD）、C-money-addend-tbl（type 1..10 逐值 10/30/100/150/250/400/600/800/1000/2000；行 11+ 表界未证不入表）、C-money-cap（999999）、C-extend-threshold（8000→$ED=$40）、C-bomb-type-index（$0190 0-3，映射 0=F/3=W 实测 1=B/2=T 推定）`
