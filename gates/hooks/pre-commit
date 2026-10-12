@@ -1,0 +1,6 @@
+#!/bin/sh
+# gunnac-remake gates: pre-commit -> python3 gates/cli.py check
+# 薄封装：扫描/裁定逻辑只存在于 gates/cli.py（无第二套扫描逻辑）。
+set -e
+repo_root=$(git rev-parse --show-toplevel) || exit 1
+exec python3 "$repo_root/gates/cli.py" check

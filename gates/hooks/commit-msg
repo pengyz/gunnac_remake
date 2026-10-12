@@ -1,0 +1,7 @@
+#!/bin/sh
+# gunnac-remake gates: commit-msg -> python3 gates/cli.py commit-msg "$1"
+# 触及 data/naming/ reference/ rom/ 的提交必须含 Evidence/Confidence 字段（AGENTS.md §9）。
+# 薄封装：证据门禁逻辑只存在于 gates/cli.py（无第二套扫描逻辑）。
+set -e
+repo_root=$(git rev-parse --show-toplevel) || exit 1
+exec python3 "$repo_root/gates/cli.py" commit-msg "$1"
