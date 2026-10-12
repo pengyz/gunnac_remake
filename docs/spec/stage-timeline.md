@@ -84,6 +84,34 @@
 - 可判定性: 部分（机制定位后可 L3 全判）；当前=观察级规则
 - 关联: B-SYS-SPAWNRHYTHM、Wv-3、R-stage-1a
 
+## 2.6 行为规则 —— R-bg-scroll-*（STG-01 BG 时间线，2026-10-12 t70 入档；**L3 已判**）
+
+> 证据：`docs/findings/bg-content-line.md` §4（A 级，t69）+ N-0089（bg_scroll_timeline）；
+> **升格裁定（captain）**：帧级确定性值序列、零未证依赖 = 标准 L3 断言形态。断言载体 = gameplay-stage1
+> zp watch `$1C/$1D` 逐帧向量（L3 状态向量已含 zp）。
+
+### R-bg-scroll-1: 基础卷轴 **dy = −2 px/帧**（f1214 起全程）
+- 证据: `docs/findings/bg-content-line.md` §4-1 + `analysis/traces/gameplay-stage1.frames.jsonl`（`$1C/$1D` 逐帧差分）+ N-0089
+- 可判定性: **机器可判定（L3 已判）**：逐帧 `$1D` 差分 = −2 断言
+- 关联: B-STG-01-TL、C-scroll-vars、R-stage-4
+
+### R-bg-scroll-2: **120 帧周期单帧脉冲 dy = −18**（f1318+120k，10/10 命中）
+- 证据: 同上（§4-2，脉冲帧表 10/10）+ N-0089
+- 可判定性: **机器可判定（L3 已判）**：周期相位帧 `dy=−18` 单帧断言
+- 关联: B-STG-01-TL、Wv-3（BG 侧定时=120f，非 16f——负注）
+
+### R-bg-scroll-3: 阶段边界：f1193 装载 `−48`、f1194-1213 **静止**、f1214 起卷
+- 证据: 同上（§4-3）+ N-0089（f1193 装载边界）
+- 可判定性: **机器可判定（L3 已判）**：边界帧三段断言
+- 关联: B-STG-01-TL、R-bg-scroll-4
+
+### R-bg-scroll-4: 商店卷轴区分界 f1193：**UI 卷轴与关卡卷轴分立**（bank1:$AB3B-$AB4C UI 面板滚动 ≠ 关卡滚动）
+- 证据: 同上（§4-4）+ `docs/spec/stage-timeline.md` R-stage-4 区分注记（t42）+ N-0089
+- 可判定性: 机器可判定（L3 已判）：分界帧两侧卷轴源断言
+- 关联: B-SYS-UI、R-stage-4
+
+- 【2026-10-12 t70 更正（t69/W22）】t42"**$AC87 指针**"线索**证伪**：`bank00:$9625` 的 `LDA #$87/LDY #$AC` = **对象例程传参（类型/参数），非指针**；`$AC80/$AC85/$ACE0` 字面 xref 0 命中（间接寻址），`$ACA0` 命中系 `LDY #$AC` 字节邻接巧合（data-island 族第五例）——原线索留档不删
+
 ## 3. 汉化特有
 
 本批次证据为数据结构层，未涉文本/渲染；汉化差异（H-08）不适用。

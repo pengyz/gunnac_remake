@@ -581,15 +581,16 @@
     "B-STG-01-TL": {
       "id": "B-STG-01-TL",
       "face": "behavior",
-      "content": "STG-01 滚动时间线：波次链结构 / 滚动指令嵌入 / bank 图归属 / 目录顺序扫入口",
+      "content": "STG-01 滚动时间线：波次链结构 / 滚动指令嵌入 / bank 图归属 / 目录顺序扫入口 / **BG 时间线**",
       "evidence": [],
-      "strength": "L2",
+      "strength": "L3",
       "bindings": {
         "scenario": [
           "scenario:analysis/traces/gameplay-stage1"
         ],
         "trace": [],
         "rule": [
+          "R-bg-scroll-1..4",
           "R-stage-1..6"
         ]
       },
