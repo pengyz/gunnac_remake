@@ -90,11 +90,14 @@
 |---|---|---|---|
 | 动手前 | 状态预检 | `python3 gates/cli.py status` | 看清 SKIP/恒红项再动 |
 | **任何 commit** | 总闸（pre-commit 自动） | `python3 gates/cli.py check` | 任一 FAIL ⇒ 不提交 |
-| 改 `data/naming/` `reference/` `rom/` | 证据门禁（commit-msg 自动） | commit message 含 `Evidence`/`证据` | 缺证据字段 ⇒ 拒绝 commit |
+| 改 `data/naming/` `data/status/` `reference/` `rom/` | 证据门禁（commit-msg 自动） | commit message 含 `Evidence`/`证据` | 缺证据字段 ⇒ 拒绝 commit |
 | 改参考投影/轨道后 | 投影回归 | `python3 gates/cli.py seed` | seed sha 不变；src 轨道 trace 不变 |
 | 改 game-data/game-core 后 | 差分（L1–L3） | `python3 gates/cli.py trace` | 任何回退 ⇒ 停止，先定位层（§4） |
 | 改渲染后 | 视觉（L4） | `python3 gates/cli.py visual` | 白名单外像素必须一致 |
 | 里程碑收尾 | 全量 | `python3 gates/cli.py all` | 对照管线文档阶段 Gate |
+
+> 【2026-10-12 更正】敏感路径增补 `data/status/`：t11 F1 攻击链暴露"降基线提交可机器无痕入库"，
+> t14 修复已把实现纳入 commit-msg 强制，本表与 §9 同步跟进（gates/cli.py 为实现权威）。
 
 - **门禁失败不是"多跑几次"能解决的**：按 §4 定位层，修复根因，不许调阈值/加白名单掩盖。
 - 视觉白名单（字体/调色板映射等）是**唯一**允许的例外清单，变更需用户确认并记录。
@@ -128,10 +131,12 @@
                                     # scope: rom/ref/oracle/data/core/platform/gates/docs/tools
 <空行>
 <正文：改了什么、为什么、证据与影响>
-<触及 data/naming/ / reference/ / rom/ 时必须含：>
+<触及 data/naming/ / data/status/ / reference/ / rom/ 时必须含：>
 Evidence: <A/B 级证据描述>
 Confidence: <0-100>
 ```
+
+> 【2026-10-12 更正】敏感清单增补 `data/status/`（与 §5 同步，见该处更正注）。
 
 小步提交：一个 commit 一个逻辑变更。门禁改动单独成 commit，不得与功能变更混提。
 安全网：本地 `pre-commit`（gates check）+ `commit-msg`（证据门禁）实时拦截；CI 在 push/PR 时跑同等检查。
