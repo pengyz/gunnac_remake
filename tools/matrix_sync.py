@@ -36,7 +36,7 @@ CELL_ROW_RE = re.compile(r"^\|\s*(B-[A-Za-z0-9-]+)\s*\|")
 EREF_RE = re.compile(r"E-[RSW][0-9]+[a-z]?")
 STRENGTH_RE = re.compile(r"L([0-4])")
 SCEN_RE = re.compile(r"(scenario|trace):([^\s（）、；]+)")
-RULE_RE = re.compile(r"(R-(?:shop|money|item|ui|move|fire|bomb)-[0-9]+(?:\.\.[0-9]+)?)")
+RULE_RE = re.compile(r"(R-(?:shop|money|item|ui|move|fire|bomb|respawn)-[0-9]+(?:\.\.[0-9]+)?)")
 REQUIRED_KEYS = ("id", "face", "content", "evidence", "strength", "bindings", "covered")
 
 

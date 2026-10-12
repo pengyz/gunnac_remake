@@ -195,6 +195,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | B-SYS-SCORE | 计分/最高分系统（`HI SCORE`/`SCORE` 显示） | E-R01, E-S01 | A | L0 |
 | B-SYS-MOVE | 自机移动：输入位图→位移 / X·Y 钳制 / 亚像素累积 / 速度对（2026-10-12 t23 按约束①准入） | N-0011..0016, bank03:A084-A0E8, ram-watch-s3 §1, scenario: gameplay-stage1 | A | **L2**（R-move-1..6，§2.4.3） |
 | B-SYS-FIRE | 射击/投放：A 边沿投放例程流 / 消耗查表 / 坐标快照 / mode:=7 / 主武器弹药 | N-0017..0021/N-0024, bank03:A2B4-A2FA, ram-watch-s3 §3-4, scenario: gameplay-stage1 | A | **L2**（R-fire-1..6，§2.4.3） |
+| B-SYS-RESPAWN | 死亡/重生事件：事件窗口 / 移动冻结 / 坐标重置 128/160 / 弹药回满 4（2026-10-12 t27 按约束①准入；受击判定/死亡语义不在此格，见 H-16/W3） | oracle/traces/gameplay-stage1.player.jsonl 帧域 f1831-1916/f2047-2101/f2131-2175, t24 L3 发现 | A | **L2**（R-respawn-1..4，§2.4.5） |
 
 #### 2.4.1 分子登记记录（L1，规则面覆盖；t6 2026-10-12）
 
@@ -300,11 +301,24 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 备注: H-11 残项（1=B/2=T 推定、上限映射）、H-12 残项（等级/残机/红圈 slot）
 ```
 
+#### 2.4.5 分子登记记录（L2，死亡/重生事件规格化；t27 2026-10-12）
+
+> 格式按 §6.2；受击判定（hit-test）= spec 未证域（H-16）**不入本格**；死亡语义（残机/结束条件）未证不写。
+
+```
+格: B-SYS-RESPAWN
+强度: L2
+证据: trace:oracle/traces/gameplay-stage1.player.jsonl#f1831-1916/f2047-2101/f2131-2175（事件遮蔽缺口 86/55/45 帧 + 边界状态）、trace:oracle/traces/gameplay-stage1.player.jsonl#f2102-2130（移动冻结直接证据）、trace:oracle/traces/gameplay-stage1.player.jsonl#f1917/f2176（复位锚点 128/160 双向）、shot:shots/gameplay-stage1_f01860..f02220_probe.png（画面佐证，t12 probe f1830 后分岔告警→数值以 trace 为准）、t24 任务输出（L3 试点发现：弹药回满 4）
+工件: docs/spec/player-movement.md#R-respawn-1..4
+日期: 2026-10-12
+备注: W5 收口（=重生坐标重置）；H-16（hit-test 未证域，t25 oracle/scenarios/hit-test.txt 可重跑）；死亡语义（残机/结束条件）W3 未证不写
+```
+
 ### 2.5 分母统计（v0）
 
 | 面 | 格数 | 备注 |
 |---|---|---|
-| 行为面/内容面（§2） | 25 + 4 + 8 + 9 = **46** | 武器 25 / 炸弹 4 / 关卡 8 / 系统 9（t23 +B-SYS-MOVE/B-SYS-FIRE）；子格未计 |
+| 行为面/内容面（§2） | 25 + 4 + 8 + 10 = **47** | 武器 25 / 炸弹 4 / 关卡 8 / 系统 10（t23 +MOVE/FIRE、t27 +RESPAWN）；子格未计 |
 | 规则面（§5） | 46（下限，按行为格派生） | 每格 ≥1 条 R- 规则 |
 | 符号面（§3） | **未计**（占位） | S1 后机械导出 |
 | 数据面（§4） | **未计**（占位） | S1 后机械导出 |
@@ -420,6 +434,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | H-13 | 商店进入/离开的完整条件（菜单序列各输入的独立作用、关间序列、GAME OVER 后路径） | C | S2 单变量场景矩阵 |
 | H-14 | A 边沿同时驱动主武器射击（press_every 段实测出弹）与投放例程（bank03:A2B4）的分工机制 | C | S1 射击例程定位 + S2 单键场景 |
 | H-15 | `game_action_mode`（$0401）除 0/7 外的值域语义（N-0024 同址多用途） | C | S2 多场景 $0401 采样 |
+| H-16 | 受击判定（hit-test）本身未证：判定盒/触发条件/无敌窗口/受击到重生的事件内时序（t24 L3 窗口内细分未证） | C | t25 `oracle/scenarios/hit-test.txt` 场景重跑（静止受击设计 + $0401 采样）；死亡语义（残机扣除/结束条件）同域未证（W3） |
 
 ---
 
@@ -467,6 +482,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 `v0.3 (2026-10-12, t20) 机器可读镜像 data/status/completeness_matrix.json 建立（44 行为面格 + 四面计数按现状：规则面 44 下限/21 条目/覆盖 4，符号面 276+3+18+7+560+414，数据面 8+7+128）；tools/matrix_sync.py --check 机械一致性自检（格 ID/强度/证据引用/content/绑定）；§2.4.2 记录补 trace: 指针；completeness-ratchet 门禁激活。`
 `v0.4 (2026-10-12, t23) S4 行为规则第一批：B-SYS-MOVE/B-SYS-FIRE 按约束①准入（证据 N-0011..0024 + bank03:A084-A0E8/A2B4-A2FA + gameplay-stage1 RAM diff），行为面 44→46，两格 L2（§2.4.3）；R-move-1..6/R-fire-1..6 入 docs/spec/player-movement.md（规则面 21→33 条目）；constants.md v2（速度对 ±2.8125、钳制 $0E-$F3/$14-$DF、消耗表 $A336,Y=[1,2,3,2] 逐值；类型表/速度查表登记不解释）；新增 H-14/H-15；§2.6 判定点留守。`
 `v0.5 (2026-10-12, t26) t22 证据消化：R-money-4 扩写（money_counter_bcd $E0-$E6=显示值本体+前导零抑制渲染）+ R-money-5/6（加法器 bank14:DBCE 逐值加数表 10..2000/进位/封顶 999999、extend 阈值 8000→$ED=$40）+ R-bomb-1..3（bomb_type_index $0190 四值域、拾取三方同步、映射 0=F/3=W 实测 1=B/2=T 推定）；constants.md v3；H-09/H-11/H-12 原地更新残项（H-12 字母归因收口）；N-0025/W1 证伪留档；知识条目 gotcha-parallel-read-image-order-unreliable 入库（§2.4.4 增补记录）。`
+`v0.6 (2026-10-12, t27) 死亡/重生事件规格化：B-SYS-RESPAWN 按约束①准入（证据 oracle/traces/gameplay-stage1.player.jsonl 帧域 f1831-1916/f2047-2101/f2131-2175 + t24 L3 发现），行为面 46→47，L2（§2.4.5）；R-respawn-1..4（窗口/移动冻结/坐标重置 128/160/弹药回满 4，L3 已可判）入 player-movement.md；W5 收口（=重生坐标重置，ram-watch-s3 §7 原地更正）；新增 H-16（hit-test 未证域，关联 t25 hit-test.txt）；死亡语义未证不写。`
 
 ---
 
