@@ -119,7 +119,7 @@ grep -n "STA     \$4E0\|STA     \$4FC\|CMP     #\$F4\|CMP     #\$E0\|LDA     \$1
 | W2 | 顶层数值 = 分数 or 金钱 | C | S2 收支事件相关性 |
 | W3 | HUD『A0』的等级 var、『1』的残机 var | C | S2 HUD 帧差分 |
 | W4 | 红圈掉落物类型字段 slot 偏移 | C | S2 object slot trace |
-| W5 | up 段后 Y 自动回中的机制 | C | S2 复现 |
+| W5 | up 段后 Y 自动回中的机制 | ~~C~~ | **【2026-10-12 t27 收口】= 死亡/重生事件的坐标重置**（非自动回中机制）：确定性 trace `oracle/traces/gameplay-stage1.player.jsonl` f2130 y=37 → f2176 y=160 复位锚点 (128,160)，见 `docs/spec/player-movement.md` R-respawn-3 |
 | W6 | 速度对亚像素/整数分划 | B | S1 反汇编速度查表 ($A30B/$A2FB) |
 
 ---
