@@ -728,3 +728,51 @@ pub fn flow_sequence_legal(rows: &[FlowRow]) -> Vec<String> {
     }
     problems
 }
+
+/// 敌出现事件（t84 ④观测面）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppearRow {
+    pub f: u32,
+    pub slot: u8,
+    pub x: u8,
+    pub y: u8,
+}
+
+/// 解析出现事件 golden JSONL。
+pub fn parse_appear_rows(jsonl: &str) -> Result<Vec<AppearRow>, String> {
+    let mut out = Vec::new();
+    for (lineno, line) in jsonl.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        let v = crate::l2::parse_json(line).map_err(|e| format!("第 {} 行: {e}", lineno + 1))?;
+        let obj = match v { Json::Obj(o) => o, _ => return Err(format!("第 {} 行非对象", lineno + 1)) };
+        out.push(AppearRow {
+            f: obj_num(&obj, "f")? as u32,
+            slot: obj_num(&obj, "slot")? as u8,
+            x: obj_num(&obj, "x")? as u8,
+            y: obj_num(&obj, "y")? as u8,
+        });
+    }
+    if out.is_empty() {
+        return Err("出现事件 golden 为空".into());
+    }
+    Ok(out)
+}
+
+/// 出现事件检查（t84 ④，**声明容差**）：硬面=事件非空 + 槽/坐标网格域；
+/// 记录集 x-match 率为观测（W12 桥未证不入断言）；时刻层容差 W28（节律 8-10f）不入硬断言。
+/// 返回 (违规, 记录集命中数, 总数)。
+pub fn appear_records_check(rows: &[AppearRow]) -> (Vec<String>, usize, usize) {
+    const REC_X: [u8; 8] = [175, 123, 139, 119, 119, 117, 117, 128];
+    let mut problems = Vec::new();
+    let mut match_n = 0usize;
+    for r in rows {
+        if r.slot >= 28 {
+            problems.push(format!("f{}: 槽 {} 越 28 槽网格", r.f, r.slot));
+        }
+        if REC_X.contains(&r.x) {
+            match_n += 1;
+        }
+    }
+    (problems, match_n, rows.len())
+}

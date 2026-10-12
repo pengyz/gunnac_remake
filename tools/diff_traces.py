@@ -411,6 +411,41 @@ def extract_flow_sequence(scene: str) -> int:
     return 0
 
 
+
+def extract_appearances(scene: str) -> int:
+    """敌出现事件 golden（t84 ④：时刻/位置 vs 生成记录装载结果）。
+    口径（声明）：从 .enemy.jsonl churn golden 变换 placed 转变（(x,y)≠(0,0)）——
+    事件驱动全采；**时刻层容差 W28 注记**（帧换算未证，节律 8-10f 参数化）、
+    **位置层 W12 桥未证**（VM $A4 → $04xx 网格写链待考）——比对为观测面（match 率记录）。
+    """
+    src = ROOT / "oracle" / "traces" / f"{scene}.enemy.jsonl"
+    dst = ROOT / "oracle" / "traces" / f"{scene}.stage-appear.jsonl"
+    if not src.is_file():
+        return 0
+    events = []
+    prev = None
+    for line in src.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        st = bytes.fromhex(rec["state"])
+        xs = bytes.fromhex(rec["x"])
+        ys = bytes.fromhex(rec["y"])
+        cur = [(xs[i], ys[i]) != (0, 0) for i in range(28)]
+        if prev is not None:
+            for i in range(28):
+                if cur[i] and not prev[i]:
+                    events.append({"f": rec["f"], "slot": i, "x": xs[i], "y": ys[i]})
+        prev = cur
+    with open(dst, "w", encoding="utf-8") as out:
+        for e in events:
+            out.write(json.dumps(e) + "\n")
+    rec_x = [175, 123, 139, 119, 119, 117, 117, 128]
+    match = sum(1 for e in events if e["x"] in rec_x)
+    print(f"敌出现事件：{scene} {len(events)} 事件（x∈记录集 {match}/{len(events)}——W12/W28 注记观测面）→ {dst.relative_to(ROOT)}")
+    return 0
+
+
 def extract() -> int:
     rc = 0
     for scene, cfg in SCENES.items():
@@ -449,6 +484,7 @@ def extract() -> int:
         rc = rc or extract_money_events(scene)
     for scene in ("gameplay-stage1", "shop", "respawn-window", "title-menu"):
         rc = rc or extract_flow_sequence(scene)
+    rc = rc or extract_appearances("gameplay-stage1")
     return rc
 
 
@@ -459,7 +495,8 @@ def run_diff() -> int:
         sorted((ROOT / "oracle" / "traces").glob("*.enemy.jsonl")) +
         sorted((ROOT / "oracle" / "traces").glob("*.scroll.jsonl")) +
         sorted((ROOT / "oracle" / "traces").glob("*.money.jsonl")) +
-        sorted((ROOT / "oracle" / "traces").glob("*.flow.jsonl")))
+        sorted((ROOT / "oracle" / "traces").glob("*.flow.jsonl")) +
+        sorted((ROOT / "oracle" / "traces").glob("*.stage-appear.jsonl")))
     if not goldens:
         print(f"L3 golden 缺失（先 --extract）", file=sys.stderr)
         return 2
