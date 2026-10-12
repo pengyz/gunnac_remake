@@ -65,7 +65,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | E-R01 | `rom:4272` (0x10B0) | `HI SCORE` / `SCORE` 及标题版权串 `1990 @TOKYO SHOSEKI / PROGRAMED BY COMPILE / PRESENTED BY NEXOFT CORP. / LICENSED BY NINTENDO OF AMERICA INC.`（~4286–4394）；**像素佐证**：`shot:shots/auto_f00360.png` | A |
 | E-R02 | `rom:4759` (0x1297) | `10000000000`（含义待考证 → H-03） | A |
 | E-R03 | `rom:5419` (0x152B) | `WEAPON-0`；`rom:5430 (0x1536)` `BOMBER-0` —— 等级/槽位显示标签（尾位数字疑为运行时改写 → H-04） | A |
-| E-R04 | `rom:8523` (0x214B) | `-------$` 金钱显示串（破折号+货币符）；**像素佐证**：`shot:shots/auto_f01080.png` 中 `你有 ──￥` | A |
+| E-R04 | `rom:8516–8523` (0x2144–0x214B) | `-------$` 金钱显示串（破折号+货币符，`$` 位于 8523）；**像素佐证**：`shot:shots/auto_f01080.png` 中 `你有 ──￥` | A |
 | E-R05 | `rom:8914–9000` | 编号价目记录区：4 条编号记录（ASCII `1.`/`2.`/`3.`/`4.` + 图形码商品名）各后随一条价格串，模板 `1 <图形码> $<n>`：`$10`@8929、`$6`@8958、`$4`@8986；4 号记录后未见 ASCII 价格串（@8993 附近即被 `ff` 填充截断） | A |
 | E-R06 | `rom:9095` (0x2387) | 平行串记录 `1 2 3 4 5 `（5 个数字） | A |
 | E-R07 | `rom:9534` (0x253E) | 平行串记录 `1 2 3 4 5 6 7 8`（8 个数字） | A |
@@ -186,13 +186,76 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 
 | 格 ID | 内容单元 | 证据指针 | 级 | 分子 |
 |---|---|---|---|---|
-| B-SYS-SHOP | 商店系统：进出时机（关间）、货架商品、价目、购买流程、按键切换 | E-W06, E-R05, E-R04, E-S02 | A/B | L0 |
-| B-SYS-MONEY | 金钱系统：获取/显示/累计/上限/消费 | E-W06, E-R04, E-S02（`你有 ──￥`）, E-R05（价目）, E-R02（`10000000000` 待证 → H-03） | A/B | L0 |
-| B-SYS-ITEM | 道具系统：编号圈（换武器）、字母圈（换炸弹）、升级圈、翼装 wing（E-W05：多挨一击+武器可继续升级） | E-W02, E-W03, E-W04, E-W05, E-S02 | A/B | L0 |
+| B-SYS-SHOP | 商店系统：进出时机（关间）、货架商品、价目、购买流程、按键切换 | E-W06, E-R05, E-R04, E-S02, + S2: shop/exp-shop-* | A/B | **L2**（R-shop-1..8，§2.4.2） |
+| B-SYS-MONEY | 金钱系统：获取/显示/累计/上限/消费 | E-W06, E-R04, E-S02（`你有 ──￥`）, E-R05（价目）, E-R02（`10000000000` 待证 → H-03）, + S2: shop f1140 | A/B | **L2**（R-money-1..4；增减时机仍空 H-09） |
+| B-SYS-ITEM | 道具系统：编号圈（换武器）、字母圈（换炸弹）、升级圈、翼装 wing（E-W05：多挨一击+武器可继续升级） | E-W02, E-W03, E-W04, E-W05, E-S02, + S2: shop f1140（导弹20上限） | A/B | **L2**（R-item-1；映射 H-11 仍空） |
 | B-SYS-DROP | 掉落系统：关内随机浮动金钱、被毁对象/敌人掉钱、道具掉落 | E-W06, E-W02 | B | L0 |
 | B-SYS-BOSS | Boss 系统：最终 Boss 多相（E-W07 "first phase of the last boss"）；各关 Boss 子格按 §2.3 规则登记 | E-W07, E-R09 | B | L0 |
-| B-SYS-UI | 流程系统：标题/菜单（开始·设置）/DEMO/GAME OVER/CONTINUE/结局文本 | E-R01, E-R10, E-R11, E-S01, E-S03 | A | L0 |
+| B-SYS-UI | 流程系统：标题/菜单（开始·设置）/DEMO/GAME OVER/CONTINUE/结局文本 | E-R01, E-R10, E-R11, E-S01, E-S03, + S2: title-menu/shop/gameplay-stage1 | A | **L2**（R-ui-1..8，§2.4.2） |
 | B-SYS-SCORE | 计分/最高分系统（`HI SCORE`/`SCORE` 显示） | E-R01, E-S01 | A | L0 |
+
+#### 2.4.1 分子登记记录（L1，规则面覆盖；t6 2026-10-12）
+
+> 格式按 §6.2；强度封顶 L1（web: 证据不得超 L1）。交互边界（购买按键效果、金钱增减时机、菜单跳转）
+> 已在两份规格的"待 S2 取证空位"留白，**未发明**。
+
+```
+格: B-SYS-SHOP
+强度: L1
+证据: rom:8914–9000（价目记录 $10@8929/$6@8958/$4@8986）、rom:8516–8523、rom:8570/8575 等面板尾部 A/B 字符、shot:shots/auto_f01080.png、web:E-W06
+工件: docs/spec/shop-economy.md#R-shop-1..4、docs/spec/constants.md
+日期: 2026-10-12
+备注: H-05（记录布局）、4 号商品价格缺串
+
+格: B-SYS-MONEY
+强度: L1
+证据: rom:8516–8523（C-money-template）、rom:4759（仅登记不解释）、rom:8929/8958/8986、shot:shots/auto_f01080.png、web:E-W06
+工件: docs/spec/shop-economy.md#R-money-1..3、docs/spec/constants.md
+日期: 2026-10-12
+备注: H-03（10000000000 含义禁解释）
+
+格: B-SYS-UI
+强度: L1
+证据: rom:4272/4283/4291/4313/4336/4364/4378/12264/12635/124126/124137/12278/12299/12036、shot:shots/auto_f00360.png/auto_f00540.png/auto_f00720.png/auto_f00900.png
+工件: docs/spec/ui-flow.md#R-ui-1..5
+日期: 2026-10-12
+备注: H-06（美版删改差异未证）；菜单串映射未证
+```
+
+#### 2.4.2 分子登记记录（L2，S2 场景证据回填；t17 2026-10-12）
+
+> 格式按 §6.2；L2 = 绑定可复现场景 + trace/截图（scenario:analysis/traces/<id> + 帧号）。
+> 已证部分入规则，未闭环交互边界继续留空位 + 新 H（H-09..H-13），**未发明**。
+
+```
+格: B-SYS-SHOP
+强度: L2
+证据: scenario:analysis/traces/shop（f1080 shop-arrival sha efcfe736 / f1140 shop-page sha fec87b88）、scenario:analysis/traces/exp-shop-start（2000 帧无输入反证）、scenario:analysis/traces/exp-shop-b（frames 2000）、scenario:analysis/traces/gameplay-stage1（f1200 exit-transition / f1260 stage-start）、trace:analysis/traces/shop#f1080/f1140、trace:analysis/traces/gameplay-stage1#f1200/f1260
+工件: docs/spec/shop-economy.md#R-shop-5..8
+日期: 2026-10-12
+备注: H-10（A 单击/购买确认效果）、H-13（进入/离开完整条件）
+
+格: B-SYS-MONEY
+强度: L2
+证据: scenario:analysis/traces/shop（f1140：「你有 ──￥0」显示行数值位）、trace:analysis/traces/shop#f1140 + 原 L1 证据（rom:8516–8523 等）
+工件: docs/spec/shop-economy.md#R-money-1..4
+日期: 2026-10-12
+备注: H-09（增减精确时机与数值未证）、H-03（10000000000 不解释）
+
+格: B-SYS-ITEM
+强度: L2
+证据: scenario:analysis/traces/shop（f1140：「导弹20个 上限。」）+ scenario:analysis/traces/gameplay-stage1（HUD 计数随输入变化 f1260/f1500/f2349）、trace:analysis/traces/shop#f1140、trace:analysis/traces/gameplay-stage1#f1260/f1500/f2349
+工件: docs/spec/shop-economy.md#R-item-1、docs/spec/ui-flow.md#R-ui-8
+日期: 2026-10-12
+备注: H-11（导弹↔F/B/T/W 映射）、H-12（HUD 语义留台账）
+
+格: B-SYS-UI
+强度: L2
+证据: scenario:analysis/traces/title-menu（f180 boot-black→f360 title→f540-900 menu→f1079 end，1080 行）、scenario:analysis/traces/shop（1450 行）、scenario:analysis/traces/gameplay-stage1（2400 行：f1080→f1200→f1260→f1500→f2349）、trace:analysis/traces/title-menu#f180/f360/f540/f1079、trace:analysis/traces/gameplay-stage1#f1080/f1200/f1260/f1500/f2349
+工件: docs/spec/ui-flow.md#R-ui-6..8
+日期: 2026-10-12
+备注: H-06（开场/结局显示条件）、H-12（HUD 语义）、H-13（序列中各输入独立作用未隔离）
+```
 
 ### 2.5 分母统计（v0）
 
@@ -207,31 +270,49 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 
 | 候选格 | 缺什么证据 |
 |---|---|
-| 自机移动/射击手感、判定点 | 无 gameplay 截图/trace（现有 shots 只有标题与商店）→ S2 首批场景 |
-| 命数/死亡重生/CONTINUE 语义 | 仅 `CONTINUE` 串（E-R11），行为未观测 |
+| 自机移动/射击手感、判定点 | 【2026-10-12 入口解锁】gameplay-stage1 场景已采实机画面（星域/自机/敌机/弹幕，f1260/f1500/f2349）；判定点数值/手感规则仍缺 L3 trace → 场景就绪，可按约束①准入 |
+| 命数/死亡重生/CONTINUE 语义 | 仅 `CONTINUE` 串（E-R11），行为未观测（gameplay-stage1 f2349 为运行中止于战斗态，非 GAME OVER） |
 | 音频（APU）行为 | 按 pipeline R5 先 scope-decision，不入行为面 |
 | 各关主题/名称、各关 Boss | 见 §2.3 与 H-06/H-07 |
 | 商店 4 号商品价格 | E-R05 记录区价格串缺失 → S2/S3 |
 
 ---
 
-## 3. 符号面分母（占位）
+## 3. 符号面分母（S1 机械导出已建立，2026-10-12 t7）
 
-> **S1 后由 IDA/Ghidra 机械导出** —— v0 不做任何人工估数。
+> 由 IDA 9.1（M6502）逐 bank 建库分析机械导出，全集登记在
+> `data/naming/remap-table.json`（机械层，pipeline §7，`tools/remap/run.py` 生成/校验）；
+> 本表只登记**计数与覆盖率**，不登记语义名。冻结投影：`reference/seed/gunnac.asm`（91,601 行，sha256 `96b2c071…73721e`）。
 
-- 全集定义：代码符号 = IDA（`m65`）自动分析的子程序/入口/中断向量（RESET/NMI/IRQ）；RAM 符号 = 0x0000–0x07FF 直接页符号与映射寄存器使用点。
-- 计数规则（机械）：子程序以入口+RTS/RTI 边界计数，跳转表目标按 xref 计入；bank 窗口内代码区全覆盖。
-- 导出产物落 `data/naming/remap-table.json`（机械层，pipeline §7），本表只登记**计数与覆盖率**，不登记语义名。
-- 在 S1 导出前，本面分母=未计；**禁止**用"大概几百个函数"之类的估计填表。
+| 分母项 | 计数 | 计数规则（机械） |
+|---|---|---|
+| 子程序 | **276** | IDA 入口（JSR/JMP 绝对目标 + 段起点）建函数，RTS/RTI 边界取 IDA 函数范围；f_000–f_275 机械名 |
+| 中断向量 | **3** | NMI=$EF85、RESET=$E000、IRQ=$F20B（bank15 固定窗，file 0x2000A） |
+| far-call 跳板调用点 | **18** | `JSR $E649`+内联(R6,R7,target)，12 个不同目标（$8000/$800C/$800F/$8012/$8807/$881A/$8DDF/$922B/$92C5/$95F9/$9698/$9BC3） |
+| bank11 入口表 | **7** | bank11:$8000 起 JMP 表（$88A3/$88A7/$890B/$8016/$8894/$889B/$8E2C） |
+| RAM 直接页符号 | **560** | 0x0000–0x07FF 操作数使用点（`v_XXX` 机械名 + 使用计数） |
+| 映射寄存器符号 | **414** | 0x2000–0x401F 操作数使用点（PPU/APU/手柄寄存器，`r_XXXX`） |
+| 字节覆盖 | **131,072/131,072** | code 74,436B + data 56,636B = PRG 全字节覆盖（线性扫描，无空洞） |
 
-## 4. 数据面分母（占位）
+- Ghidra 12.1.4（`6502:LE:16:default`）analyzeHeadless 伪代码投影同步导出：`analysis/ghidra/bank00.c…bank15.c`（19,434 行 C，函数级反编译，可再生）。
+- 与 S0 交叉核对（remap-table.json `cross_checks_s0`）：far-call 18 ✓、bank11 入口表 7 ✓、bank14/15 固定窗 ✓、向量 ✓ —— 全部 PASS。
+- 遗留：跨 bank 代码 xref 机械层不计（经 far-call/指针间接），S3 考证时按 bank 窗口换算。
 
-> **S1 后由 IDA/Ghidra 机械导出** —— 全集 = 数据表 + xref（表边界、字段切分、指针表）。
+## 4. 数据面分母（S1 机械导出已建立，2026-10-12 t7）
 
-- 计数规则（机械）：以 IDA/Ghidra 识别的数据对象 + 每个被≥2 个代码 xref 索引的连续区段计一表；CHR/调色板/文本表按资源计。
-- 已知数据锚点（**不构成分母**，仅供 S1 交叉核对，均有 §1 证据指针）：
+> 全集 = 数据表 + xref；机械规则：**每个被 ≥2 个不同 intra-bank 代码 xref 索引的连续数据区段计一表**。
+
+| 分母项 | 计数 | 说明 |
+|---|---|---|
+| 机械数据表 | **8** | t_000–t_007，见 `data/naming/remap-table.json` `data_tables`（含 bank:addr/PRG 偏移/xref 计数/长度） |
+| 已知数据锚点候选 | **7**（不入分母） | charmap 表 ×2 + 文本记录区 ×5，登记于 `remap-table.json` `known_data_candidates` |
+| CHR 资源 | **128 × 1KB bank** | 字模区 bank124–127（file 0x3F010–0x40010，汉字字模）；空 bank 42,43,47,51,64–71,80–83（S0 §5） |
+
+- 文本记录格式（S0 已证实，纳入数据面候选）：`{PPU地址, tile码…, FE/FF}`，记录区：标题/版权 `PRG 0x0109E-0x01123`、剧情 `0x02CDC-0x02F8B`、结局 `0x02FE4-0x03155`、STAFF 字幕 `0x01959-0x01BC0`（含 `@2011 JIUBAN` 汉化签名）、大字模 `0x1FF00-0x1FFEF`。
+- charmap/字形索引表候选：`PRG 0x01190-0x01220`、`PRG 0x01830-0x018F8`（含重排段，汉化文本映射线索）。
+- 已知数据锚点（**不构成分母**，保留 v0 条目，均有 §1 证据指针）：
   - 商店价目记录区 `rom:8914–9000`（E-R05）；
-  - 平行串记录区 `rom:9095/9534/9626`（E-R06/07/08）与文本记录区 `rom:8523`（E-R04）；
+  - 平行串记录区 `rom:9095/9534/9626`（E-R06/07/08）与文本记录区 `rom:8516–8523`（E-R04）；
   - 字符串/文本表区 `rom:0x1000–0x3100`（E-R01…E-R10）；
   - CHR 128K（iNES 头 CHR=16×8K；`_chr_bank0.png` 抽样渲染已跑通）。
 
@@ -289,6 +370,11 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | H-06 | 美版删改（E-W07：最终 Boss 第一形态、intro、ending）与本汉化 ROM 的实际差异——注意 E-R09/E-R10 的 intro/ending 文本**确实存在于 ROM**，是否显示未证 | C | S2 全流程场景（intro/ending/Boss 相位） |
 | H-07 | 各关主题（动物/植物/工厂等，E-R09 暗示）与关名 | C | S2 逐关场景 + S1 关卡表 |
 | H-08 | 汉化版相对美版的行为差异（文本字模、断行、结算数值） | C | L4 视觉差分 + 文本表考证（AGENTS.md R4） |
+| H-09 | 金钱增减的精确时机与数值（拾取 +?、击毁掉落 +?、购买 −?、死亡惩罚、过关结算）——S2 仅证显示行存在且初始为 0 | C | S2 拾取/购买/结算场景 + RAM diff（金钱地址待 t18 台账） |
+| H-10 | 商店内 A 键单击与"购买确认"的效果（采样帧 trace f1180/f1340 留证但效果未定） | C | S2 单变量场景（隔离 A/B/Start） |
+| H-11 | 「导弹」↔ 炸弹字母（F/B/T/W）映射、20 上限对应弹种、其余弹种上限 | C | S2 弹种切换场景 + 台账 |
+| H-12 | 实机 HUD 语义（左上字母+数字行含义、F↔W 字母切换归因、红圈数字）——留命名台账，禁入规则结论 | C | t18 RAM diff 动态取证 |
+| H-13 | 商店进入/离开的完整条件（菜单序列各输入的独立作用、关间序列、GAME OVER 后路径） | C | S2 单变量场景矩阵 |
 
 ---
 
@@ -323,15 +409,24 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | 分子登记/升强度 | verifier / spec-writer | 证据绑定硬规则（§6.2）+ 对应差分门禁 |
 | 降强度/删格 | 任何成员提议 | 单独 commit + 理由 + captain 验收（约束②） |
 | 每轮收敛记录 | captain | 轮次日志含：各面格数、强度分布、下一最优格（约束③） |
+| 机器可读镜像同步 | 任何矩阵修订后 | `python3 tools/matrix_sync.py --export && --check`（completeness-ratchet + 自检） |
+
+> **机器可读镜像**（2026-10-12 t20）：`data/status/completeness_matrix.json` 是本文件的门禁输入面
+> （completeness-ratchet 消费；`covered ⇔ strength ≥ L1`）。单一真相源仍是**本文件**；
+> 同一格两处的强度/证据引用不得矛盾，由 `tools/matrix_sync.py --check` 机械比对（44 格 + §2.4.x 登记记录绑定）。
 
 版本记录：`v0 (2026-10-12) 建立：行为面 44 格、规则面 44（下限）、符号/数据面占位、分子全 L0`。
 后续修订在本行下追加，不删历史。
+`v0.1 (2026-10-12, t6) B-SYS-SHOP/MONEY/UI 规则面覆盖（R-shop-1..4、R-money-1..3、R-ui-1..5 → docs/spec/shop-economy.md、ui-flow.md），三格分子登记 L1（§2.4.1，web 证据封顶）；constants.md 建立（C-shop-p1..p3、C-money-template、C-money-unk 不解释）；E-R04 指针精确化为 rom:8516–8523。`
+`v0.2 (2026-10-12, t17) S2 证据回填：R-shop-5..8、R-money-4、R-item-1、R-ui-6..8 入规则（绑 scenario:analysis/traces/<id>+帧号）；B-SYS-SHOP/MONEY/ITEM/UI 四格升 L2（§2.4.2）；空位闭环状态更新（部分闭环 3 项），新增 H-09..H-13（未闭环项）；§2.6 自机 gameplay 入口解锁。`
+`v0.3 (2026-10-12, t20) 机器可读镜像 data/status/completeness_matrix.json 建立（44 行为面格 + 四面计数按现状：规则面 44 下限/21 条目/覆盖 4，符号面 276+3+18+7+560+414，数据面 8+7+128）；tools/matrix_sync.py --check 机械一致性自检（格 ID/强度/证据引用/content/绑定）；§2.4.2 记录补 trace: 指针；completeness-ratchet 门禁激活。`
 
 ---
 
 ## 10. v0 建立时的核对输出
 
 - 门禁 `python3 gates/cli.py check`：**SKIP —— `gates/cli.py` 尚未建立**（M0 基建任务另行交付；本任务为矩阵文档）。
+  > 【2026-10-12 更新】`gates/cli.py` 已交付并实跑：`check` = **PASS**（`SUMMARY: PASS=4 FAIL=0 SKIP=7 TOLERATED=0`，无静默跳过）。上句保留为 v0 建立时的历史记录。
   人工可核验的最小证据（下列命令实际执行于 2026-10-12，仓库根目录）：
 
 ```text
