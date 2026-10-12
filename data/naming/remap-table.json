@@ -7669,6 +7669,16 @@
       "evidence": "docs/findings/enemy-dataface.md §1.2（变长 {参数, RAM 槽指针}）"
     },
     {
+      "name": "enemy_script_vm_opcodes（t59）",
+      "prg": "0x0044A-0x00584",
+      "evidence": "docs/findings/enemy-script-vm.md §1（bank00 字节码机指令集）"
+    },
+    {
+      "name": "script_record_loader_4b（t59）",
+      "prg": "0x003F6-0x00432",
+      "evidence": "docs/findings/enemy-script-vm.md §2（4 字节记录格式）"
+    },
+    {
       "name": "enemy_script_stream（t32）",
       "prg": "0x112B4-0x12DFF",
       "evidence": "docs/findings/enemy-dataface.md §3（bank8 行为脚本流，嵌套指针）"
