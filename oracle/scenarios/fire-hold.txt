@@ -38,3 +38,7 @@ watch 072f shot_counter_1
 watch 0730 shot_counter_2
 watch_range 0300-07ff iram
 watch_range 6000-7fff wram
+
+# t94 NMI 级写点插桩（观察性）：行缓冲+挂起计数+位属性
+probe_mem 0130 0160
+probe_mem 00d3 00da

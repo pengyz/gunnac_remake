@@ -105,6 +105,36 @@ end
 local traceF = assert(io.open(tracePath, "w"))
 local capF = assert(io.open(capPath, "w"))
 
+-- W-NEW 行缓冲 NMI 级插桩（t94）：probe_mem 写点 PC 轨迹（观察性，不改行为）
+if PLAN.probe_mem and #PLAN.probe_mem > 0 then
+  local probePath = PLAN.out_dir .. "/" .. name .. ".probe.jsonl"
+  local probeF = io.open(probePath, "w")
+  local probeN = 0
+  local function probeLog(addr, val)
+    if probeN > 200000 then return end
+    probeN = probeN + 1
+    local ok, st = pcall(emu.getState)
+    local pc = (ok and st and st.cpu) and string.format("%04X", st.cpu.pc or 0) or "????"
+    local fc = (ok and st) and (st.frameCount or 0) or 0
+    probeF:write(string.format('{"f":%d,"pc":"%s","a":"%04X","v":%d}\n', fc, pc, addr, val))
+    if probeN % 512 == 0 then probeF:flush() end
+  end
+  for _, r in ipairs(PLAN.probe_mem) do
+    local lo, hi = tonumber(r[1], 16), tonumber(r[2], 16)
+    local ok = pcall(emu.addMemoryCallback, function(address, value)
+      probeLog(address, value)
+    end, "write", lo, hi)
+    if not ok then
+      ok = pcall(emu.addMemoryCallback, function(address, value)
+        probeLog(address, value)
+      end, emu.memCallbackType and emu.memCallbackType.write or "write", lo, hi)
+    end
+    probeF:write(string.format('{"probe":"%04X-%04X","cb":%s}\n', lo, hi, tostring(ok)))
+    probeF:flush()
+  end
+  emu.addEventCallback(function() probeF:flush() end, "endFrame")
+end
+
 emu.addEventCallback(function()
   frame = frame + 1
   local btn = schedule[frame] or {}
