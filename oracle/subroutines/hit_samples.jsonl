@@ -1,0 +1,13 @@
+{"kind":"shot_enemy","frame":1404,"slot":8,"obj":{"x":119,"y":28},"other":{"x":128,"y":43},"dx":9,"dy":15}
+{"kind":"shot_enemy","frame":1454,"slot":13,"obj":{"x":119,"y":28},"other":{"x":128,"y":34},"dx":9,"dy":6}
+{"kind":"shot_enemy","frame":1524,"slot":8,"obj":{"x":137,"y":24},"other":{"x":128,"y":34},"dx":9,"dy":10}
+{"kind":"shot_enemy","frame":1644,"slot":27,"obj":{"x":121,"y":148},"other":{"x":128,"y":151},"dx":7,"dy":3}
+{"kind":"shot_enemy","frame":1849,"slot":17,"obj":{"x":240,"y":97},"other":{"x":248,"y":107},"dx":8,"dy":10}
+{"kind":"shot_enemy","frame":2048,"slot":15,"obj":{"x":146,"y":74},"other":{"x":152,"y":71},"dx":6,"dy":3}
+{"kind":"shot_enemy","frame":2156,"slot":5,"obj":{"x":0,"y":2},"other":{"x":0,"y":5},"dx":0,"dy":3}
+{"kind":"shot_enemy","frame":2156,"slot":6,"obj":{"x":0,"y":8},"other":{"x":0,"y":5},"dx":0,"dy":3}
+{"kind":"shot_enemy","frame":2156,"slot":7,"obj":{"x":0,"y":2},"other":{"x":0,"y":5},"dx":0,"dy":3}
+{"kind":"shot_enemy","frame":2307,"slot":3,"obj":{"x":128,"y":13},"other":{"x":128,"y":4},"dx":0,"dy":9}
+{"kind":"player_enemy","frame":1830,"slot":8,"obj":{"x":243,"y":160},"other":{"x":240,"y":148},"dx":3,"dy":12}
+{"kind":"player_enemy","frame":2045,"slot":12,"obj":{"x":128,"y":37},"other":{"x":122,"y":27},"dx":6,"dy":10}
+{"kind":"release_golden","frame":1404,"slot":8,"writes":{"type":0,"f1c":0,"x_subpix":0,"y_subpix":0,"speed":16,"hit_cnt":0}}
