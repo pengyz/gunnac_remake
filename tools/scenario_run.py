@@ -282,6 +282,26 @@ def archive_existing(name: str) -> str | None:
     return str(dst.relative_to(ROOT)) if moved else None
 
 
+
+def historical_first_sample_s(name: str, first_sample_frame: int) -> list[float]:
+    """历史 run 的『启动→首采样帧』秒数样本：新字段 first_sample_s 直读；旧 run 以
+    wall_s × 首采样帧/总帧 估算（同一驱动/机器，比例模型足够做 3 倍告警基线）。"""
+    samples: list[float] = []
+    for d in sorted((ROOT / "analysis" / "traces" / ".archive").glob(f"{name}-*")):
+        mp = d / f"{name}.run.json"
+        if not mp.is_file():
+            continue
+        try:
+            m = json.loads(mp.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if "first_sample_s" in m and m["first_sample_s"]:
+            samples.append(float(m["first_sample_s"]))
+        elif m.get("wall_s") and m.get("frames"):
+            samples.append(float(m["wall_s"]) * first_sample_frame / max(1, int(m["frames"])))
+    return samples
+
+
 def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = True) -> dict:
     spath = scenario_path_of(name_or_path)
     plan = parse_scenario(spath)
@@ -292,6 +312,16 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
         fcntl.flock(lock_f, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         raise ScenarioError("另一场景运行中（串行纪律）：analysis/.scenario.lock 被占用")
+    # t54 F3 根因防护：串行锁只罩驱动进程——驱动崩溃/被强杀后 Mesen/Xvfb 孤儿仍在跑，
+    # 与后续运行争显示/写同一批产物（实测 trace 交错、DONE 不落、30x 变慢）。启动前显式清扫。
+    stale = subprocess.run(["pgrep", "-f", "tools/mesen2/Mesen"], capture_output=True, text=True).stdout.split()
+    if stale:
+        for pid in stale:
+            try:
+                os.kill(int(pid), signal.SIGKILL)
+            except (ProcessLookupError, ValueError):
+                pass
+        print(f"  [清场] 清除孤儿 Mesen {len(stale)} 个（驱动侧锁覆盖不到的残留）")
     archived = archive_existing(name)
     (ROOT / "analysis" / "traces").mkdir(parents=True, exist_ok=True)
     (ROOT / "shots").mkdir(parents=True, exist_ok=True)
@@ -299,6 +329,23 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     lua_src, lua_sha = generate_lua(plan, spath)
     lua_path = GEN_DIR / f"{name}.lua"
     lua_path.write_text(lua_src, encoding="utf-8")
+
+    # t54：观测/基线设置全部在 Mesen 启动前完成（此段崩溃不得孤儿化模拟器）
+    cap_frames = [int(c["frame"]) for c in plan.get("captures", []) if "frame" in c]
+    every = plan.get("capture_every")
+    if isinstance(every, dict) and every.get("n"):
+        cap_frames.append(int(every["n"]))
+    first_sample_frame = min(cap_frames) if cap_frames else 60
+    history = historical_first_sample_s(name, first_sample_frame)
+    median_s = sorted(history)[len(history) // 2] if history else None
+    # 地板 15s 吸收 Mesen 启动开销（比例模型不含启动段；真 first_sample_s 样本入史后中位数自校准）
+    warn_at = max((3.0 * median_s) if median_s else 120.0, 15.0)
+    first_sample_s: float | None = None
+    next_progress = 60.0
+    probe_globs = [
+        ROOT / "analysis" / "traces" / f"{name}_f*.ram.hex",
+        ROOT / "shots" / f"{name}_f*.png",
+    ]
 
     done_path = ROOT / "analysis" / "traces" / f"{name}.done"
     trace_path = ROOT / "analysis" / "traces" / f"{name}.frames.jsonl"
@@ -328,6 +375,7 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     try:
         while not done_path.exists():
             now = time.time()
+            el = now - t0
             if now - t0 > timeout_s:
                 timed_out = True
                 break
@@ -337,6 +385,15 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
                     dead_since = now
                 elif now - dead_since > 20:
                     break
+            if first_sample_s is None:
+                if any(any(g.parent.glob(g.name)) for g in probe_globs):
+                    first_sample_s = round(el, 1)
+                    print(f"  首采样帧（~f{first_sample_frame}）耗时 {first_sample_s}s"
+                          f"（历史中位 {('%.1f' % median_s) if median_s else '无'}s）")
+                elif el > next_progress:
+                    print(f"  [时长告警] 已 {el:.0f}s 未见首采样产物（基线 {warn_at:.0f}s）"
+                          "——疑似挂起/负载异常，检查 Mesen/Xvfb/系统负载", flush=True)
+                    next_progress = el + 60.0
             time.sleep(0.5)
     finally:
         def kill_group(sig) -> None:
@@ -383,6 +440,12 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
         "done": done_info,
         "timed_out": timed_out,
         "wall_s": wall,
+        "first_sample_s": first_sample_s,
+        "duration_warning": (
+            f"首采样 {first_sample_s}s 超历史中位 {median_s:.1f}s 的 3 倍——疑似挂起/负载异常"
+            if first_sample_s is not None and median_s is not None and first_sample_s > 3.0 * median_s
+            else None
+        ),
         "outputs": {
             "trace": str(trace_path.relative_to(ROOT)),
             "captures": f"analysis/traces/{name}.captures.jsonl",
