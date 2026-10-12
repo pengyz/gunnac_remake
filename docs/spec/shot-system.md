@@ -30,17 +30,17 @@
 
 ### R-shot-gen-1: 六弹型并行计数调度：`$072E,X`（X=0..5）计数与 `$074A,Y` 周期比较，到点生成弹对象并 INC 回写
 - 证据: `bank3:$A1FD-$A22B`（`LDA $072E,X`、`CMP $074A,Y`、`INC $072E,X` @`$A20C`）+ `docs/findings/shot-behavior.md` §1.1 + N-0035
-- 可判定性: **机器可判定（L2 纯函数）**：给定计数器/周期快照单步比对生成决策
+- 可判定性: **机器可判定（L2 纯函数）**：给定计数器/周期快照单步比对生成决策；**L3（前提 t50 golden 转正，落地后改已判）**【2026-10-12 t51 升格标注】
 - 关联: B-SYS-FIRE、R-shot-level-2、N-0035
 
 ### R-shot-gen-2: 自动连射无按键判断（H-14 定谳延续）：循环体内仅计数器/周期比较——主武器射击**不读输入**
 - 证据: `bank3:$A1FD-$A22B` 循环体内无 `$16`/`$18` 引用（静态）+ `scenario:analysis/traces/akey-role`（hold-A 100 帧内 `$072E,X` 无 A 相关脉冲，动态反证）+ t25/t29 输出
-- 可判定性: 机器可判定（L3：输入位变化时生成节奏不变）
+- 可判定性: 机器可判定（L3：输入位变化时生成节奏不变）；**L3 全判前提=t50 golden 转正**【t51 升格标注】
 - 关联: B-SYS-FIRE、H-14（已收口：主武器=计数器驱动自动连射 / A 边沿=投放 / B=弹种切换）
 
 ### R-shot-gen-3: 生成初值链（弹对象五字段）：寿命/状态 `$040E←1`、脚本指针 `$047E←$0766,X`、坐标 `$04EE←$04E0`（玩家X）/`$055E←$04FC`（玩家Y）、弹型码 `$063E←X`
 - 证据: `bank3:$A20F-$A22B`（`$055E,Y←$04FC`、`$04EE,Y←$04E0`、`$063E,Y←X`、`$040E,Y←1`、`$A228 LDA $0766,X/STA $047E,Y`）+ `docs/findings/shot-behavior.md` §1.1
-- 可判定性: **机器可判定（L2 纯函数）**：生成事件写集断言
+- 可判定性: **机器可判定（L2 纯函数）**：生成事件写集断言；**L3（前提 t50 golden 转正，落地后改已判）**【2026-10-12 t51 升格标注】
 - 关联: B-SYS-FIRE、N-0044（obj_lifetime_counter）、N-0045（obj_script_ptr）、N-0046/0047（obj_pos_x/y）
 
 ## 3. 行为规则 —— R-shot-motion-*（运动机 bank2:$87B3-$8810）
@@ -89,6 +89,32 @@
 - 证据: `bank3:$A1F5-A2B2`（`LDA $34/BNE` 分派、`$A244 CMP #$03/BEQ`、`$A271-$A291` LDX #$03 族）+ `docs/findings/shot-behavior.md` §2
 - 可判定性: 机器可判定（L2 纯函数：槽值→分派分支断言）；逐型齐射参数未证（留 §5）
 - 关联: B-SYS-FIRE、N-0032（weapon_slot=$34）
+
+## 4.5 行为规则 —— R-shot-alloc-*（弹对象槽位分配，2026-10-12 t51 登记；t48 定谳）
+
+> 证据：`docs/findings/shot-slot-geometry.md`（A 级：字节 + L2 实测）+ L2 用例 **shot-alloc-1..4 三方全等**。
+> 可判定性：**L2 已实证 → L3（前提 t50 golden 转正，落地后改"已判"）**——照 R-respawn FA-2 先例，不虚高提前标已判。
+
+### R-shot-alloc-1: 槽位几何：**4 组 × 5 = 20 槽**（`$80-$84`/`$9C-$A0`/`$B8-$BC`/`$D4-$D8`），组内 stride=1，**组距 $1C**（与对象网格同格交错）
+- 证据: `docs/findings/shot-slot-geometry.md` §1（字节实证）+ §2 shot-alloc-1..4 三方全等 + churn 对照（最大并发 9≤20）
+- 可判定性: 机器可判定（L2 数据解析/分配断言）；**L3（前提 t50 转正，落地后改已判）**
+- 关联: B-SYS-FIRE、N-0054（obj_field_grid_1c 同格）
+- 【t51 撤销】t45"槽位几何未证"注记**已定谳撤销**：t45 的 18 例矛盾值= stride-1 跨 $18 组间空隙**伪读**（`oracle/traces/README.md` 原地更正）
+
+### R-shot-alloc-2: 分配器 `bank2:$888D-$88BA` = **首次适应**（低偏移优先）扫描 20 槽
+- 证据: `docs/findings/shot-slot-geometry.md` §1 逐指令反汇编（`LDY #$80` 起始偏移）+ shot-alloc-2 用例
+- 可判定性: 机器可判定（L2 纯函数）；L3（前提 t50）
+- 关联: B-SYS-FIRE
+
+### R-shot-alloc-3: 空槽判定 = `state==0`；回收 = 寿命倒数归零
+- 证据: `docs/findings/shot-slot-geometry.md` §1/§2（shot-alloc-3 用例）+ R-shot-motion-1（`$040E` 逐帧 DEC）互证
+- 可判定性: 机器可判定（L2 纯函数）；L3（前提 t50）
+- 关联: B-SYS-FIRE、R-shot-motion-1、N-0044
+
+### R-shot-alloc-4: 满载路径 = **SEC**（Y=A=`$F0`，`TYA/ADC #$18` 遗留值；case-4 ROM 实测更正）
+- 证据: `docs/findings/shot-slot-geometry.md` §1（`$88B9: SEC/RTS`）+ §2 shot-alloc-4-full 用例（Y=$F0/A=$F0 三方全等；A 值系遗留，首轮手算已 ROM 实测更正）
+- 可判定性: 机器可判定（L2 纯函数：满载出参断言）；L3（前提 t50）
+- 关联: B-SYS-FIRE
 
 ## 5. 待证残项（如实留空，禁止发明）
 

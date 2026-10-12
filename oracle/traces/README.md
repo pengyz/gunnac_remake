@@ -14,6 +14,12 @@
 
 ## t45 发现（弹轨迹 L3 暂缓）：弹对象槽位几何未证
 
+> 【2026-10-12 更正（t51）】本节"槽位几何未证"**已由 t48 定谳撤销**（`docs/findings/shot-slot-geometry.md`）：
+> 几何 = 4 组×5 槽（$80-$84/$9C-$A0/$B8-$BC/$D4-$D8），组内 stride=1、组距 $1C；18 例矛盾值 = stride-1
+> 跨 $18 组间空隙**伪读**；分配器 `bank2:$888D` 首次适应/空槽=state==0/回收=寿命归零/满载 SEC。
+> L2 shot-alloc-1..4 三方全等；`--shots-extract` 转正前提=t50 golden（R-shot-alloc-* 见 shot-system.md §4.5）。
+> 下文 t45 原文保留（证伪更正文化）。
+
 `gameplay-stage1` 已采 `shot_objs` watch（$0400-$06FF，captain 批准），但**槽位索引几何未证**：
 t32/t29 的"$70 间距"只锚定六个字段基址（$040E/$047E/$04EE/$055E/$05CE/$063E），槽位步长/
 容量/分配器（`JSR $888D`）语义属 B5/A5 未证域——按 stride-1 解析 trace 会跨系统串扰（$1C 网格
