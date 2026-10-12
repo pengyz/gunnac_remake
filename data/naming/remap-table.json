@@ -15,7 +15,8 @@
     "bank11_entry_table": 7,
     "ram_symbols": 560,
     "io_register_symbols": 414,
-    "data_tables": 8,
+    "data_tables": 5,
+    "mixed_regions": 3,
     "code_bytes": 74436,
     "data_bytes": 56636
   },
@@ -7566,7 +7567,9 @@
       "cpu": "$AD64-$B18A",
       "prg": "0x02D64-0x0318A",
       "size": 1063,
-      "xref_count": 6
+      "xref_count": 6,
+      "branch_align_pct": 43.5,
+      "classification": "data"
     },
     {
       "id": "t_001",
@@ -7574,31 +7577,9 @@
       "cpu": "$B2A4-$BFFF",
       "prg": "0x032A4-0x03FFF",
       "size": 3420,
-      "xref_count": 4
-    },
-    {
-      "id": "t_002",
-      "bank": 2,
-      "cpu": "$8678-$9FFF",
-      "prg": "0x04678-0x05FFF",
-      "size": 6536,
-      "xref_count": 4
-    },
-    {
-      "id": "t_003",
-      "bank": 5,
-      "cpu": "$8F8D-$9FFF",
-      "prg": "0x0AF8D-0x0BFFF",
-      "size": 4211,
-      "xref_count": 2
-    },
-    {
-      "id": "t_004",
-      "bank": 6,
-      "cpu": "$93A8-$9FFF",
-      "prg": "0x0D3A8-0x0DFFF",
-      "size": 3160,
-      "xref_count": 6
+      "xref_count": 4,
+      "branch_align_pct": 77.2,
+      "classification": "data"
     },
     {
       "id": "t_005",
@@ -7606,7 +7587,9 @@
       "cpu": "$ADD0-$BFFF",
       "prg": "0x10DD0-0x11FFF",
       "size": 4656,
-      "xref_count": 4
+      "xref_count": 4,
+      "branch_align_pct": 63.4,
+      "classification": "data"
     },
     {
       "id": "t_006",
@@ -7614,15 +7597,54 @@
       "cpu": "$97B0-$97BA",
       "prg": "0x157B0-0x157BA",
       "size": 11,
-      "xref_count": 2
+      "xref_count": 2,
+      "branch_align_pct": 0.0,
+      "classification": "data"
     },
     {
       "id": "t_007",
       "bank": 15,
-      "cpu": "$FD2A-$FFFF",
-      "prg": "0x1FD2A-0x1FFFF",
-      "size": 726,
-      "xref_count": 8
+      "cpu": "$FD2A-$FFF9",
+      "prg": "0x1FD2A-0x1FFF9",
+      "size": 720,
+      "xref_count": 7,
+      "branch_align_pct": 50.0,
+      "classification": "data"
+    }
+  ],
+  "mixed_regions": [
+    {
+      "id": "t_002",
+      "bank": 2,
+      "cpu": "$8678-$9FFF",
+      "prg": "0x04678-0x05FFF",
+      "size": 6536,
+      "xref_count": 4,
+      "branch_align_pct": 84.3,
+      "classification": "mixed_code",
+      "evidence": "种子反汇编 branch-align 880/1044=84%（≥80% ⇒ 混排代码区，移出数据面分母）"
+    },
+    {
+      "id": "t_003",
+      "bank": 5,
+      "cpu": "$8F8D-$9FFF",
+      "prg": "0x0AF8D-0x0BFFF",
+      "size": 4211,
+      "xref_count": 2,
+      "branch_align_pct": 92.0,
+      "classification": "mixed_code",
+      "evidence": "种子反汇编 branch-align 333/362=92%（≥80% ⇒ 混排代码区，移出数据面分母）"
+    },
+    {
+      "id": "t_004",
+      "bank": 6,
+      "cpu": "$93A8-$9FFF",
+      "prg": "0x0D3A8-0x0DFFF",
+      "size": 3160,
+      "xref_count": 6,
+      "branch_align_pct": 97.1,
+      "classification": "mixed_code",
+      "evidence": "种子反汇编 branch-align 303/312=97%（≥80% ⇒ 混排代码区，移出数据面分母）"
     }
   ],
   "known_data_candidates": [
