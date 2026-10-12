@@ -166,6 +166,25 @@ fn main() -> ExitCode {
                     println!("         {p}");
                 }
             }
+        } else if path.ends_with(".flow.jsonl") {
+            let rows = match game_oracle::l3::parse_flow_rows(&jsonl) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("{path}: golden 解析失败：{e}");
+                    return ExitCode::from(2);
+                }
+            };
+            let problems = game_oracle::l3::flow_sequence_legal(&rows);
+            total += rows.len();
+            if problems.is_empty() {
+                println!("[ok]   {path}: 流程模式序列 {} 事件全合法（R-ui-6/7 已证边集）", rows.len());
+            } else {
+                failures += 1;
+                println!("[FAIL] {path}:");
+                for p in &problems {
+                    println!("         {p}");
+                }
+            }
         } else {
             eprintln!("{path}: 未知 golden 类型（*.player.jsonl / *.weapons.jsonl / *.shots.jsonl）");
             return ExitCode::from(2);

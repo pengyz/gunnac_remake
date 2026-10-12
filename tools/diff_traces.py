@@ -344,6 +344,73 @@ def extract_stage_scroll(scene: str) -> int:
     return 0
 
 
+
+def extract_money_events(scene: str) -> int:
+    """金钱转移事件 golden（R-money-4/5：$E0-$E6 逐帧转移）。
+    口径（声明）：全部转移帧逐事件记录 {f, before(7 位), after(7 位)}——事件驱动无降采样。
+    断言面：每转移 = 单次加法器事件（delta=加数表值）或封顶（$E0-$E5 全 9）。
+    """
+    src = ROOT / "analysis" / "traces" / f"{scene}.frames.jsonl"
+    dst = ROOT / "oracle" / "traces" / f"{scene}.money.jsonl"
+    if not src.is_file():
+        return 2
+    events = 0
+    prev = None
+    with open(dst, "w", encoding="utf-8") as out:
+        for line in src.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            w = rec["w"]
+            zp_w = w.get("zp")
+            if zp_w is None:
+                return 0
+            zp = bytes.fromhex(zp_w)
+            cur = list(zp[0xE0:0xE7])
+            if prev is not None and cur != prev:
+                out.write(json.dumps({"f": rec["f"], "before": prev, "after": cur}) + "\n")
+                events += 1
+            prev = cur
+    print(f"金钱事件抽取：{scene} {events} 事件 → {dst.relative_to(ROOT)}")
+    return 0
+
+
+
+TAG_TO_MODE = {
+    "boot-black": "Black", "title": "Title",
+    "menu-540": "Menu", "menu-720": "Menu", "menu-900": "Menu", "menu-end": "Menu",
+    "shop-arrival": "Shop", "shop-page": "ShopInfo", "exit-transition": "Transition",
+    "stage-start": "StageStart", "mid-combat": "Combat",
+}
+
+
+def extract_flow_sequence(scene: str) -> int:
+    """流程模式序列 golden（R-ui-6/7，场景 capture 标签锚定）。
+    口径（声明）：全部非 probe 标签逐事件记录 {f, mode}——事件驱动全采；end=序列终止标记不入行。
+    """
+    src = ROOT / "analysis" / "traces" / f"{scene}.captures.jsonl"
+    dst = ROOT / "oracle" / "traces" / f"{scene}.flow.jsonl"
+    if not src.is_file():
+        return 0
+    rows = []
+    for line in src.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        mode = TAG_TO_MODE.get(rec.get("tag", ""))
+        if mode is None:
+            continue
+        rows.append({"f": rec["f"], "mode": mode})
+    if not rows:
+        print(f"流程序列：{scene} 无模式标签——不产出 golden")
+        return 0
+    with open(dst, "w", encoding="utf-8") as out:
+        for r in rows:
+            out.write(json.dumps(r) + "\n")
+    print(f"流程序列抽取：{scene} {len(rows)} 事件 → {dst.relative_to(ROOT)}")
+    return 0
+
+
 def extract() -> int:
     rc = 0
     for scene, cfg in SCENES.items():
@@ -378,6 +445,10 @@ def extract() -> int:
     # 卷轴 golden 仅 gameplay-stage1（R-bg-scroll 相位/边界帧系该场景时间线定谳；
     # 他场景时间线未证不抽取）
     rc = rc or extract_stage_scroll("gameplay-stage1")
+    for scene in ("gameplay-stage1", "shop"):
+        rc = rc or extract_money_events(scene)
+    for scene in ("gameplay-stage1", "shop", "respawn-window", "title-menu"):
+        rc = rc or extract_flow_sequence(scene)
     return rc
 
 
@@ -386,7 +457,9 @@ def run_diff() -> int:
         sorted((ROOT / "oracle" / "traces").glob("*.weapons.jsonl")) +
         sorted((ROOT / "oracle" / "traces").glob("*.shots.jsonl")) +
         sorted((ROOT / "oracle" / "traces").glob("*.enemy.jsonl")) +
-        sorted((ROOT / "oracle" / "traces").glob("*.scroll.jsonl")))
+        sorted((ROOT / "oracle" / "traces").glob("*.scroll.jsonl")) +
+        sorted((ROOT / "oracle" / "traces").glob("*.money.jsonl")) +
+        sorted((ROOT / "oracle" / "traces").glob("*.flow.jsonl")))
     if not goldens:
         print(f"L3 golden 缺失（先 --extract）", file=sys.stderr)
         return 2
