@@ -187,6 +187,8 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | B-STG-01-TL | STG-01 滚动时间线：波次链结构 / 滚动指令嵌入 / bank 图归属 / 目录顺序扫入口 / **BG 时间线** | stage-timeline.md §1-5/§2.6 + wave-semantics-s1.md（记录格式 A 级）+ bg-content-line.md §4（BG 时间线 A 级）, gameplay-stage1 `$1C/$1D` 逐帧向量 | B/A | **L3 已判**（t70 升格（captain 裁定）：R-bg-scroll-1..4 帧级确定性值序列零未证依赖=标准 L3 断言；注：波次链帧级对齐 S1 负结论维持（t47），两断言面分离） |
 
 > 其余 TL/EN/BOSS 子格按下方规则**证据后准入，不预建**。
+> 【t74 优先级注】下一格候选首选 **W21（`$AC80` tile 流格式定谳）**——B-STG 其余子格（EN/BOSS 时间线）
+> 证据准入的**前置**（地形/内容流语义未成前，子格断言面无从设计）；其次 W15 触发例程（H-16 本体）。
 
 **关卡子格登记规则**（约束①的具体化，防猜测入分母）：每关的
 `B-STG-xx-TL`（滚动时间线）、`B-STG-xx-EN`（敌人生成/波次）、`B-STG-xx-BOSS`（关底 Boss）
@@ -589,7 +591,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 | **Wv**（wave 域，t51 消歧：原 W1-W5 → Wv-1..5） | `docs/findings/wave-semantics-s1.md` §7、`docs/findings/bg-content-line.md` | Wv-1 链首字用途/**时刻读**——**双重证伪**（t47 S1 拟合✗ + t69 滚动×波次链对齐负证：120f 脉冲 vs 波次簇无对应）｜Wv-2 `XX FD` 标记语义：**循环计数部分 A 级**（VM `$FD`=循环计数装入已证，$AC80/波次链 FD 字节对应未证→W21）｜Wv-3 定时机制——**BG 侧负注**（t69：BG 定时=120f 非 16f；16f 节律属 spawn 域）｜Wv-4 地形流消费例程（已收口→VM 链，S4）｜Wv-5 链尾段（C） |
 | **Ws**（shot 域，t51 消歧） | `docs/findings/shot-slot-geometry.md` §4、`docs/findings/shot-gating-f1.md` §4 | Ws-6：`$05CE`（motion_code）写点（脚本机运行时写，六字段补证）｜**Ws-7** 弹 state 与网格字段**同址所有权**（时分复用？B 级；原"交错语义待 t52"占位经 t52 F2b 收口转正；【t57 增量】t55 实证存在**网格驻留切换**现象——断言腿曾将其误计为出生（f2350 结案素材），时分复用假设方向获旁证）｜**Ws-8**（t52 W8）：`$32` bit2/bit3 置位时机（模式来源，C）｜**Ws-9**（t52 W9）：计数器满阈值停发/复位闭环（`$91B3` 调用时机 vs `$074A` 周期，B） |
 | **B**（t32 敌数据面，与 B-WPN/B-SYS 前缀无撞——专指假设编号） | `docs/findings/enemy-dataface.md` §3 | B1 t_005 三参数语义（C）｜B2 t_001 RAM 槽指针语义（C）｜B3 玩家=$1C 系统固定槽（B）｜B4 HP 字段四候选 $05DC/$0630/$06A0/$06BC（C）｜B5 $1C/$70 两系统对象关系（C，Ws-7 互链）｜B6 bank8 $AD00 链=波次脚本链（C，Wv 族互链） |
-| **W（enemy）**（t59/t64 脚本机遗留，⚠ 与 ram-watch W 系列**编号撞车**——引用带来源） | `docs/findings/enemy-script-vm.md` §6、`docs/findings/enemy-final-bridge.md` §7 | W10 t_005"时序"参数未证（C）｜W11 4B 装载机流 vs 5B t_005 子系统归属（C，N-0079）｜~~W12~~ **前提证伪收口**（t64：VM 输出不进 $04xx——BG 搬运桥 $85A0 定谳，N-0080/0082）｜**W14** 命中触发清除（HP 消减→释放）例程（C，R-enemy-clear-1 之对照链）｜**W15** 玩家受击触发例程/判定盒/无敌窗口（C，=H-16 本体）｜**W16** `$65` bit7 死亡状态标志（B，N-0084 候选：双事件交替翻转实证）｜**W18** `$05DC` 双读：HP vs 死亡倒数备选（命中清除与自然清除共用字段，t66 §1）——语义二选一未定谳｜**W21** `$AC80` tile 流格式未定谳（N-0090：5B 试切分无稳定对齐；消费方 xref 0 命中/`$ACA0` 邻接巧合=data-island 第五例；**W22**：t42 `$AC87` 指针线索证伪=`LDA #$87/LDY #$AC` 系传参） |
+| **W（enemy）**（t59/t64 脚本机遗留，⚠ 与 ram-watch W 系列**编号撞车**——引用带来源） | `docs/findings/enemy-script-vm.md` §6、`docs/findings/enemy-final-bridge.md` §7 | W10 t_005"时序"参数未证（C）｜W11 4B 装载机流 vs 5B t_005 子系统归属（C，N-0079）｜~~W12~~ **前提证伪收口**（t64：VM 输出不进 $04xx——BG 搬运桥 $85A0 定谳，N-0080/0082）｜**W14** 命中触发清除（HP 消减→释放）例程（C，R-enemy-clear-1 之对照链）｜**W15** 玩家受击触发例程/判定盒/无敌窗口（C，=H-16 本体）｜**W16** `$65` bit7 死亡状态标志（B，N-0084 候选：双事件交替翻转实证）｜**W18** `$05DC` 双读：HP vs 死亡倒数备选（命中清除与自然清除共用字段，t66 §1）——语义二选一未定谳｜**W21** `$AC80` tile 流格式未定谳（N-0090：5B 试切分无稳定对齐；消费方 xref 0 命中/`$ACA0` 邻接巧合=data-island 第五例；**W22**：t42 `$AC87` 指针线索证伪=`LDA #$87/LDY #$AC` 系传参）——**t74 优先级：下一格首选**（B-STG 其余子格证据准入前置） |
 | **Q**（t28 孤儿 run 复核遗留） | `docs/findings/orphan-run-recheck.md` §四 | Q1 **收口**（t29：$0190 拾取处理器 + $3B 连收计数）｜Q2 → N-0037 同域｜Q3 干净重跑已做（t29 akey-role）｜Q4 已落地（`oracle/scenarios/README.md` +1 帧约定） |
 
 > 【t51 W 系列消歧规则】三域并存，引用必须带域前缀：**W**=ram-watch（W1-W8，历史深嵌不改名）、
@@ -664,6 +666,7 @@ python3 -c "d=open('rom/gunnac_cn.nes','rb').read(); print(d[<off>:<off>+N])"
 `v0.19 (2026-10-12, t65) VM 定性反转扫荡（t64 冲击波）：R-enemy-2"行为脚本流"→**BG/地形脚本机**（W12 前提证伪：VM 输出→$0130/$0140 BG 缓冲族+位属性，非 $04xx 敌网格；三层 RAM 分立模型替换两层注；t62 Rust 模块命名调整建议报 captain 转 porter）；R-enemy-clear-1 入档（$6F4,X 到期→退场序列，B 级 L2，自然清除非命中触发）；命中段负结论登记（升格判据不满足=缺 A 级触发例程/样本，H-16 维持，W14/W15/W16 入索引）；S4 地形消费例程收口→VM 链（格式残余 W21）；N-0084 死亡位候选入索引。`
 `v0.20 (2026-10-12, t67) t66 登记：R-enemy-hit-1 入档（A 级命中清除链：接触帧 $05DC+n 归零→类型清 0→槽释放，f1404 字段列差分+12 例样本集）；包络候选不发明（玩家 |dx|≤12,|dy|≤12/弹×敌 |dx|≤9,|dy|≤15，B 级→W15 注，触发例程 W15 未定位）；寻址更正扫荡（n×$1C 槽寻址误读→字段基址+n stride 1+N-0086，findings/规则原地更正，两套 SoA 语言统一）；W18（$05DC 双读）入索引。`
 `v0.21 (2026-10-12, t70) t69 登记：R-bg-scroll-1..4 入档（基础 dy=−2px/帧/120 帧单帧脉冲 dy=−18（10/10）/f1193 阶段边界/商店卷轴区分界）**L3 已判**（captain 裁定：帧级确定性值序列标准 L3 断言）；B-STG-01-TL 升 L3 已判（波次链帧级对齐 S1 负结论维持，两断言面分离）；enemy-final-bridge ×3→×5 更正传播（N-0088）；Wv-1 时刻读双重证伪/Wv-2 循环计数部分 A 级/Wv-3 BG 侧 120f 负注/W21+W22 入索引；t42 $AC87 线索证伪（传参非指针）。`
+`v0.22 (2026-10-12, t74) 标注状态刷新（t68 条件履约，FA-2/t57 先例）：R-enemy-hit-1 升"L3 部分"（12 样本入 golden+HitBox 谓词+负向自证三=样本驱动断言面成立；三-way ROM 对拍待 W15 后升"已判"，照实不虚高）；双清除链对照表入档（命中清除 A 级 vs 自然清除 B 级）；R-spawn-1/2 帧表正寻址重采复核注（t72 在途）；W21 优先级注（B-STG 其余子格准入前置）。`
 
 ---
 
