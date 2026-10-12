@@ -7,7 +7,7 @@
     "naming_ledger_entries": 27,
     "assets_manifest_entries": 0,
     "knowledge_entries": 7,
-    "rust_test_count": 12,
+    "rust_test_count": 15,
     "completeness_cells": 6
   },
   "assets": {},
