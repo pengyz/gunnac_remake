@@ -37,14 +37,20 @@ fn spawn_records_stg01_golden() {
 }
 
 #[test]
-fn wave_schedule_1to1_and_rhythm() {
+fn wave_schedule_1to1_and_tiers() {
     let ws = WaveSchedule::default();
     for seg in 0..8 {
         assert_eq!(ws.record_index(seg), Some(seg), "8 段↔8 记录 1:1");
     }
     assert_eq!(ws.record_index(8), None, "EN-9+ fail-closed");
-    assert_eq!(ws.rhythm_frames, 9, "观测节律参数默认 9f（8-10f 区间中值，W28）");
-    assert_eq!(ws.frame_offset(3), 27);
+    // R-stage-tick-1：三档块域（t83 校准替换 9f 默认）
+    assert_eq!(ws.interval_at(1345), Some(10), "段A 10f");
+    assert_eq!(ws.interval_at(1600), Some(15), "段C 15f");
+    assert_eq!(ws.interval_at(2300), Some(8), "段F 8f");
+    assert_eq!(ws.interval_at(1200), None, "域外");
+    assert!(ws.is_tick_frame(1341) && ws.is_tick_frame(1351));
+    assert!(!ws.is_tick_frame(1342), "网格外帧非 tick");
+    assert_eq!(ws.frame_offset(3, TickTier::S15), 45);
 }
 
 #[test]
@@ -72,4 +78,17 @@ fn stage_content_negative_selfproof() {
     let dir = parse_stage_dir(&b8);
     assert_eq!(dir[0].tail_ptr, 0xA16F);
     assert_ne!(dir[0].tail_ptr, dir[1].tail_ptr, "行错位哨兵");
+}
+
+#[test]
+fn r_stage_tick_rules_and_negatives() {
+    // R-stage-tick-2：$FD 计数↔间隔（已实测档对 + 候选公式）
+    assert_eq!(PROVEN_FD_PAIRS, [(16, 15), (8, 8)]);
+    assert_eq!(fd_interval_candidate(16), 15, "计数≈间隔+1 候选");
+    assert_eq!(fd_interval_candidate(8), 7, "候选公式（8f 段实测对为 8↔8，W28′ 缺口注记）");
+    // 负向自证：三档域表哨兵（错档必红）
+    let ws = WaveSchedule::default();
+    assert_ne!(ws.interval_at(1600), Some(8), "段C 是 15f 非 8f");
+    assert_ne!(ws.interval_at(2300), Some(15), "段F 是 8f 非 15f");
+    assert!(!ws.is_tick_frame(1350), "1350 非 10f 网格（1341+9k≠）必红");
 }

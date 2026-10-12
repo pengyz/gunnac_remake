@@ -129,19 +129,36 @@ pub fn parse_spawn_records(region: &[u8]) -> Vec<SpawnRecord> {
         .collect()
 }
 
-/// 波次调度（t79 §3：链 8 段 ↔ 记录 8 条 **1:1**；W28 帧换算未证——观测节律 8-10f
-/// **参数化**，t83 定谳后校准）。
+/// tick 间隔三档（R-stage-tick-1，t83 A 级实测：8/10/15 帧）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WaveSchedule {
-    /// 每段重复节律（帧），默认观测区间中值 9f（8-10f 参数，W28 注记）。
-    pub rhythm_frames: u8,
+pub enum TickTier {
+    S8 = 8,
+    S10 = 10,
+    S15 = 15,
 }
 
-impl Default for WaveSchedule {
-    fn default() -> Self {
-        WaveSchedule { rhythm_frames: 9 }
-    }
+/// 块级域表（t83 §1 六段实录）：每段 (起帧, 止帧, 间隔档)。
+pub const TICK_DOMAINS: [(u32, u32, TickTier); 6] = [
+    (1341, 1391, TickTier::S10), // 段A：每 tick 1 发
+    (1460, 1519, TickTier::S10), // 段B：混突发（1460 同帧 5 发）
+    (1597, 1657, TickTier::S15), // 段C
+    (1853, 1903, TickTier::S10), // 段D
+    (1981, 2011, TickTier::S10), // 段E
+    (2232, 2360, TickTier::S8),  // 段F：长段
+];
+
+/// `$FD` 计数↔间隔**已实测档对**（R-stage-tick-2）：`10 FD`(16)↔15f、`08 FD`(8)↔8f。
+pub const PROVEN_FD_PAIRS: [(u8, u8); 2] = [(16, 15), (8, 8)];
+
+/// `$FD` 计数→间隔候选公式：`计数 ≈ 间隔+1`（R-stage-tick-2 候选注；逐块公式未全闭=W28′）。
+pub fn fd_interval_candidate(count: u8) -> u8 {
+    count.saturating_sub(1)
 }
+
+/// 波次调度（t79 §3：链 8 段 ↔ 记录 8 条 **1:1**；时刻层按 R-stage-tick-1..3 校准——
+/// tick 间隔=块级三档（t83），替换 t84 的 8-10f 参数化默认）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct WaveSchedule;
 
 impl WaveSchedule {
     /// 第 `segment`（0..8）段的记录索引（1:1 驱动）。
@@ -153,9 +170,30 @@ impl WaveSchedule {
         }
     }
 
-    /// 段内第 `repeat` 次重复的预计帧偏移（观测节律参数化——W28 换算未证）。
-    pub fn frame_offset(&self, repeat: u32) -> u32 {
-        repeat * self.rhythm_frames as u32
+    /// 帧所在块域的间隔档（R-stage-tick-1）；不在任何域 ⇒ None。
+    pub fn interval_at(&self, frame: u32) -> Option<u8> {
+        for (start, end, tier) in TICK_DOMAINS {
+            if (start..=end).contains(&frame) {
+                return Some(tier as u8);
+            }
+        }
+        None
+    }
+
+    /// 帧是否为块域网格上的 tick 帧（起帧+k×间隔，域内）。
+    pub fn is_tick_frame(&self, frame: u32) -> bool {
+        for (start, end, tier) in TICK_DOMAINS {
+            if (start..=end).contains(&frame) {
+                let step = tier as u32;
+                return (frame - start) % step == 0;
+            }
+        }
+        false
+    }
+
+    /// 段内第 `repeat` 次重复的预计帧偏移（按档间隔；W28′ 逐块公式未全闭）。
+    pub fn frame_offset(&self, repeat: u32, tier: TickTier) -> u32 {
+        repeat * tier as u32
     }
 }
 

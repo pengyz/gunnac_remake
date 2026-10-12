@@ -197,7 +197,7 @@ fn main() -> ExitCode {
             let (problems, match_n, total) = game_oracle::l3::appear_records_check(&rows);
             total_events += rows.len();
             if problems.is_empty() {
-                println!("[ok]   {path}: 敌出现 {total} 事件网格域全合法；记录集 x 命中 {match_n}/{total}（W12/W28 注记观测面）");
+                println!("[ok]   {path}: tick 硬断言全过（R-stage-tick-1..3：分布/86 tick/干净段网格/顺序）；记录集 x 命中 {match_n}/{total}（W12 观测）");
             } else {
                 failures += 1;
                 println!("[FAIL] {path}:");
