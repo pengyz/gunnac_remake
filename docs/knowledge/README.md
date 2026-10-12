@@ -54,3 +54,5 @@
 | [decision-baseline-raise-policy.md](decision-baseline-raise-policy.md) | decision | 基线分级：进度类上调 captain 验收后代执行；下调/放宽/白名单仍须用户确认 |
 | [decision-gate-trust-root-boundary.md](decision-gate-trust-root-boundary.md) | decision | 信任根边界：三文件自洽伪造不可内圈检出——不造内圈，Evidence/Confidence+git 评审兜底，Stage B 再议外部信任根 |
 | [gotcha-parallel-read-image-order-unreliable.md](gotcha-parallel-read-image-order-unreliable.md) | gotcha | 并行多图 read_image 结果序不可信——多图单张调用或字节级锚定，数值结论禁只凭读图 |
+| [gotcha-concurrent-mesen-output-corruption.md](gotcha-concurrent-mesen-output-corruption.md) | gotcha | 并发 Mesen 共写输出=幻影输入/假 trace——串行锁+归档+自管 Xvfb，外来位先查并发污染（并行不可信家族） |
+| [pattern-visual-binding-needs-pixel-proof.md](pattern-visual-binding-needs-pixel-proof.md) | pattern | 视觉↔RAM 绑定必须像素级证明+分离事件检验——相关性≠绑定（N-0032→N-0037 教训） |
