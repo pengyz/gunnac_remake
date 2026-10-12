@@ -67,6 +67,7 @@
 
 ### R-shop-8: Start 在商店内无效果（退出不走 Start）
 - 证据: `scenario:analysis/traces/exp-shop-start`（反证：2000 帧无输入画面不变）+ `oracle/scenarios/gameplay-stage1.txt` 注记（"Start 在商店内无效果（exp-shop-start 反证），退出不走 Start"）
+- 【2026-10-12 t80 补全素材（t77）】**商店状态机三转换实现侧锚定**（game-core::ui 模块，commit 32b61f1）：B 切页（R-shop-6）/双 B 退出（R-shop-7）/Start 无效（R-shop-8）——t77 ROM 逐字节+**负向自证 6 组**复核，三转换语义不变仅补实现侧证据链；**A/B 场景分工注记**（t77 报告提及）具体分工语义待 t77 findings 落档补证——**未证不发明**，此处留空
 - 可判定性: 机器可判定（反证场景可复跑）
 - 关联: B-SYS-SHOP
 
@@ -95,6 +96,9 @@
 - 证据: `bank14:DBCE-DBFF`（`STA $04/ASL/ADC $04/ASL`=type×6 → `TAY/LDX #5` 六次循环：`LDA $DCCF,Y/ADC $E0,X/CMP #$0A/SBC #$0A/STA $E0,X/DEY/DEX`，末位进位 → `$E0-$E5` 全 9 封顶）+ 加数表 `bank14:$DCCF+type×6`（逐值见 C-money-addend-tbl）+ 事件分发 `bank14:DB4C`（A=奖励类型，`$26 & $88` 状态屏蔽，调用点 bank00:8C86、bank02:8660）+ probe 增量 +400/+1100/+1300 与行值组合一致（`ram-watch-s3.md` §8.1）
 - 可判定性: 机器可判定（L2 子程序级 diff：给定 type 与计数器快照跑加法器到 RTS 比对写集）
 - 关联: B-SYS-MONEY、C-money-addend-tbl、C-money-cap、N-0028
+- 【2026-10-12 t80 补正（t77 ROM 逐字节）】①索引更正：加数表指针 = **`Y=type×6−6`**（type1 起算；t31"事件类型×6 索引"表述随之精化）；②**borrow 链进位 quirk**：逐位 `CMP #$0A/SBC #$0A` 的借位链使非法规 BCD 组合按**先借后进**展开（bank14:DBCE 逐指令实证）；③**type0 = 无操作**（直接 RTS，不触计数器）；④加数表 66B **ROM 逐值**（type8-10 首版手推越出 dump 域已替换——禁发明纪律实例）
+- 【t80 价目注】R-shop 价目解析实测 **[10,6,4,None]**（槽 4 = `FF` 截断 → None；与 R-shop-2/3 联动：4 号槽价缺失=汉化数据截断，E-R05）
+- 【t80 L3 分解语义】金钱事件**帧粒度捆绑分解**：单帧事件可含 ≤8 个加数（实测 200=100+100、500、1200）——L3 断言按**事件簇加数集合**比对（非单加数帧步进）；**消费侧待证不发明**（购买扣减/死亡惩罚/结算仍 H-09 残项）
 
 ### R-money-6: extend 阈值检查 `bank14:DAE7-DAFC`：计数器与 `extend_threshold_bcd` $E7-$EC（=8000）逐位比较，达标置 $ED=$40
 - 证据: `bank14:DAE7-DAFC`（`CMP $E7,Y` 逐位比较循环）+ probe 实测阈值恒 `0,0,8,0,0,0`=**8000**（计数器 7200 逼近）+ `bank14:DB4C` 链（`JSR $DBCE` 后 `JSR $DAE7`）（`ram-watch-s3.md` §8.2）
