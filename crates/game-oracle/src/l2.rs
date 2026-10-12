@@ -551,6 +551,33 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
             }
             (0xFF, i as u8, slot as u8) // 退出：A=终止负值，X=偏移+2n，Y=对数
         }
+        "shot_alloc" => {
+            // bank2:$888D 弹槽分配器（t48 字节级定谳，逐指令对齐）：
+            // Y=$80 起，4 组×5 槽（组内 stride 1，组距 $1C：$80/$9C/$B8/$D4），
+            // 空槽判定 $040E+Y==0，首命中返回；全满 SEC（Y=$F0, A=末读值）。
+            let mut y: u8 = 0x80;
+            let mut a = 0u8;
+            let mut hit: Option<u8> = None;
+            for _ in 0..4 {
+                let base = y;
+                for k in 0..5u8 {
+                    y = base.wrapping_add(k);
+                    a = ram(0x040E + y as u16);
+                    if a == 0 {
+                        hit = Some(y);
+                        break;
+                    }
+                }
+                if hit.is_some() {
+                    break;
+                }
+                y = y.wrapping_add(0x18); // TYA/ADC #$18：末检查位 $84+0x18=$9C
+            }
+            match hit {
+                Some(off) => (0u8, x_in, off),
+                None => (y, x_in, y), // 全满：TYA/ADC #$18 遗留 A=Y=$F0
+            }
+        }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),
     };
     Ok(Out { a, x, y, writes, exit: 0 })
