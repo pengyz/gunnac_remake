@@ -281,3 +281,57 @@ pub fn vm_run_frame(
     }
     Ok(())
 }
+
+// ============ nametable 持久化模型（t93 ②；bank15:$F040-F0DA NMI 消费链定谳） ============
+
+/// NES 背景 nametable 状态（32×30 tiles + 8×8 属性字节）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Nametable {
+    pub tiles: [u8; 960],
+    pub attrs: [u8; 64],
+}
+
+impl Default for Nametable {
+    fn default() -> Self {
+        Nametable { tiles: [0; 960], attrs: [0; 64] }
+    }
+}
+
+impl Nametable {
+    /// NMI 行冲刷（bank15:$F040-F0DA 定谳）：
+    /// - `$160` 行挂起计数=0 ⇒ 无更新；
+    /// - 行缓冲 `$130-$14F`（32 tile）→ PPU 行（地址 `$8F:$8E`，行距 $20）；
+    /// - `$D3-$DA` 8 字节 → 属性行（地址 `($8F|3):$90`）。
+    /// 字段映射（t93 ③ 定谳）：记录 4 字段 → 行内列 (x, x+1, x+16, x+17)（桥写集反推）。
+    pub fn nmi_flush(&mut self, row_buf: &[u8; 32], attrs: &[u8; 8], addr_lo: u8, addr_hi: u8, attr_lo: u8, pending: u8) {
+        if pending == 0 {
+            return;
+        }
+        let raw = (addr_hi as u16) << 8 | addr_lo as u16;
+        if !(0x2000..0x3000).contains(&raw) {
+            return; // 非 PPU 域地址（boot/菜单期 $8E/$8F 驻留 RAM 影子——不入 nametable）
+        }
+        let a = (raw - 0x2000) as usize;
+        let row = a / 32;
+        let col = a % 32;
+        if row < 30 && col + 32 <= 32 {
+            self.tiles[row * 32..row * 32 + 32].copy_from_slice(row_buf);
+        }
+        let attr_raw = ((addr_hi as u16 | 3) << 8) | attr_lo as u16;
+        if (0x23C0..0x2400).contains(&attr_raw) {
+            let attr_addr = (attr_raw - 0x23C0) as usize;
+            if attr_addr + 8 <= 64 {
+                self.attrs[attr_addr..attr_addr + 8].copy_from_slice(attrs);
+            }
+        }
+    }
+
+    /// 属性字节 → 2×2 块调色板号（NES 规范：2 bit/块，行对/列对取位）。
+    pub fn block_palette(&self, tile_x: usize, tile_y: usize) -> u8 {
+        let ax = tile_x / 4;
+        let ay = tile_y / 4;
+        let b = self.attrs[ay * 8 + ax];
+        let shift = ((tile_y % 4) / 2) * 4 + ((tile_x % 4) / 2) * 2;
+        (b >> shift) & 3
+    }
+}
