@@ -100,3 +100,31 @@ fn l3_events_reject_illegal_steps() {
     ];
     assert!(bomb_events_legal(&good_bomb).is_empty(), "bomb 合法步被误判：{:?}", bomb_events_legal(&good_bomb));
 }
+
+#[test]
+fn l3_shot_replay_machine_self_consistent() {
+    // 轨迹重放机器自证：由 game-core::shot::tick 生成的轨迹必须被 diff_shot_trajectory 全等接受
+    use game_core::shot::{script_fetch, spawn_init, tick, ShotObject, ACTION_DURATIONS, ACTION_STREAM};
+    let mut obj = spawn_init(0, 2, 0, 100, 50, 0x0C);
+    let mut frames = vec![game_oracle::l3::ShotFrame {
+        f: 1, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
+        pos_y: obj.pos_y, motion_code: obj.motion_code, shot_type: obj.shot_type,
+    }];
+    for f in 2..40u32 {
+        if tick(&mut obj).is_none() {
+            break;
+        }
+        frames.push(game_oracle::l3::ShotFrame {
+            f, lifetime: obj.lifetime, script_ptr: obj.script_ptr, pos_x: obj.pos_x,
+            pos_y: obj.pos_y, motion_code: obj.motion_code, shot_type: obj.shot_type,
+        });
+    }
+    let (compared, problems) = game_oracle::l3::diff_shot_trajectory(&frames).expect("执行错误");
+    assert!(problems.is_empty(), "重放机器自证失败：{problems:?}");
+    assert!(compared >= 5, "轨迹过短：{compared}");
+    // 脚本机跳转语义（duration=0 → 指针跳转）：合成表单测
+    let (dur, code, ptr) = script_fetch(0, &[0, 0xFF, 0x0A], &[2, 5, 7]);
+    assert_eq!((dur, code, ptr), (0x0A, 7, 3), "0 时长跳转到 action[0]=2 再取");
+    let _ = ACTION_DURATIONS[0];
+    let _ = ACTION_STREAM[0];
+}

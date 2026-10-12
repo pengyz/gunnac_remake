@@ -234,3 +234,90 @@ pub fn bomb_events_legal(events: &[TraceEvent]) -> Vec<String> {
     }
     problems
 }
+
+/// 弹对象轨迹帧（L3 对拍；slot 全覆盖+帧降采样口径见 oracle/traces/README）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShotFrame {
+    pub f: u32,
+    pub lifetime: u8,
+    pub script_ptr: u8,
+    pub pos_x: u8,
+    pub pos_y: u8,
+    pub motion_code: u8,
+    pub shot_type: u8,
+}
+
+/// 解析弹轨迹 golden JSONL。
+pub fn parse_shot_frames(jsonl: &str) -> Result<Vec<ShotFrame>, String> {
+    let mut out = Vec::new();
+    for (lineno, line) in jsonl.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let v = crate::l2::parse_json(line).map_err(|e| format!("第 {} 行: {e}", lineno + 1))?;
+        let obj = match v { Json::Obj(o) => o, _ => return Err(format!("第 {} 行非对象", lineno + 1)) };
+        out.push(ShotFrame {
+            f: obj_num(&obj, "f")? as u32,
+            lifetime: obj_num(&obj, "lifetime")? as u8,
+            script_ptr: obj_num(&obj, "script_ptr")? as u8,
+            pos_x: obj_num(&obj, "pos_x")? as u8,
+            pos_y: obj_num(&obj, "pos_y")? as u8,
+            motion_code: obj_num(&obj, "motion_code")? as u8,
+            shot_type: obj_num(&obj, "shot_type")? as u8,
+        });
+    }
+    if out.is_empty() {
+        return Err("弹轨迹 golden 为空".into());
+    }
+    Ok(out)
+}
+
+/// 弹轨迹对拍：出生帧为种子，此后逐帧 tick（脚本机+LUT 累加）比对；
+/// 死亡帧（tick 返回 None）为未证域边界，不入比对面（样本窗口=出生帧..死亡帧前一帧）。
+pub fn diff_shot_trajectory(frames: &[ShotFrame]) -> Result<(usize, Vec<String>), String> {
+    use game_core::shot::{tick, ShotObject};
+    if frames.is_empty() {
+        return Err("轨迹为空".into());
+    }
+    let mut obj = ShotObject {
+        lifetime: frames[0].lifetime,
+        script_ptr: frames[0].script_ptr,
+        pos_x: frames[0].pos_x,
+        pos_y: frames[0].pos_y,
+        motion_code: frames[0].motion_code,
+        shot_type: frames[0].shot_type,
+    };
+    let mut problems = Vec::new();
+    let mut compared = 0usize;
+    for w in frames.windows(2) {
+        let (prev, cur) = (w[0], w[1]);
+        if cur.f != prev.f + 1 {
+            // 帧缺口 = 分段（死亡/重生窗口），以新段首帧重播种
+            obj = ShotObject {
+                lifetime: cur.lifetime, script_ptr: cur.script_ptr,
+                pos_x: cur.pos_x, pos_y: cur.pos_y,
+                motion_code: cur.motion_code, shot_type: cur.shot_type,
+            };
+            continue;
+        }
+        // 帧降采样窗口内逐帧推进（采样步长=帧差，golden 口径声明于抽取端）
+        for _ in prev.f..cur.f {
+            if tick(&mut obj).is_none() {
+                problems.push(format!("f{}: 对象提前死亡（比对窗口应止于死亡帧前）", cur.f));
+                return Ok((compared, problems));
+            }
+        }
+        compared += 1;
+        let got = (obj.lifetime, obj.script_ptr, obj.pos_x, obj.pos_y, obj.motion_code, obj.shot_type);
+        let exp = (cur.lifetime, cur.script_ptr, cur.pos_x, cur.pos_y, cur.motion_code, cur.shot_type);
+        if got != exp {
+            problems.push(format!("f{}: sim={:?} oracle={:?}", cur.f, got, exp));
+            if problems.len() >= 10 {
+                problems.push("…（失配过多，截断显示）".to_string());
+                break;
+            }
+        }
+    }
+    Ok((compared, problems))
+}

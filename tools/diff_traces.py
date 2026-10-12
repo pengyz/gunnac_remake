@@ -111,6 +111,64 @@ def extract_weapon_events(scene: str) -> int:
     return 0
 
 
+
+# 弹对象 SoA 字段（t32 $70 间距网格；watch_range 0400-06ff 的分列解释）
+SHOT_FIELDS = [("lifetime", 0x0E), ("script_ptr", 0x7E), ("pos_x", 0xEE),
+               ("pos_y", 0x15E), ("motion_code", 0x1CE), ("shot_type", 0x23E)]
+SHOT_SLOTS = 0x70  # 字段间距 = 槽容量（slot 步长 1 字节）
+SHOT_SAMPLE_N = 4  # 帧降采样（声明口径，可复现）
+
+
+def extract_shot_trajectories(scene: str) -> int:
+    """弹对象轨迹 golden（分列命名：lifetime/script_ptr/pos_x/pos_y/motion_code/shot_type）。
+
+    采样口径（显式声明，可复现）：slot 全覆盖（0..0x6F）；每个存活窗口（lifetime≠0 连续段）
+    首帧+每 SHOT_SAMPLE_N 帧+末帧入 golden；出生帧=种子，比对=逐帧 tick（R-shot-motion-1/2）；
+    死亡帧（lifetime 归 0）为未证域边界不入比对面。数据源=shot_objs watch blob（$0400-$06FF）
+    按数组分列解析——为 enemy 轨迹（$1C 网格）留结构。
+    """
+    src = ROOT / "analysis" / "traces" / f"{scene}.frames.jsonl"
+    dst = ROOT / "oracle" / "traces" / f"{scene}.shots.jsonl"
+    if not src.is_file():
+        print(f"oracle 全量 trace 缺失：{src}", file=sys.stderr)
+        return 2
+    # 逐 slot 收集存活窗口
+    segments: dict[int, list[dict]] = {}
+    open_seg: dict[int, list] = {}
+    for line in src.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        blob_w = rec["w"].get("shot_objs")
+        if blob_w is None:
+            print(f"  {scene} 缺 shot_objs watch（$0400-06ff）", file=sys.stderr)
+            return 2
+        blob = bytes.fromhex(blob_w)
+        f = rec["f"]
+        for slot in range(SHOT_SLOTS):
+            fields = {name: blob[off + slot] for name, off in SHOT_FIELDS}
+            alive = fields["lifetime"] != 0
+            if alive:
+                open_seg.setdefault(slot, []).append({"f": f, "slot": slot, **fields})
+            elif slot in open_seg:
+                segments.setdefault(slot, []).append(open_seg.pop(slot))
+    for slot, seg in open_seg.items():
+        segments.setdefault(slot, []).append(seg)
+    # 帧降采样 + 落盘
+    n_rows = 0
+    with open(dst, "w", encoding="utf-8") as out:
+        for slot in sorted(segments):
+            for seg in segments[slot]:
+                keep = [i for i in range(len(seg)) if i % SHOT_SAMPLE_N == 0]
+                if len(seg) - 1 not in keep:
+                    keep.append(len(seg) - 1)  # 末帧必留
+                for i in keep:
+                    out.write(json.dumps(seg[i]) + "\n")
+                    n_rows += 1
+    n_seg = sum(len(v) for v in segments.values())
+    print(f"弹轨迹抽取：{scene} {n_seg} 个存活窗口 / {n_rows} 行（slot 全覆盖，帧降采样 n={SHOT_SAMPLE_N}）→ {dst.relative_to(ROOT)}")
+    return 0
+
 def extract() -> int:
     rc = 0
     for scene, cfg in SCENES.items():
@@ -143,8 +201,8 @@ def extract() -> int:
 
 
 def run_diff() -> int:
-    goldens = sorted((ROOT / "oracle" / "traces").glob("*.player.jsonl")) + \
-        sorted((ROOT / "oracle" / "traces").glob("*.weapons.jsonl"))
+    goldens = (sorted((ROOT / "oracle" / "traces").glob("*.player.jsonl")) +
+        sorted((ROOT / "oracle" / "traces").glob("*.weapons.jsonl")))
     if not goldens:
         print(f"L3 golden 缺失（先 --extract）", file=sys.stderr)
         return 2
@@ -157,6 +215,11 @@ def run_diff() -> int:
 
 
 def main() -> int:
+    if "--shots-extract" in sys.argv:
+        # 【实验性】弹轨迹抽取：槽位几何未证（见 oracle/traces/README t45 发现——
+        # t32 $70 间距仅锚定字段基址，槽位步长/容量/分配器 $888D 属 B5/A5 未证域；
+        # 命中数据含跨系统串扰迹象，不得作为 golden 入库）——decomp-analyst 取证后启用。
+        return extract_shot_trajectories("gameplay-stage1")
     if "--extract" in sys.argv:
         rc = extract()
         return rc if rc else run_diff()

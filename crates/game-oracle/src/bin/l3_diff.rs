@@ -71,8 +71,34 @@ fn main() -> ExitCode {
                     println!("         {p}");
                 }
             }
+        } else if path.ends_with(".shots.jsonl") {
+            let frames = match game_oracle::l3::parse_shot_frames(&jsonl) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("{path}: golden 解析失败：{e}");
+                    return ExitCode::from(2);
+                }
+            };
+            match game_oracle::l3::diff_shot_trajectory(&frames) {
+                Ok((compared, problems)) => {
+                    total += compared;
+                    if problems.is_empty() {
+                        println!("[ok]   {path}: 弹轨迹 {compared} 帧全等（脚本机+LUT 累加；出生帧播种，死亡帧不入比对面）");
+                    } else {
+                        failures += 1;
+                        println!("[FAIL] {path}:");
+                        for p in &problems {
+                            println!("         {p}");
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{path}: 差分执行错误：{e}");
+                    return ExitCode::from(2);
+                }
+            }
         } else {
-            eprintln!("{path}: 未知 golden 类型（*.player.jsonl / *.weapons.jsonl）");
+            eprintln!("{path}: 未知 golden 类型（*.player.jsonl / *.weapons.jsonl / *.shots.jsonl）");
             return ExitCode::from(2);
         }
     }
