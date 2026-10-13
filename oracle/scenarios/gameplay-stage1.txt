@@ -72,3 +72,4 @@ watch_range 6000-7fff wram
 # t97 地址寄存器相位插桩（观察性）：$2005/$2006 写流
 probe_mem 2005 2006
 probe_mem 008e 008f
+probe_mem 0161 016f

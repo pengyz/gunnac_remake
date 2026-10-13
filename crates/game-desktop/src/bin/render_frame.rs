@@ -58,6 +58,17 @@ fn main() {
                 0x8E => regs.0 = v,
                 0x8F => regs.1 = v,
                 0x90 => regs.2 = v,
+                0x8D => {
+                    // t100 行地址 LUT 通道：$8D 行索引 → $EBF4 项 = 行基址（$2000+$40n）
+                    let lut = [
+                        0x2000u16, 0x2040, 0x2080, 0x20C0, 0x2100, 0x2140, 0x2180, 0x21C0,
+                        0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380, 0x2CA5,
+                    ];
+                    if let Some(&base) = lut.get(v as usize) {
+                        regs.0 = base as u8;
+                        regs.1 = (base >> 8) as u8;
+                    }
+                }
                 0x0161..=0x0167 => pal[(a - 0x0161) as usize] = v,
                 _ => {}
             }

@@ -134,18 +134,18 @@ fn nametable_model_and_attr_mask_tail() {
     row[0] = 5;
     row[31] = 9;
     let attrs = [0xE4u8; 8];
-    nt.nmi_flush(&row, &attrs, 0x00, 0x20, 0xC0, 1); // $2000 = 行 0
-    assert_eq!(nt.tiles[0][0], 5);
-    assert_eq!(nt.tiles[0][31], 9);
-    assert_eq!(nt.attrs[0][0], 0xE4);
+    nt.nmi_flush(&row, &attrs, 0x00, 0x20, 0xC0, 1); // 基址 $2000+$0F=$200F（R-l4-linebuf-6）
+    assert_eq!(nt.tiles[0][0x0F], 5, "组 0 首字节");
+    assert_eq!(nt.tiles[0][0x76], 9, "组 3 末字节（$200F+$67）");
+    assert_eq!(nt.attrs[0][0x0F], 0xE4, "属性 $23C0+$0F=$23CF");
     // PPU 域守卫：非 $2xxx 地址（boot 期 $8E/$8F 驻留）不入 nametable
     let mut nt2 = Nametable::default();
     nt2.nmi_flush(&row, &attrs, 0x00, 0x00, 0x00, 3);
-    assert_eq!(nt2.tiles[0][0], 0, "非 PPU 域地址不得写入");
+    assert_eq!(nt2.tiles[0][0x0F], 0, "非 PPU 域地址不得写入");
     // pending=0 不写
     let mut nt3 = Nametable::default();
     nt3.nmi_flush(&row, &attrs, 0x00, 0x20, 0xC0, 0);
-    assert_eq!(nt3.tiles[0][0], 0);
+    assert_eq!(nt3.tiles[0][0x0F], 0, "pending=0 不写");
     // 属性 2×2 块取位（NES 规范）
     let mut nt4 = Nametable::default();
     nt4.attrs[0][0] = 0xE4; // 11 10 01 00
