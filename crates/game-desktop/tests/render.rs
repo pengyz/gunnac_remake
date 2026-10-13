@@ -184,7 +184,8 @@ fn oam_parse_and_attr_semantics() {
     // 【锚点口径钉死（t165 红窗收口）】screen_y = oam_y（8×16 高精灵上缘锚）——
     // 等价式注：8×8 时代 screen_y=oam_y+8 ≡ entity_y−8（OAM 基准 +16）；
     // 8×16 时代锚=y（t165 5 基×2 帧实测判优 95.39/94.74）——两口径择一钉死=本式。
-    assert_eq!(s.screen_y(), 0x1F, "锚点口径钉死：screen_y=oam_y（8×16）");
+    // 【N-0168 平台惯例】OAM Y→屏 y **+1**（t191 彩蛋：Y=80→屏 81——1px 纵相位谜底）
+    assert_eq!(s.screen_y(), 0x20, "锚点口径钉死：screen_y=oam_y+1（N-0168）");
     assert_eq!(s.palette(), 3);
     assert!(s.behind_bg(), "bit5=BG 前置");
     assert!(s.hflip() && !s.vflip(), "bit6=hflip（0x63 位形）");
@@ -235,7 +236,7 @@ fn y_anchor_table_and_negatives() {
     // t107 ①：逐实体 Y 锚点表（弹/敌/文本族 +8——实测修正版；自机族 +0x2C 待槽分区）
     use game_desktop::SpriteObj;
     let s = SpriteObj { y: 80, tile: 0, attr: 0, x: 0 };
-    assert_eq!(s.screen_y(), 80, "锚点口径钉死：screen_y=oam_y");
+    assert_eq!(s.screen_y(), 81, "OAM Y=80→屏 81（N-0168 平台惯例）");
     // 负向自证：自机截止门 <$30（参数表）
     let p = SpriteObj { y: 0x20, tile: 0, attr: 0x01, x: 0 };
     assert!(p.player_cutoff(), "自机 Y<$30 截止必真");
