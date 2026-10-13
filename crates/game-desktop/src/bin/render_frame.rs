@@ -196,9 +196,8 @@ fn main() {
             if !addr_ok && row.iter().any(|&v| v != 0) {
                 // ① 放置序=**降序+双写**（t109 参数表：行索引逆序映射、每行双调用——
                 // 顺序填充实验反向即本因）：fills/2 → LUT 行 15 递降
-                let lut = [0x2000u16, 0x2040, 0x2080, 0x20C0, 0x2100, 0x2140, 0x2180, 0x21C0,
-                           0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380, 0x2CA5];
-                let idx = 15usize.saturating_sub(hud_row_seq / 2);
+                let lut = [0x21C0u16, 0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380];
+                let idx = 7usize.saturating_sub(hud_row_seq / 2 % 8);
                 let base = lut[idx];
                 pending_row = Some((row, attrs, base as u8, (base >> 8) as u8, 0xC0));
                 hud_row_seq += 1;
@@ -238,7 +237,7 @@ fn main() {
             // t157 三行映射（t154 A 级）：字模族→124/126 对，游戏族→$6A(106) 对
             // ② 字模 CHR 直读（t167 A 级）：bank124 基 + tile×16 **线性区**（跨 bank 124-127 连续）
             // R16-1：恒等式保真维持（低误差域复测 pair≡linear 98.07 同值）
-            let bank = if tile_page[ntr][ty] == 2 { 28 + tile / 64 } else { 124 + tile / 64 }; // t208：128+ 族实测（bank28 劣 98.05）回 context 派发nk28
+            let bank = if tile_page[ntr][ty] == 2 { 28 + tile / 64 } else { 124 + tile / 64 };
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 // 【2026-10-13 更正（t185 R18-1 高危）】墨掩码=p0 置位（索引 1/3 为墨、
