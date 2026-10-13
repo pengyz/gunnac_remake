@@ -67,42 +67,16 @@ fn main() {
     for (f, a, v, inv, seg) in &raw_writes {
         groups.entry((*inv, *seg)).or_default().push((*f, *a, *v));
     }
-    // ③ 滤表钉死最后写者（R3-3）：同起点只保留最后 (inv,seg) 组（真覆盖族同起点不误归属）
-    let mut chosen: std::collections::HashMap<u16, ((u32, u32), Vec<(u32, u16, u8)>)> = std::collections::HashMap::new();
-    for (key, ws) in &groups {
-        let mut hi = None;
-        let mut start = None;
-        for (_f, a, v) in ws {
-            if *a == 0x2006 {
-                if hi.is_none() {
-                    hi = Some(*v);
-                } else {
-                    start = Some((hi.unwrap() as u16) << 8 | *v as u16);
-                    break;
-                }
-            }
-        }
-        if let Some(st) = start {
-            if seg_starts.contains(&st) {
-                let e = chosen.entry(st).or_insert((*key, Vec::new()));
-                // R3-3 修正：按**最后写时刻**（组末帧）钉死，非 (inv,seg) 字典序
-                let t_new = ws.iter().map(|w| w.0).max().unwrap_or(0);
-                let t_old = e.1.iter().map(|w| w.0).max().unwrap_or(0);
-                if (t_new, *key) >= (t_old, e.0) {
-                    e.0 = *key;
-                    e.1 = ws.iter().map(|(f, a, v)| (*f, *a, *v)).collect();
-                }
-            }
-        }
-    }
-    let mut text_writes: Vec<(u32, u16, u8, u32)> = Vec::new(); // 带组序号（消费序分组）
-    for (_st, (key, ws)) in &chosen {
-        for (f, a, v) in ws {
-            text_writes.push((*f, *a, *v, (key.0 << 16) | key.1)); // 组标识
-        }
-    }
+    // 【t228 ①持久化模型】nametable 写入即保持到被覆写——**全写流时序回放**
+    // （替换七段滤表模型：4719px 主根=被滤掉的条带写入）；t130 后写胜自然成立
+    let mut text_writes: Vec<(u32, u16, u8, u32)> = raw_writes.iter()
+        .map(|(f, a, v, _inv, _seg)| (*f, *a, *v, 0u32))
+        .collect();
     text_writes.sort_by_key(|w| w.0);
     let text_writes = text_writes;
+    let _ = seg_starts;
+    // （旧七段滤表已由持久化模型替换——历史见 t228 档）
+
     let mut text_i = 0usize;
     let mut last_grp: u32 = u32::MAX;
     let mut ppu_addr: u16 = 0;
