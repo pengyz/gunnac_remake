@@ -401,5 +401,11 @@
     "verified": "①2×2 拼字=自描述行主序（值 112-117 连跑=四象限自描述——逐格绘制即装配 ✓）；②两平面合成=decode_tile(p0|(p1<<1)) ✓ 已正确；③槽位分派=族 A/族 B 两簇 ✓",
     "root_localization": "oracle『田』形 glyph（70-77×22-30，精灵层（非 tile 对齐））——我方该位置仅 1-2px 稀疏绘制=**精灵 tile→CHR bitmap 映射错**（标签族）——W73' 根精确定位；128+ 族 bank28 实测 98.05 < 98.15（非此根）",
     "conclusion": "形状根=精灵标签族 tile→bitmap 映射（最后工程件单点）——2×2/两平面/槽位轴已验完"
+  },
+  "t210_label_mapping_confirmed": {
+    "status": "标签族映射**实证确认**（Hamming=0）：slot 63（Y=16 tile=1 X=70）→ bank96 连续对 (0,1)——『田』16 行窗口逐像素 0 差",
+    "integration_result": "集成净负（96.40/95.44 < 98.15/97.27）：glyph 画对但整体反降——**位置锚点/8-line quirk/族选择器交互**未收口（glyph 54px vs 净损 1075px=他处回退）",
+    "single_point_mapping": "OAM tile=1 → bank96 pair (T&$FE, T&$FE|1) = (0,1) ✓（t209 公式实证）；下半 value 2 面（R20-1 修正注）",
+    "conclusion": "单点映射已实证（W73' 根的 CHR 侧确认）——集成层（族选择器+锚点+quirk 交互）为剩余工程；按止损保留 t208 状态（98.15/97.27）"
   }
 }
