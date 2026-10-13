@@ -20,3 +20,12 @@ dbg frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=198183
 gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=198183
 gameplay-stage1_f01260_stage-start frame=1260 base=0 scroll=(0,114) nt_nz=0 probe=198183
 gameplay-stage1_f02349_end frame=2349 base=0 scroll=(0,96) nt_nz=0 probe=198183
+gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=199341
+nt0 frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=199341
+nt1 frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=199341
+nt2 frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=199341
+nt3 frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=199341
+gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=200001
+gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nt_nz=0 probe=200001
+gameplay-stage1_f01260_stage-start frame=1260 base=0 scroll=(0,114) nt_nz=0 probe=200001
+gameplay-stage1_f02349_end frame=2349 base=0 scroll=(0,96) nt_nz=0 probe=200001

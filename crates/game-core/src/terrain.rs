@@ -308,18 +308,23 @@ impl Nametable {
         if pending == 0 {
             return;
         }
-        let raw = (addr_hi as u16) << 8 | addr_lo as u16;
-        if !(0x2000..0x3000).contains(&raw) {
-            return; // 非 PPU 域地址（相位陷阱值不入）
+        // R-l4-linebuf-6（t98 A 级）：目标地址 = $8F:($8E+$0F)；4 组×8B，组间步进 +$20
+        let base = ((addr_hi as u16) << 8 | addr_lo as u16).wrapping_add(0x0F);
+        for grp in 0..4u16 {
+            let start = base.wrapping_add(grp * 0x20);
+            for j in 0..8u16 {
+                let raw = start.wrapping_add(j);
+                if !(0x2000..0x3000).contains(&raw) {
+                    continue;
+                }
+                let rel = (raw - 0x2000) as usize;
+                let (nt, off) = (rel / 0x400, rel % 0x400);
+                if nt < 4 && off < 0x3C0 {
+                    self.tiles[nt][off] = row_buf[(grp * 8 + j) as usize];
+                }
+            }
         }
-        let rel = (raw - 0x2000) as usize;
-        let nt = rel / 0x400; // NT 号（t99：$2Bxx=NT2 实测）
-        let off = rel % 0x400;
-        let (row, col) = (off / 32, off % 32);
-        if nt < 4 && row < 30 && col == 0 {
-            self.tiles[nt][row * 32..row * 32 + 32].copy_from_slice(row_buf);
-        }
-        let attr_raw = ((addr_hi as u16 | 3) << 8) | attr_lo as u16;
+        let attr_raw = (((addr_hi as u16 | 3) << 8) | attr_lo as u16).wrapping_add(0x0F);
         if (0x23C0..0x3000).contains(&attr_raw) {
             let arel = (attr_raw - 0x2000) as usize;
             let ant = arel / 0x400;

@@ -42,6 +42,17 @@
     "#BCBE00",
     "#E4E594"
   ],
-  "binding_status": "像素↔(调色板号,索引) 绑定未证——依 knowledge/pattern-visual-binding-needs-pixel-proof：白名单/映射理由需像素级证明；backdrop=#000000（占比 97%+ 强候选）；其余 6 色↔索引绑定待 nametable 装载路径（W-NEW2）收口后逐像素定",
-  "palette_src_probe": "$161-$167 全程 0 写事件（t99 实测）——调色板装载路径与行缓冲装载同为未观测路径"
+  "binding_status": {
+    "backdrop": "定谳：#000000 = backdrop（tile 索引 0 透明）——像素级证明：BG 层重建两侧全黑 97.2-98.3% 逐像素一致（真彩域）",
+    "bg_text_candidates": "6 色（#FFFEFF/#00404D/#64B0FF/#B53120/#BCBE00/#E4E594）= sprite/HUD 调色板域——绑定待精灵层（OAM）取证（W-42 新开）",
+    "stream_indices": "$161-$169 索引流 t100 已定谳（$0F/$30/$00/$10/$20/$18/$06/$07 族）——与 7 色集的逐索引绑定同样待精灵层",
+    "t99_note": "原『待像素级证明』已部分转定谳（backdrop）；其余随 W-42"
+  },
+  "palette_src_probe": "$161-$167 全程 0 写事件（t99 实测）——调色板装载路径与行缓冲装载同为未观测路径",
+  "content_frame_convergence": {
+    "result": "未收敛至 W-C4 纯色彩项——第三阻塞：sprite 层（OAM）未移植",
+    "bg_layer_match": "97.2-98.3%（真彩域，黑场背景逐像素一致）",
+    "residual": "2-3% = sprite 层像素（HUD 文本/敌人/弹幕——OAM $0200-02FF 未 watch、精灵渲染未实现）",
+    "attribution": "移植缺口（M3 渲染链仅 BG 层）——四分类：非 W-C4 平台差异；按用户裁定不报白名单残余"
+  }
 }
