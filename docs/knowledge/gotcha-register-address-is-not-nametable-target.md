@@ -7,8 +7,9 @@ status: confirmed
 
 # gotcha：注册器地址 ≠ nametable 目标（PPU `$2006/$2007` 协议暗雷）
 
-> 【2026-10-12 候选注】本条为 t131 根修教训，**待对抗复核 #2 校准**（新 AGENTS.md §5 纪律：
-> 未过复核的产出只算待审稿）。
+> 【2026-10-12 t159 升级转正】~~候选注~~ **正式条目**：前置已齐——四自由度注（14 位掩码/
+> 自增量/时序相位/读自增）+ 影响面收窄（port 消费侧）+ **t154/t158 链 pass**（adversarial-review-10
+> 独立验证成立）；升级判定完成。
 > 【2026-10-12 t142 升级前置注（AR3-D/AR3-E）】【t146 (a) 错位修正（R2-8）】**(a) 协议自由度注**
 >（~~两自由度=14 位掩码+自增量~~ 补全为**四项独立自由度**）：**14 位掩码**（`ORA #3`/bit7 flag
 > 坐实——地址只取低 14 位）+ **自增量**（`$2000` bit2 决定 1/32）+ **时序相位**（hi→lo 锁存顺序）
@@ -35,6 +36,9 @@ L4 内容帧收敛**连续十一击**（t102..t123）在同一暗雷上绊倒：
 - 与 [gotcha-observation-granularity-fabricates-invariants.md](gotcha-observation-granularity-fabricates-invariants.md)
   （时间轴网眼）、[gotcha-stack-page-game-var-watch-coverage.md](gotcha-stack-page-game-var-watch-coverage.md)
   （地址轴盲区）同族：**观测/解释层的缺陷伪装成数据问题**——本条是"协议层未解释"伪装成"数据错位"。
+- 【t159 家族扩充】**投影/换算层缺陷**新员并入本家族：[gotcha-cpu-file-offset-conversion.md](gotcha-cpu-file-offset-conversion.md)
+  （CPU↔file 换算漏 iNES 头）——"换算层错"伪装成"数据对不上"；配合
+  [pattern-repair-selfcheck-grep.md](pattern-repair-selfcheck-grep.md)（修复自查）共同封口。
 
 ## 何时使用
 
