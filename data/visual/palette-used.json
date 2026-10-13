@@ -1,0 +1,47 @@
+{
+  "name": "palette-used-truth-set",
+  "status": "部分产物（绑定待证）",
+  "derivation": "oracle/screens expected/ 三关键帧逐像素精确 RGB 提取（A 级）+ probe $161-$167 调色板源扫描",
+  "sample_frames": [
+    "gameplay-stage1_f01260_stage-start",
+    "gameplay-stage1_f01500_mid-combat",
+    "gameplay-stage1_f02349_end"
+  ],
+  "used_colors": {
+    "f1260": [
+      "#000000",
+      "#FFFEFF",
+      "#00404D",
+      "#64B0FF",
+      "#B53120",
+      "#BCBE00"
+    ],
+    "f1500": [
+      "#000000",
+      "#FFFEFF",
+      "#00404D",
+      "#BCBE00",
+      "#B53120",
+      "#E4E594"
+    ],
+    "f2349": [
+      "#000000",
+      "#FFFEFF",
+      "#64B0FF",
+      "#00404D",
+      "#B53120",
+      "#BCBE00"
+    ]
+  },
+  "observed_union": [
+    "#000000",
+    "#FFFEFF",
+    "#00404D",
+    "#64B0FF",
+    "#B53120",
+    "#BCBE00",
+    "#E4E594"
+  ],
+  "binding_status": "像素↔(调色板号,索引) 绑定未证——依 knowledge/pattern-visual-binding-needs-pixel-proof：白名单/映射理由需像素级证明；backdrop=#000000（占比 97%+ 强候选）；其余 6 色↔索引绑定待 nametable 装载路径（W-NEW2）收口后逐像素定",
+  "palette_src_probe": "$161-$167 全程 0 写事件（t99 实测）——调色板装载路径与行缓冲装载同为未观测路径"
+}
