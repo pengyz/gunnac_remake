@@ -91,7 +91,8 @@ fn l5_scope_note_3scenes_10events() {
     let evs = parse_l5(&jsonl).expect("解析");
     let scenes: std::collections::BTreeSet<_> = evs.iter().map(|e| e.scene.as_str()).collect();
     let named = evs.iter().filter(|e| e.checkpoint.is_some()).count();
-    assert_eq!(scenes.len(), 3, "3 场景");
-    assert_eq!(evs.len(), 10, "10 事件");
-    assert_eq!(named, 8, "8 命名检查点（t81 flow+t84 内容 id 落档）");
+    // 口径注（t193 链扩展后）：4 场景/17 事件/15 命名检查点（+STG-02..08 段）
+    assert_eq!(scenes.len(), 4, "4 场景（+stg02-08-chain）");
+    assert_eq!(evs.len(), 17, "17 事件（10+7 段级）");
+    assert_eq!(named, 15, "15 命名检查点");
 }

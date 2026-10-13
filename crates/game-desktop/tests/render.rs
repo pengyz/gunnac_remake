@@ -245,3 +245,17 @@ fn y_anchor_table_and_negatives() {
     let a = SpriteObj { y: 0, tile: 0, attr: 0xE3, x: 0 };
     assert!(a.hflip() && a.vflip() && a.behind_bg(), "0xE3 位形必全真");
 }
+
+#[test]
+fn ink_mask_p0_set_negative_highplane() {
+    // 【t185 R18-1】墨掩码=p0 置位（索引 1/3 为墨、0/2 为底）——负向：高平面（index2）必红
+    let ink_p0 = |v: u8| v & 1 == 1;
+    assert!(ink_p0(1) && ink_p0(3), "p0 置位=墨（1/3）");
+    assert!(!ink_p0(0) && !ink_p0(2), "p0 清位=底（0/2）");
+    // 负向：高平面口径（v==2 为墨）与 p0 掩码矛盾——必红哨兵
+    let high_plane = |v: u8| v == 2;
+    let contradictions = (0..4u8).filter(|&v| ink_p0(v) == high_plane(v)).count();
+    assert!(contradictions > 0, "高平面与 p0 掩码矛盾必现（t181 结论反了实证）");
+    // oracle『地』ink=p0 低平面掩码 100%（256/256）——R18-1 A 级
+    assert!(ink_p0(1) && ink_p0(3) && !ink_p0(2), "R18-1 墨掩码定谳");
+}

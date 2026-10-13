@@ -464,6 +464,12 @@ def extract_l5_chain() -> int:
                              (1260, "StageStart", "stg01-start"), (1500, "Combat", "combat")]),
         ("respawn-window", [(1260, "StageStart", None), (1350, "Combat", None),
                             (1400, "DeathRespawn", "respawn-window")]),
+        # t193 链扩展：STG-02..08 段级检查点（S5-ALL-CLEAR 分段接力——帧号待场景取证，
+        # 先以检查点类别入 golden（A1 流程可达），帧号=占位 0（fail-closed 不发明真值））
+        ("stg02-08-chain", [(0, "StageStart", "stg02-start"), (0, "StageStart", "stg03-start"),
+                            (0, "StageStart", "stg04-start"), (0, "StageStart", "stg05-start"),
+                            (0, "StageStart", "stg06-start"), (0, "StageStart", "stg07-start"),
+                            (0, "StageStart", "stg08-start")]),
     ]
     out = ROOT / "oracle" / "traces" / "stg01-chain.l5.jsonl"
     with open(out, "w", encoding="utf-8") as f:

@@ -172,3 +172,53 @@ fn attr_mask_selection_tail_ruled() {
     assert_eq!(mask_at(3), 0xFB);
     assert_ne!(mask_at(3), ATTR_MASKS[1], "选择公式≠单一掩码（尾段已定谳）");
 }
+
+// ============ t193：STG-02..08 内容集成（t87 三级骨架） ============
+
+#[test]
+fn stg_02_08_skeleton_registry() {
+    use game_core::stage::{stage_skeleton, StageSkeleton};
+    // t87 §1 三级骨架总表（A/B 级）逐关核对
+    let s2 = stage_skeleton(2).expect("STG-2");
+    assert_eq!((s2.root, s2.tail), (0xA048, 0xA3C4));
+    assert_eq!((s2.rec4, s2.rec6, s2.loop_n), (242, 14, 3));
+    let s3 = stage_skeleton(3).expect("STG-3");
+    assert_eq!((s3.rec4, s3.rec6, s3.loop_n), (29, 13, 1));
+    assert_eq!(s3.tick_params, Some([16, 16, 8, 16, 8, 4, 16]), "STG-3 CNT tick 表 7 段");
+    assert_eq!(s3.scripts.len(), 8, "STG-3 链段族 8 脚本");
+    let s7 = stage_skeleton(7).expect("STG-7");
+    let s1 = stage_skeleton(1).expect("STG-1");
+    assert_eq!(s7.root, s1.root, "STG-1/7 共享流（root 同值 $A000）");
+    assert_eq!(s7.rec4, s1.rec4, "共享流内容同");
+    let s8 = stage_skeleton(8).expect("STG-8");
+    assert_eq!(s8.tick_params, Some([16, 16, 8, 16, 8, 4, 16]), "STG-8 CNT 同 STG-3");
+    assert!(stage_skeleton(9).is_none(), "STG-9 不存在（fail-closed）");
+    assert!(stage_skeleton(0).is_none());
+}
+
+#[test]
+fn stg_02_08_rom_root_tail_verified() {
+    // ROM 字节级：目录行 root/tail 与骨架表逐值对拍（t84 目录解析复用）
+    use game_core::stage::{parse_stage_dir, stage_skeleton};
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    let bank8 = &rom[0x10 + 8 * 0x2000..0x10 + 9 * 0x2000];
+    let dir = parse_stage_dir(bank8);
+    for n in 1..=8u8 {
+        let sk = stage_skeleton(n).expect("骨架");
+        let d = dir[(n - 1) as usize];
+        assert_eq!(d.root_ptr, sk.root, "STG-{n} root 目录 vs 骨架");
+        assert_eq!(d.tail_ptr, sk.tail, "STG-{n} tail 目录 vs 骨架");
+    }
+}
+
+#[test]
+fn stg_negative_skeleton_guards() {
+    use game_core::stage::stage_skeleton;
+    // 负向：rec 计数非零（空表必红哨兵）
+    for n in 1..=8u8 {
+        let s = stage_skeleton(n).unwrap();
+        assert!(s.rec4 > 0, "STG-{n} rec4 非零");
+        assert!(s.rec6 > 0, "STG-{n} rec6 非零");
+        assert!(!s.scripts.is_empty(), "STG-{n} 脚本集非空");
+    }
+}

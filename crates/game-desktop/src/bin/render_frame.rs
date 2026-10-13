@@ -252,13 +252,10 @@ fn main() {
             let bank = if tile_page[ntr][ty] == 2 { 28 + tile / 64 } else { 124 + tile / 64 };
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
-                // ③ 高平面渲染（t184）：CJK 字形=高平面（色彩索引 2）——低平面留底
-                let bg_pal: [game_desktop::Rgba; 4] = [
-                    [0, 0, 0, 255],
-                    [0, 0, 0, 255],
-                    [0xFF, 0xFE, 0xFF, 255],
-                    [0, 0, 0, 255],
-                ];
+                // 【2026-10-13 更正（t185 R18-1 高危）】墨掩码=p0 置位（索引 1/3 为墨、
+                // 0/2 为底）——t181『高平面』结论反了（相位错位伪数），实测 ink=p0 低平面
+                // 掩码 100%（256/256）；高平面仅 80.9%（承错实现 55.5% 画错形）
+                let bg_pal: [game_desktop::Rgba; 4] = [[0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255], [0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255]];
                 canvas.draw_chr(&rom, bank, tile % 64, px, py, &bg_pal);
             }
         }
@@ -292,11 +289,11 @@ fn main() {
     let sprite_pals: [[game_desktop::Rgba; 4]; 4] = [
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0x00, 0x40, 0x4D)],
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0xFF, 0xFE, 0xFF)],
-        [unk, unk, unk, mk(0xBC, 0xBE, 0x00)],
+        [unk, mk(0xBC, 0xBE, 0x00), unk, mk(0xBC, 0xBE, 0x00)],
         [unk, unk, unk, unk],
     ];
     let bg_opaque = [[false; 256]; 240]; // BG 面重建为空（黑场）——掩码全透明
-    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 30, &sprite_pals, &bg_opaque);
+    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 28, &sprite_pals, &bg_opaque);
 
     std::fs::create_dir_all("oracle/screens/actual").unwrap();
     let out_path = format!("oracle/screens/actual/{name}.png");
