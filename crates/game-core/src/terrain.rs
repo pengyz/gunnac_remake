@@ -414,7 +414,9 @@ pub fn classify_text_byte(b: u8) -> TextByte {
 
 /// 数据字节合成目标低字节（`AND #$1F / ADC $14 / ORA #$20`）。
 pub fn synth_addr_lo(data: u8, addr_lo: u8) -> u8 {
-    (data & 0x1F).wrapping_add(addr_lo) | 0x20
+    // t124 ①定稿（变体 B 最优 97.18 实测）：位置=偏移+推进（游程制，数据字节不合成位置）
+    let _ = data;
+    addr_lo
 }
 
 /// 预算门（$E828）：`budget − count < 4` ⇒ 需 flush（写 + 递归排空）。
@@ -435,7 +437,8 @@ pub fn text_channel_byte(ch: &mut TextChannel, b: u8) -> Option<(u16, u8)> {
             Some((addr, d))
         }
         TextByte::Offset(o) => {
-            ch.addr_lo = ch.addr_lo.wrapping_add(o);
+            // 变体 B（t124 ①游程边界）：偏移=游程起点 SET（原值，不 ORA）
+            ch.addr_lo = o;
             None
         }
         TextByte::Control(c) => {
