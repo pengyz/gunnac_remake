@@ -231,10 +231,16 @@ fn main() {
     let ntr: usize = std::env::var("RENDER_NT").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
     for ty in 0..30usize {
         for tx in 0..32usize {
-            let tile = nt.tiles[ntr][ty * 32 + tx] as usize + base * 256;
+            let raw_tile = nt.tiles[ntr][ty * 32 + tx];
+            // ② 小值参数族分离（t152）：0-16 簇=参数字节非 tile（AR2-D bit5 同族）——
+            // 直拷制下渲染按透明（不画 glyph）；命名值仍保留在 nametable（内容层精确不动）
+            if raw_tile <= 16 || raw_tile >= 128 {
+                continue; // 参数族（0-16 簇）+ 高值族（≥128）非 glyph tile（t152 实测）
+            }
+            let tile = raw_tile as usize + base * 256;
             let px = (tx as i32) * 8 - sx as i32;
             let py = (ty as i32) * 8 - sy as i32; // t131 实测：+8 更劣（94.17<94.50）——偏移非主因
-            let bank = font_bank + (tile / 64) * 2; // t143 实测最优（92.20%）——W45 映射=码表转换待证（见账）
+            let bank = font_bank + (tile / 64) * 2; // t143/t152 实测最优 // 2KB 对：R0=124/125（值 0-127），R1=126/127（128-255） // t143 实测最优（92.20%）——W45 映射=码表转换待证（见账）
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 let bg_pal: [game_desktop::Rgba; 4] = [
