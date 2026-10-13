@@ -376,5 +376,12 @@
     "R19_3_good_news": "象限放置+平面+sprite index1 路径字形渲染 256/256 正确 ✓（复审方实证）",
     "retractions": "R19-2 三变体推论撤/R19-3 base 沿革注/t185『55.5% 错形』复审自撤回（旧图误判，现态 100%）——dated",
     "conclusion": "两小项=glyph 局部项（需 glyph 级比对驱动的逐字校正）——全局参数轴已穷尽（25 击），残余 1.87/2.78% 待 glyph 级工具或 W-C4 终裁"
+  },
+  "t198_glyph_profile": {
+    "status": "glyph 级比对工具建成+画像输出——逐字校正遇形状根（④带账停工）",
+    "tool": "glyph cell 8×8 画像（99 差异 cell/1147px，形差/色差/相位三类归因）——analysis/phase/glyph-profile-f1260.json",
+    "findings": "①缺墨块=多色字形（白/青/蓝/红=绑定 7 色集）——墨色扩展=palette 映射全表（非单 index）；②全部块 pal=0（attr 单调）——逐块 palette 变异假说否证；③形差 cell 主导（ink 数不齐）=W73' 形状根（2×2 拼字/两平面合成）——与值 3 色差交织",
+    "correction_status": "逐字校正：全局变体（y±1/index3 色）已证反降；per-tile 墨表需形状真值（W73' 依赖）——工具建成但校正轴待 W73'",
+    "conclusion": "glyph 工具就绪（画像可复现）；校正需 W73' 两平面合成或 glyph 形状真值——按④带账停工回判据讨论"
   }
 }
