@@ -249,14 +249,15 @@ fn main() {
             let py = (ty as i32) * 8 - sy as i32; // t131 实测：+8 更劣（94.17<94.50）——偏移非主因
             // t157 三行映射（t154 A 级）：字模族→124/126 对，游戏族→$6A(106) 对
             // ② 字模 CHR 直读（t167 A 级）：bank124 基 + tile×16 **线性区**（跨 bank 124-127 连续）
-            let bank = if tile_page[ntr][ty] == 2 { 106 + tile / 64 } else { font_bank + (tile / 64) * 2 }; // 实测判优（D3）；t175 ①恒等式（124+code//64）见账注nk=124+code//64）nk 邻接对）胜
+            let bank = if tile_page[ntr][ty] == 2 { 28 + tile / 64 } else { font_bank + (tile / 64) * 2 }; // t184 ①：关卡 CJK=bank28 族，菜单 ASCII=124+nnk=124+code//64）nk 邻接对）胜
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
+                // ③ 高平面渲染（t184）：CJK 字形=高平面（色彩索引 2）——低平面留底
                 let bg_pal: [game_desktop::Rgba; 4] = [
                     [0, 0, 0, 255],
+                    [0, 0, 0, 255],
                     [0xFF, 0xFE, 0xFF, 255],
-                    [0xFF, 0xFE, 0xFF, 255],
-                    [0xFF, 0xFE, 0xFF, 255],
+                    [0, 0, 0, 255],
                 ];
                 canvas.draw_chr(&rom, bank, tile % 64, px, py, &bg_pal);
             }
@@ -292,7 +293,7 @@ fn main() {
         [unk, unk, unk, unk],
     ];
     let bg_opaque = [[false; 256]; 240]; // BG 面重建为空（黑场）——掩码全透明
-    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 107, &sprite_pals, &bg_opaque);
+    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 30, &sprite_pals, &bg_opaque);
 
     std::fs::create_dir_all("oracle/screens/actual").unwrap();
     let out_path = format!("oracle/screens/actual/{name}.png");
