@@ -48,15 +48,20 @@ fn main() {
     }).unwrap_or_default();
     let mut probe_i = 0usize;
     let mut ptr_writes: std::collections::HashMap<u64, (u8, u8)> = std::collections::HashMap::new();
-    let text_writes: Vec<(u32, u16, u8)> = std::fs::read_to_string("analysis/phase/gameplay-stage1-text.jsonl")
+    // 归属轴（t131 ④，t130 §2）：可见文本层 = 7 调用写集（0/11/14/15/16/17/18）
+    let visible_invs: [u32; 7] = [0, 11, 14, 15, 16, 17, 18];
+    let text_writes: Vec<(u32, u16, u8, u32)> = std::fs::read_to_string("analysis/phase/gameplay-stage1-text.jsonl")
         .map(|t| t.lines().filter_map(|l| {
             let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
             let a = u16::from_str_radix(l.split("\"addr\":\"").nth(1)?.split('"').next()?, 16).ok()?;
             let v = l.split("\"val\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
-            Some((f, a, v))
+            let inv = l.split("\"inv\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
+            if visible_invs.contains(&inv) { Some((f, a, v, inv)) } else { None }
         }).collect())
         .unwrap_or_default();
     let mut text_i = 0usize;
+    let mut ppu_addr: u16 = 0;
+    let mut ppu_addr_latch_high = true;
     for (pf, pa, pv) in &probe {
         match pa {
             0x2F => {
@@ -115,15 +120,31 @@ fn main() {
         let wrote = probe.iter().any(|(pf, pa, _)| *pf == f && (0x0130..=0x0150).contains(pa));
         // —— 文本放置（t129 机制终版）：核回放写集（phase-batch 产物）直接落 nametable——
         // 77+46 变长足迹表由 ROM 链原生产出（与 t128 A 级裁定逐址一致）——
+        // PPU 协议解释（t131 归属合并击根修）：$2006 写锁存地址（高/低），
+        // $2007 写落 tile（地址自增）——注册器写序列 → nametable 态
         while text_i < text_writes.len() && text_writes[text_i].0 <= f as u32 {
-            let (_f, addr, val) = text_writes[text_i];
+            let (_f, addr, val, _inv) = text_writes[text_i];
             text_i += 1;
-            if (0x2000..0x3000).contains(&addr) {
-                let rel = (addr - 0x2000) as usize;
-                let (n, off) = (rel / 0x400, rel % 0x400);
-                if n < 4 && off < 0x3C0 {
-                    nt.tiles[n][off] = val;
+            match addr {
+                0x2006 => {
+                    if ppu_addr_latch_high {
+                        ppu_addr = ((val as u16) << 8) | (ppu_addr & 0x00FF);
+                    } else {
+                        ppu_addr = (ppu_addr & 0xFF00) | val as u16;
+                    }
+                    ppu_addr_latch_high = !ppu_addr_latch_high;
                 }
+                0x2007 => {
+                    if (0x2000..0x3000).contains(&ppu_addr) {
+                        let rel = (ppu_addr - 0x2000) as usize;
+                        let (n, off) = (rel / 0x400, rel % 0x400);
+                        if n < 4 && off < 0x3C0 {
+                            nt.tiles[n][off] = val;
+                        }
+                    }
+                    ppu_addr = ppu_addr.wrapping_add(1);
+                }
+                _ => {}
             }
         }
         if wrote {
@@ -164,7 +185,7 @@ fn main() {
         for tx in 0..32usize {
             let tile = nt.tiles[ntr][ty * 32 + tx] as usize + base * 256;
             let px = (tx as i32) * 8 - sx as i32;
-            let py = (ty as i32) * 8 - sy as i32;
+            let py = (ty as i32) * 8 - sy as i32; // t131 实测：+8 更劣（94.17<94.50）——偏移非主因
             let bank = font_bank + tile / 64;
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
