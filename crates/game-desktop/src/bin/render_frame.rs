@@ -46,6 +46,7 @@ fn main() {
         }).collect()
     }).unwrap_or_default();
     let mut probe_i = 0usize;
+    let mut trace_oam: Option<String> = None;
     let apply_frame_writes = |buf: &mut [u8; 0x31], attrs: &mut [u8; 8],
                                   regs: &mut (u8, u8, u8), pal: &mut [u8; 7],
                                   f: u64, pi: &mut usize| {
@@ -95,6 +96,12 @@ fn main() {
         }
         let _ = &zp_prev;
         zp_prev = zp.clone();
+        if f == frame.wrapping_sub(1) {
+            if let Some(i) = line.find("\"oam\":\"") {
+                let rest = &line[i + 7..];
+                trace_oam = Some(rest[..rest.find('"').unwrap()].to_string());
+            }
+        }
         if f == frame {
             sx = zp[0x1C];
             sy = zp[0x1D];
@@ -125,6 +132,23 @@ fn main() {
             let _ = tile;
         }
     }
+    // —— 精灵层（t104 ①）：OAM blob → 合成（BG 掩码 + 优先级 + 翻转 + 8/行 quirk）——
+    let oam_blob: Vec<u8> = trace_oam.as_ref().map(|h| hex_decode(h)).unwrap_or_default();
+    let sprites = game_desktop::parse_oam(&oam_blob);
+    // 绑定表（t102/t104 ③像素级证明产物）：sp<pal][idx] → RGB
+    let mk = |r: u8, g: u8, b: u8| -> game_desktop::Rgba {
+        [r, g, b, if r == 0 && g == 0 && b == 0 { 0 } else { 255 }]
+    };
+    let unk = mk(0, 0, 0);
+    let sprite_pals: [[game_desktop::Rgba; 4]; 4] = [
+        [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0x00, 0x40, 0x4D)],
+        [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0xFF, 0xFE, 0xFF)],
+        [unk, unk, unk, mk(0xBC, 0xBE, 0x00)],
+        [unk, unk, unk, unk],
+    ];
+    let bg_opaque = [[false; 256]; 240]; // BG 面重建为空（黑场）——掩码全透明
+    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 124, &sprite_pals, &bg_opaque);
+
     std::fs::create_dir_all("oracle/screens/actual").unwrap();
     let out_path = format!("oracle/screens/actual/{name}.png");
     canvas.export_png(std::path::Path::new(&out_path)).expect("导出");

@@ -224,3 +224,105 @@ pub fn render_bg_projection(
         }
     }
 }
+
+// ============ 精灵层渲染（t104：OAM DMA 语义 + NESdev 标准精灵合成） ============
+
+/// OAM 精灵条目（4B：Y-1 / tile / attr / X）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpriteObj {
+    pub y: u8,
+    pub tile: u8,
+    pub attr: u8,
+    pub x: u8,
+}
+
+impl SpriteObj {
+    /// OAM 4 字节解析（NESdev 标准）。
+    pub fn from_oam4(b: [u8; 4]) -> Self {
+        SpriteObj { y: b[0], tile: b[1], attr: b[2], x: b[3] }
+    }
+    pub fn palette(&self) -> usize {
+        (self.attr & 3) as usize
+    }
+    /// bit5：1=BG 前置（精灵在 BG 后）。
+    pub fn behind_bg(&self) -> bool {
+        self.attr & 0x20 != 0
+    }
+    pub fn hflip(&self) -> bool {
+        self.attr & 0x40 != 0
+    }
+    pub fn vflip(&self) -> bool {
+        self.attr & 0x80 != 0
+    }
+    /// 8×8 精灵屏上 Y——**Y 语义待证注**（NESdev=Y-1；发射器 bank14:$CFC5 写 \$55 值域
+    /// 与 Y-1 编码未逐值对拍，t103 语义=候选）：当前=Y+1（NESdev 标准）。
+    pub fn screen_y(&self) -> i32 {
+        self.y as i32 + 1
+    }
+}
+
+/// OAM 表解析（64 条 × 4B，OAM 顺序=优先级序）。
+pub fn parse_oam(blob: &[u8]) -> Vec<SpriteObj> {
+    blob.chunks_exact(4).take(64).map(|b| SpriteObj::from_oam4([b[0], b[1], b[2], b[3]])).collect()
+}
+
+/// 精灵层合成（t104 ①：8×8/翻转/优先级）：sprites 合成到 canvas。
+/// `bg_opaque`：BG 像素不透明掩码（BG index 0=透明）——behind_bg 精灵仅在 BG 透明处显示。
+/// **quirk（D4 保真，待证注）**：8 精灵/行溢出截断（NESdev：OAM 序第 9 个起整精灵丢弃）；
+/// 闪烁=掉精灵（待 t103 语义定谳校准）；8×16 模式未证（PPUCTRL bit）——本函数 8×8。
+pub fn render_sprites(
+    canvas: &mut Canvas,
+    chr_rom: &[u8],
+    sprites: &[SpriteObj],
+    sprite_chr_base: usize,
+    sprite_pals: &[[Rgba; 4]; 4],
+    bg_opaque: &[[bool; 256]; 240],
+) {
+    let mut per_line = [0u8; 240];
+    for spr in sprites {
+        let y0 = spr.screen_y();
+        // 8/行溢出（D4 quirk 保真）：任一扫描线超 8 ⇒ 整精灵丢弃（NESdev 评估语义候选，待证注）
+        let mut dropped = false;
+        for row in 0..8i32 {
+            let y = y0 + row;
+            if (0..240).contains(&y) && per_line[y as usize] >= 8 {
+                dropped = true;
+                break;
+            }
+        }
+        if dropped {
+            continue;
+        }
+        let bank = sprite_chr_base + spr.tile as usize / 64;
+        if bank >= 128 {
+            continue;
+        }
+        let raw = game_data::chr::tile_bytes(chr_rom, bank, spr.tile as usize % 64);
+        let px = game_data::chr::decode_tile(&raw);
+        for row in 0..8usize {
+            let y = y0 + row as i32;
+            if !(0..240).contains(&y) {
+                continue;
+            }
+            per_line[y as usize] += 1;
+            for col in 0..8usize {
+                let sr = if spr.vflip() { 7 - row } else { row };
+                let sc = if spr.hflip() { 7 - col } else { col };
+                let v = px[sr][sc];
+                if v == 0 {
+                    continue;
+                }
+                let x = spr.x as i32 + col as i32;
+                if !(0..256).contains(&x) {
+                    continue;
+                }
+                if spr.behind_bg() && bg_opaque[y as usize][x as usize] {
+                    continue;
+                }
+                let c = sprite_pals[spr.palette()][v as usize];
+                let idx = (y as usize * 256 + x as usize) * 4;
+                canvas.pixels[idx..idx + 4].copy_from_slice(&c);
+            }
+        }
+    }
+}

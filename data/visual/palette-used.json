@@ -43,10 +43,33 @@
     "#E4E594"
   ],
   "binding_status": {
-    "backdrop": "定谳：#000000 = backdrop（tile 索引 0 透明）——像素级证明：BG 层重建两侧全黑 97.2-98.3% 逐像素一致（真彩域）",
+    "backdrop": "定谳：#000000 = backdrop（tile 0 透明）",
     "bg_text_candidates": "6 色（#FFFEFF/#00404D/#64B0FF/#B53120/#BCBE00/#E4E594）= sprite/HUD 调色板域——绑定待精灵层（OAM）取证（W-42 新开）",
     "stream_indices": "$161-$169 索引流 t100 已定谳（$0F/$30/$00/$10/$20/$18/$06/$07 族）——与 7 色集的逐索引绑定同样待精灵层",
-    "t99_note": "原『待像素级证明』已部分转定谳（backdrop）；其余随 W-42"
+    "t99_note": "原『待像素级证明』已部分转定谳（backdrop）；其余随 W-42",
+    "sprite_slots": {
+      "sp0[1]": {
+        "rgb": "#FFFEFF",
+        "hits": 27
+      },
+      "sp0[3]": {
+        "rgb": "#00404D",
+        "hits": 175
+      },
+      "sp1[1]": {
+        "rgb": "#FFFEFF",
+        "hits": 12
+      },
+      "sp1[3]": {
+        "rgb": "#FFFEFF",
+        "hits": 35
+      },
+      "sp2[3]": {
+        "rgb": "#BCBE00",
+        "hits": 25
+      }
+    },
+    "method": "OAM 位置 × CHR 2bpp 像素 × oracle 截图 RGB 逐像素收集（非黑命中投票）——像素级证明（W-42 执行）"
   },
   "palette_src_probe": "$161-$167 全程 0 写事件（t99 实测）——调色板装载路径与行缓冲装载同为未观测路径",
   "content_frame_convergence": {

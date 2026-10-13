@@ -174,3 +174,55 @@ fn bg_visual_scout_sample_export() {
 fn hex_decode(s: &str) -> Vec<u8> {
     (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect()
 }
+
+// ============ t104：精灵层（OAM 语义/合成/quirk） ============
+
+#[test]
+fn oam_parse_and_attr_semantics() {
+    use game_desktop::{parse_oam, SpriteObj};
+    let s = SpriteObj::from_oam4([0x1F, 0x05, 0x63, 0x40]);
+    assert_eq!(s.screen_y(), 0x20, "OAM Y=Y-1（NESdev）");
+    assert_eq!(s.palette(), 3);
+    assert!(s.behind_bg(), "bit5=BG 前置");
+    assert!(s.hflip() && !s.vflip(), "bit6=hflip（0x63 位形）");
+    let oam = [0u8; 256];
+    assert_eq!(parse_oam(&oam).len(), 64, "64 条 OAM");
+}
+
+#[test]
+fn sprite_render_flip_priority_and_8line_quirk() {
+    use game_desktop::{render_sprites, Canvas, SpriteObj, GREY4};
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").unwrap_or_default();
+    if rom.is_empty() {
+        return;
+    }
+    let mut canvas = Canvas::new();
+    let pals = [GREY4; 4];
+    let bg_clear = [[false; 256]; 240];
+    // 单精灵：字模区首个非空 tile
+    let mut tile_pick = 0u8;
+    for t in 0..64u8 {
+        let raw = game_data::chr::tile_bytes(&rom, 124, t as usize);
+        if game_data::chr::decode_tile(&raw).iter().any(|r| r.iter().any(|&v| v != 0)) {
+            tile_pick = t;
+            break;
+        }
+    }
+    let spr = SpriteObj { y: 100, tile: tile_pick, attr: 0, x: 50 };
+    render_sprites(&mut canvas, &rom, &[spr], 124, &pals, &bg_clear);
+    assert!(canvas.pixels.iter().any(|&p| p != 0), "精灵必须落笔");
+    // 负向 1：behind_bg + BG 遮挡 ⇒ 不落笔
+    let mut c2 = Canvas::new();
+    let bg_block = [[true; 256]; 240];
+    render_sprites(&mut c2, &rom, &[SpriteObj { y: 100, tile: tile_pick, attr: 0x20, x: 50 }], 124, &pals, &bg_block);
+    assert!(c2.pixels.iter().all(|&p| p == 0), "BG 前置+遮挡必红");
+    // 负向 2：8/行溢出——同线 9 精灵，第 9 个丢弃
+    let mut c3 = Canvas::new();
+    let nine: Vec<SpriteObj> = (0..9).map(|i| SpriteObj { y: 100, tile: tile_pick, attr: 0, x: i * 8 }).collect();
+    render_sprites(&mut c3, &rom, &nine, 124, &pals, &bg_clear);
+    let mut c4 = Canvas::new();
+    let eight: Vec<SpriteObj> = (0..8).map(|i| SpriteObj { y: 100, tile: tile_pick, attr: 0, x: i * 8 }).collect();
+    render_sprites(&mut c4, &rom, &eight, 124, &pals, &bg_clear);
+    let count = |c: &Canvas| c.pixels.iter().filter(|&&p| p != 0).count();
+    assert_eq!(count(&c3), count(&c4), "第 9 精灵必须丢弃（8/行 quirk）");
+}
