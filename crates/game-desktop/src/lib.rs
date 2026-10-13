@@ -309,9 +309,18 @@ pub fn render_sprites(
         // 模型 A（跨半对）：tile t 两半跨 bank106/107（同 t 不同 bank）；
         // 模型 B（同 bank 邻接对）：even/odd 邻接（t165 原实现）。
         let t = spr.tile as usize;
-        // t184 ② 列对四象限（TL=base+0/BL=base+1/TR=base+2/BR=base+3——2×2 拼字）：
-        // 8×16 竖对保留（上下半），水平象限由双精灵对（相邻槽）承担——单精灵内=竖对
-        let px_all: [[[u8; 8]; 8]; 2] = {
+        // t184 ② 列对四象限（TL=base+0/BL=base+1/TR=base+2/BR=base+3）；
+        // R16-2（t178）：SPRITE_MODEL 变体开关**恢复**（对照证据面禁硬编码移除）——
+        // 模型 A=跨半对（106:t,107:t）/模型 B=同 bank 邻接对（even/odd，默认）
+        let model_a = std::env::var("SPRITE_MODEL").map(|v| v == "A").unwrap_or(false);
+        let px_all: [[[u8; 8]; 8]; 2] = if model_a {
+            let bank_top = sprite_chr_base + t / 64;
+            let bank_bot = sprite_chr_base + 1 + t / 64;
+            [
+                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_top, t % 64)),
+                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_bot, t % 64)),
+            ]
+        } else {
             let t_even = t & 0xFE;
             let bank_top = sprite_chr_base + t_even / 64;
             let bank_bot = sprite_chr_base + (t_even | 1) / 64;
