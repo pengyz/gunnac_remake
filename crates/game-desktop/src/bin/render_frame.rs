@@ -255,7 +255,10 @@ fn main() {
                 // 【2026-10-13 更正（t185 R18-1 高危）】墨掩码=p0 置位（索引 1/3 为墨、
                 // 0/2 为底）——t181『高平面』结论反了（相位错位伪数），实测 ink=p0 低平面
                 // 掩码 100%（256/256）；高平面仅 80.9%（承错实现 55.5% 画错形）
-                let bg_pal: [game_desktop::Rgba; 4] = [[0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255], [0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255]];
+                // 【2026-10-13 t192 裁定】双色渲染调色板依赖——两平面各自精确，墨色按 palette
+                // 映射勿固定 index（R18-1/p2 争议闭合：p0 稠墨暴露放置缺口/p2 稀疏被指标奖励
+                // ——均非真根，真根=palette 映射）——非零索引全可见（绑定白）
+                let bg_pal: [game_desktop::Rgba; 4] = [[0, 0, 0, 255], [0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255], [0, 0, 0, 255]];
                 canvas.draw_chr(&rom, bank, tile % 64, px, py, &bg_pal);
             }
         }
@@ -289,11 +292,11 @@ fn main() {
     let sprite_pals: [[game_desktop::Rgba; 4]; 4] = [
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0x00, 0x40, 0x4D)],
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0xFF, 0xFE, 0xFF)],
-        [unk, mk(0xBC, 0xBE, 0x00), unk, mk(0xBC, 0xBE, 0x00)],
+        [unk, unk, unk, mk(0xBC, 0xBE, 0x00)],
         [unk, unk, unk, unk],
-    ];
+    ]; // t192：墨色按 palette 映射（非零全可见，绑定色）
     let bg_opaque = [[false; 256]; 240]; // BG 面重建为空（黑场）——掩码全透明
-    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 28, &sprite_pals, &bg_opaque);
+    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 30, &sprite_pals, &bg_opaque);
 
     std::fs::create_dir_all("oracle/screens/actual").unwrap();
     let out_path = format!("oracle/screens/actual/{name}.png");
