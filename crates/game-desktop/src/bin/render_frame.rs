@@ -291,7 +291,7 @@ fn main() {
         [unk, unk, unk, unk],
     ];
     let bg_opaque = [[false; 256]; 240]; // BG 面重建为空（黑场）——掩码全透明
-    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 124, &sprite_pals, &bg_opaque);
+    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 107, &sprite_pals, &bg_opaque);
 
     std::fs::create_dir_all("oracle/screens/actual").unwrap();
     let out_path = format!("oracle/screens/actual/{name}.png");
