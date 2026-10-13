@@ -305,17 +305,27 @@ pub fn render_sprites(
         if dropped {
             continue;
         }
-        // ① 8×16 精灵解析（W42 收口：$1A bit5=1 全程——t103 8×8 证伪）：
-        // tile 奇偶=上下半身（偶=上/奇=下），配对规则 NESdev 标准
-        let t_even = spr.tile as usize & 0xFE;
-        let bank_top = sprite_chr_base + t_even / 64;
-        let bank_bot = sprite_chr_base + (t_even | 1) / 64;
-        if bank_top >= 128 || bank_bot >= 128 {
-            continue;
-        }
-        let px_top = game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_top, t_even % 64));
-        let px_bot = game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_bot, (t_even | 1) % 64));
-        let px_all: [[[u8; 8]; 8]; 2] = [px_top, px_bot];
+        // ① 8×16 精灵解析（W42 收口）——**R12-1 两模型对照**（匹配率裁决）：
+        // 模型 A（跨半对）：tile t 两半跨 bank106/107（同 t 不同 bank）；
+        // 模型 B（同 bank 邻接对）：even/odd 邻接（t165 原实现）。
+        let t = spr.tile as usize;
+        let model_a = std::env::var("SPRITE_MODEL").map(|v| v == "A").unwrap_or(false);
+        let px_all: [[[u8; 8]; 8]; 2] = if model_a {
+            let bank_top = sprite_chr_base + t / 64;
+            let bank_bot = sprite_chr_base + 1 + t / 64;
+            [
+                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_top, t % 64)),
+                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_bot, t % 64)),
+            ]
+        } else {
+            let t_even = t & 0xFE;
+            let bank_top = sprite_chr_base + t_even / 64;
+            let bank_bot = sprite_chr_base + (t_even | 1) / 64;
+            [
+                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_top, t_even % 64)),
+                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_bot, (t_even | 1) % 64)),
+            ]
+        };
         for row in 0..16usize {
             let y = y0 + row as i32;
             if !(0..240).contains(&y) {

@@ -248,7 +248,8 @@ fn main() {
             let px = (tx as i32) * 8 - sx as i32;
             let py = (ty as i32) * 8 - sy as i32; // t131 实测：+8 更劣（94.17<94.50）——偏移非主因
             // t157 三行映射（t154 A 级）：字模族→124/126 对，游戏族→$6A(106) 对
-            let bank = if tile_page[ntr][ty] == 2 { 106 + (tile / 64) * 2 } else { font_bank + (tile / 64) * 2 };
+            // ② 字模 CHR 直读（t167 A 级）：bank124 基 + tile×16 **线性区**（跨 bank 124-127 连续）
+            let bank = if tile_page[ntr][ty] == 2 { 106 + (tile / 64) * 2 } else { font_bank + (tile / 64) * 2 }; // R12-1 裁决：模型 B（同 bank 邻接对）胜
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 let bg_pal: [game_desktop::Rgba; 4] = [
