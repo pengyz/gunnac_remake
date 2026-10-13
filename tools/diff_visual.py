@@ -80,6 +80,9 @@ def decode_png(path: Path):
     return w, h, out
 
 
+TRUE_COLOR = True  # t99 ②：真彩域比对口径（GREY4 公共域退役；0 容差/禁缩放不变）
+
+
 def grey_quantize(r: int, g: int, b: int) -> int:
     """灰阶公共口径：亮度量化至 GREY4 四级（调色板未证 W-C1——公共域声明）。"""
     luma = (r * 299 + g * 587 + b * 114) // 1000
@@ -95,8 +98,12 @@ def compare(exp_path: Path, act_path: Path):
     for y in range(240):
         er, ar = exp[y], act[y]
         for x in range(256):
-            ei = grey_quantize(er[3 * x], er[3 * x + 1], er[3 * x + 2])
-            ai = grey_quantize(ar[3 * x], ar[3 * x + 1], ar[3 * x + 2])
+            if TRUE_COLOR:
+                ei = (er[3 * x], er[3 * x + 1], er[3 * x + 2])
+                ai = (ar[3 * x], ar[3 * x + 1], ar[3 * x + 2])
+            else:
+                ei = grey_quantize(er[3 * x], er[3 * x + 1], er[3 * x + 2])
+                ai = grey_quantize(ar[3 * x], ar[3 * x + 1], ar[3 * x + 2])
             if ei != ai:
                 diff_pixels.append((x, y, ei, ai))
     return diff_pixels, None
@@ -179,7 +186,7 @@ def main() -> int:
     lines = [
         "# L4 视觉差分报告（t92 首报）",
         "",
-        "> 口径：256×240 逐像素 0 容差；色彩空间=灰阶公共口径（GREY4 四级量化）——",
+        "> 口径：256×240 逐像素 0 容差；色彩空间=**真彩域**（t99 ②升级；GREY4 公共域退役）——",
         "> 调色板映射未证（W-C1 候选**列而未启用**，启用需用户确认）。",
         "> 判定：白名单外像素一致 或 全部差异有显式四分类记录。",
         "",

@@ -28,6 +28,8 @@ fn main() {
     let mut nt = Nametable::default();
     let mut buf = [0u8; 0x31]; // $0130-$015F + $0160
     let mut attrs = [0u8; 8];
+    let mut addr_regs = (0u8, 0u8, 0u8); // $8E/$8F/$90（t99：probe 写点追踪，解相位陷阱）
+    let mut palette_src = [0u8; 7]; // $161-$167 调色板源（t99 ①）
     let mut pending_row: Option<([u8; 32], [u8; 8], u8, u8, u8)> = None;
     let mut sx = 0u8;
     let mut sy = 0u8;
@@ -44,13 +46,19 @@ fn main() {
         }).collect()
     }).unwrap_or_default();
     let mut probe_i = 0usize;
-    let apply_frame_writes = |buf: &mut [u8; 0x31], attrs: &mut [u8; 8], f: u64, pi: &mut usize| {
+    let apply_frame_writes = |buf: &mut [u8; 0x31], attrs: &mut [u8; 8],
+                                  regs: &mut (u8, u8, u8), pal: &mut [u8; 7],
+                                  f: u64, pi: &mut usize| {
         while *pi < probe.len() && probe[*pi].0 == f {
             let (_f, a, v) = probe[*pi];
             *pi += 1;
             match a {
                 0x0130..=0x0160 => buf[(a - 0x0130) as usize] = v,
                 0x00D3..=0x00DA => attrs[(a - 0x00D3) as usize] = v,
+                0x8E => regs.0 = v,
+                0x8F => regs.1 = v,
+                0x90 => regs.2 = v,
+                0x0161..=0x0167 => pal[(a - 0x0161) as usize] = v,
                 _ => {}
             }
         }
@@ -66,13 +74,13 @@ fn main() {
         let zi = line.find("\"zp\":\"").unwrap();
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
         // —— 主循环相位：probe 写事件填充缓冲 ——
-        apply_frame_writes(&mut buf, &mut attrs, f, &mut probe_i);
+        apply_frame_writes(&mut buf, &mut attrs, &mut addr_regs, &mut palette_src, f, &mut probe_i);
         // 帧末挂起：行缓冲若本帧被写过（扫写）→ 排队下帧 NMI 上传（地址取当帧 zp）
         let wrote = probe.iter().any(|(pf, pa, _)| *pf == f && (0x0130..=0x0150).contains(pa));
         if wrote {
             let mut row = [0u8; 32];
             row.copy_from_slice(&buf[0x00..0x20]);
-            pending_row = Some((row, attrs, zp[0x8E], zp[0x8F], zp[0x90]));
+            pending_row = Some((row, attrs, addr_regs.0, addr_regs.1, addr_regs.2));
         }
         let _ = &zp_prev;
         zp_prev = zp.clone();
@@ -84,9 +92,10 @@ fn main() {
     // 渲染：nametable 32×30 + 卷轴
     let mut canvas = Canvas::new();
     let font_bank = game_data::chr::FONT_BANK_START;
+    let ntr: usize = std::env::var("RENDER_NT").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
     for ty in 0..30usize {
         for tx in 0..32usize {
-            let tile = nt.tiles[ty * 32 + tx] as usize + base * 256;
+            let tile = nt.tiles[ntr][ty * 32 + tx] as usize + base * 256;
             let px = (tx as i32) * 8 - sx as i32;
             let py = (ty as i32) * 8 - sy as i32;
             let bank = font_bank + tile / 64;
@@ -95,10 +104,28 @@ fn main() {
             }
         }
     }
+    // 索引侧车：逐像素 (调色板号, 像素值) + 调色板源（t99 ①反推输入）
+    let mut idx_rows: Vec<String> = Vec::new();
+    for ty in 0..30usize {
+        for tx in 0..32usize {
+            let pal = nt.block_palette(ntr, tx, ty);
+            let tile = nt.tiles[ntr][ty * 32 + tx];
+            idx_rows.push(format!("{}:{}:{}", tx, ty, pal));
+            let _ = tile;
+        }
+    }
     std::fs::create_dir_all("oracle/screens/actual").unwrap();
     let out_path = format!("oracle/screens/actual/{name}.png");
     canvas.export_png(std::path::Path::new(&out_path)).expect("导出");
+    let idx_path = format!("oracle/screens/actual/{name}.idx.json");
+    std::fs::write(&idx_path, format!(
+        "{{\"palette_src\":\"{}\",\"attrs\":\"{}\",\"tiles\":\"{}\"}}",
+        palette_src.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+        nt.attrs[ntr].iter().map(|b| format!("{b:02x}")).collect::<String>(),
+        nt.tiles[ntr].iter().map(|b| format!("{b:02x}")).collect::<String>(),
+    )).expect("侧车");
+    let _ = idx_rows;
     let mut log = std::fs::OpenOptions::new().create(true).append(true).open("oracle/screens/actual/.render.log").unwrap();
-    writeln!(log, "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={}", nt.tiles.iter().filter(|&&t| t != 0).count(), probe.len()).unwrap();
+    writeln!(log, "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={}", nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count(), probe.len()).unwrap();
     let _ = (SCREEN_W, SCREEN_H);
 }

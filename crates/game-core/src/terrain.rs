@@ -284,16 +284,17 @@ pub fn vm_run_frame(
 
 // ============ nametable 持久化模型（t93 ②；bank15:$F040-F0DA NMI 消费链定谳） ============
 
-/// NES 背景 nametable 状态（32×30 tiles + 8×8 属性字节）。
+/// NES 背景 nametable 状态（**4 个 NT** ×（32×30 tiles + 8×8 属性）——t99 实测
+/// 上传地址含 $2Bxx（NT2），模型不得钉死 NT0）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Nametable {
-    pub tiles: [u8; 960],
-    pub attrs: [u8; 64],
+    pub tiles: [[u8; 960]; 4],
+    pub attrs: [[u8; 64]; 4],
 }
 
 impl Default for Nametable {
     fn default() -> Self {
-        Nametable { tiles: [0; 960], attrs: [0; 64] }
+        Nametable { tiles: [[0; 960]; 4], attrs: [[0; 64]; 4] }
     }
 }
 
@@ -309,28 +310,34 @@ impl Nametable {
         }
         let raw = (addr_hi as u16) << 8 | addr_lo as u16;
         if !(0x2000..0x3000).contains(&raw) {
-            return; // 非 PPU 域地址（boot/菜单期 $8E/$8F 驻留 RAM 影子——不入 nametable）
+            return; // 非 PPU 域地址（相位陷阱值不入）
         }
-        let a = (raw - 0x2000) as usize;
-        let row = a / 32;
-        let col = a % 32;
-        if row < 30 && col + 32 <= 32 {
-            self.tiles[row * 32..row * 32 + 32].copy_from_slice(row_buf);
+        let rel = (raw - 0x2000) as usize;
+        let nt = rel / 0x400; // NT 号（t99：$2Bxx=NT2 实测）
+        let off = rel % 0x400;
+        let (row, col) = (off / 32, off % 32);
+        if nt < 4 && row < 30 && col == 0 {
+            self.tiles[nt][row * 32..row * 32 + 32].copy_from_slice(row_buf);
         }
         let attr_raw = ((addr_hi as u16 | 3) << 8) | attr_lo as u16;
-        if (0x23C0..0x2400).contains(&attr_raw) {
-            let attr_addr = (attr_raw - 0x23C0) as usize;
-            if attr_addr + 8 <= 64 {
-                self.attrs[attr_addr..attr_addr + 8].copy_from_slice(attrs);
+        if (0x23C0..0x3000).contains(&attr_raw) {
+            let arel = (attr_raw - 0x2000) as usize;
+            let ant = arel / 0x400;
+            let aoff = arel % 0x400;
+            if ant < 4 && (0x3C0..0x400).contains(&aoff) {
+                let idx = aoff - 0x3C0;
+                if idx + 8 <= 64 {
+                    self.attrs[ant][idx..idx + 8].copy_from_slice(attrs);
+                }
             }
         }
     }
 
     /// 属性字节 → 2×2 块调色板号（NES 规范：2 bit/块，行对/列对取位）。
-    pub fn block_palette(&self, tile_x: usize, tile_y: usize) -> u8 {
+    pub fn block_palette(&self, nt: usize, tile_x: usize, tile_y: usize) -> u8 {
         let ax = tile_x / 4;
         let ay = tile_y / 4;
-        let b = self.attrs[ay * 8 + ax];
+        let b = self.attrs[nt][ay * 8 + ax];
         let shift = ((tile_y % 4) / 2) * 4 + ((tile_x % 4) / 2) * 2;
         (b >> shift) & 3
     }
