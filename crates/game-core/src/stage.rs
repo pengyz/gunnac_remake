@@ -222,3 +222,44 @@ pub fn boss_segment_unproven() -> Result<(), String> {
 pub fn vm_x_adjust_gate(x: u8, d: u8) -> (u8, bool) {
     crate::terrain::vm_x_adjust(x, d)
 }
+
+// ============ STG-02..08 三级骨架（t193；t87 §1 A/B 级表） ============
+
+/// 关卡骨架（rec4=调度记录/rec6=内容记录/CNT tick 参数/脚本指针集）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StageSkeleton {
+    pub root: u16,
+    pub tail: u16,
+    pub rec4: u16,
+    pub rec6: u16,
+    pub loop_n: u8,
+    /// CNT tick 参数（$FD 循环计数序列 7 段——STG-3/8 显式；其余在子流=W28′ 残余）
+    pub tick_params: Option<[u8; 7]>,
+    pub scripts: &'static [u16],
+}
+
+/// 八关骨架登记（t87 §1 逐值；STG-1/7 共享流 root=$A000）。
+pub fn stage_skeleton(n: u8) -> Option<StageSkeleton> {
+    use StageSkeleton as S;
+    Some(match n {
+        1 | 7 => S { root: 0xA000, tail: if n == 1 { 0xA16F } else { 0xA5D6 },
+                    rec4: 232, rec6: 24, loop_n: 3, tick_params: None,
+                    scripts: &[0xA39B, 0xB149, 0xB6E1, 0xBBAF, 0xBCFA] },
+        2 => S { root: 0xA048, tail: 0xA3C4, rec4: 242, rec6: 14, loop_n: 3,
+                tick_params: None, scripts: &[0xA39B] },
+        3 => S { root: 0xACEA, tail: 0xB1CA, rec4: 29, rec6: 13, loop_n: 1,
+                tick_params: Some([16, 16, 8, 16, 8, 4, 16]),
+                scripts: &[0xAD54, 0xAD66, 0xAD78, 0xAD8A, 0xAD98, 0xADA6, 0xADB8, 0xB198] },
+        4 => S { root: 0xA1B1, tail: 0xA5B4, rec4: 214, rec6: 38, loop_n: 8,
+                tick_params: None,
+                scripts: &[0xA3FB, 0xA4E0, 0xA6CA, 0xA9FE, 0xB663] },
+        5 => S { root: 0xAB35, tail: 0xAF4D, rec4: 219, rec6: 41, loop_n: 0,
+                tick_params: None, scripts: &[0xAB82, 0xB21D, 0xB410, 0xBE41] },
+        6 => S { root: 0xB3AA, tail: 0xB7CF, rec4: 250, rec6: 10, loop_n: 0,
+                tick_params: None, scripts: &[0xB4E6] },
+        8 => S { root: 0xAC6A, tail: 0xAF7D, rec4: 52, rec6: 19, loop_n: 1,
+                tick_params: Some([16, 16, 8, 16, 8, 4, 16]),
+                scripts: &[0xAD54, 0xAD66, 0xAD78, 0xAD8A, 0xAD98, 0xADA6, 0xADB8, 0xB198] },
+        _ => return None,
+    })
+}

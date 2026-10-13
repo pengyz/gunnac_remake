@@ -96,3 +96,22 @@ fn stg01_full_chain_driver() {
     assert!(format!("{:?}", st.mode).contains("Unproven") == false, "已证链不得含未证段");
     assert_eq!(checkpoints.len(), 7, "L5 检查点 7 个（A1 流程可达）");
 }
+
+#[test]
+fn stg_02_08_chain_checkpoints() {
+    // t193 ②：STG-02..08 链扩展——每关 StageStart 检查点（A1 流程可达）
+    // 帧号=占位（场景取证后填真值，fail-closed 不发明）
+    use game_core::stage::stage_skeleton;
+    let mut checkpoints = Vec::new();
+    for n in 2..=8u8 {
+        let sk = stage_skeleton(n).expect("骨架");
+        checkpoints.push((n, sk.root, sk.tail));
+    }
+    assert_eq!(checkpoints.len(), 7, "STG-02..08 七关检查点");
+    // 负向：骨架 root/tail 非零哨兵
+    for (n, root, tail) in &checkpoints {
+        assert!(*root != 0 && *tail != 0, "STG-{n} root/tail 非零");
+    }
+    // STG-7/1 共享流（内容集成注）
+    assert_eq!(stage_skeleton(7).unwrap().rec4, stage_skeleton(1).unwrap().rec4);
+}

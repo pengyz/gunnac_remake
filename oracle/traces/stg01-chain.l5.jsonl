@@ -8,3 +8,10 @@
 {"scene": "respawn-window", "f": 1260, "mode": "StageStart", "checkpoint": null}
 {"scene": "respawn-window", "f": 1350, "mode": "Combat", "checkpoint": null}
 {"scene": "respawn-window", "f": 1400, "mode": "DeathRespawn", "checkpoint": "respawn-window"}
+{"scene": "stg02-08-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg02-start"}
+{"scene": "stg02-08-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg03-start"}
+{"scene": "stg02-08-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg04-start"}
+{"scene": "stg02-08-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg05-start"}
+{"scene": "stg02-08-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg06-start"}
+{"scene": "stg02-08-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg07-start"}
+{"scene": "stg02-08-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg08-start"}
