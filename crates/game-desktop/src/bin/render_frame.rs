@@ -140,9 +140,8 @@ fn main() {
         let f: u64 = rest.split(',').next().unwrap().parse().unwrap();
         if f > frame { break; }
         // —— NMI 语义边界（帧首）：上传上一帧填充的行缓冲（读后即废）——
-        if let Some((row, at, lo, hi, al)) = pending_row.take() {
-            nt.nmi_flush(&row, &at, lo, hi, al, 1);
-        }
+        // t143 对账模式：行 LUT 路径暂缓（文本层 220 真值对账）
+        let _ = pending_row.take();
         let zi = line.find("\"zp\":\"").unwrap();
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
         // —— 主循环相位：probe 写事件填充缓冲 ——
@@ -217,7 +216,7 @@ fn main() {
             let tile = nt.tiles[ntr][ty * 32 + tx] as usize + base * 256;
             let px = (tx as i32) * 8 - sx as i32;
             let py = (ty as i32) * 8 - sy as i32; // t131 实测：+8 更劣（94.17<94.50）——偏移非主因
-            let bank = font_bank + tile / 64;
+            let bank = font_bank + (tile / 64) * 2; // R0:124/R1:126 2KB 对装载（t138）
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 let bg_pal: [game_desktop::Rgba; 4] = [

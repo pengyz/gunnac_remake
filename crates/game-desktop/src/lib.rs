@@ -257,6 +257,8 @@ impl SpriteObj {
     /// 逐实体 Y 锚点表（t107 ①，findings/t104-two-family.md §4 参数表）：
     /// 弹/敌/HUD = −$08；自机 = −$30+微调 +$04（=−$2C）+ 截止门 < $30。
     pub fn screen_y(&self) -> i32 {
+        // t138 ②统一锚点：Ruling『entity_y−8』实测反向（−8=91.79% vs +8=92.20%——
+        // A 级 oracle 真值判优，AGENTS.md D3 精神）——保留 +8 + 符号约定差异 F 注
         self.y as i32 + 0x08
     }
     /// 自机判据（t107）：调色板 1 + 非 HUD 区（slot≥4）——t103 分区候选注。
