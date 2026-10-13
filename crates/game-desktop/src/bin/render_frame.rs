@@ -260,6 +260,8 @@ fn main() {
                 // ——均非真根，真根=palette 映射）——非零索引全可见（绑定白）
                 // 【R19-1 逐块 palette 映射】文本块 index2→白（已证）——勿全局 2only
                 // （可见文本帧按 2only 丢字）；CJK 精灵 pal index1=白=墨（256/256 正确）
+                // t201 ①：合成规则墨表（t199 index=p0|(p1<<1)）+ palette 全表候选
+                // p0 置位（1/3）为墨：1=白、3=青（绑定色候选）
                 let bg_pal: [game_desktop::Rgba; 4] = [
                     [0, 0, 0, 255],
                     [0, 0, 0, 255],
@@ -299,9 +301,9 @@ fn main() {
     let sprite_pals: [[game_desktop::Rgba; 4]; 4] = [
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0x00, 0x40, 0x4D)],
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0xFF, 0xFE, 0xFF)],
-        [unk, unk, unk, mk(0xBC, 0xBE, 0x00)],
-        [unk, unk, unk, unk],
-    ]; // t192：墨色按 palette 映射（非零全可见，绑定色）
+        [unk, mk(0xBC, 0xBE, 0x00), unk, mk(0xBC, 0xBE, 0x00)],
+        [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0xE4, 0xE5, 0x94)],
+    ]; // R20-1：精灵面墨=pal[1]/pal[3]（p0 面值 1/3）
     let bg_opaque = [[false; 256]; 240]; // BG 面重建为空（黑场）——掩码全透明
     game_desktop::render_sprites(&mut canvas, &rom, &sprites, 30, &sprite_pals, &bg_opaque);
 
