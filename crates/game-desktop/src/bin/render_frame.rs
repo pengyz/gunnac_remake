@@ -47,6 +47,21 @@ fn main() {
         }).collect()
     }).unwrap_or_default();
     let mut probe_i = 0usize;
+    let mut iram: Vec<u8> = Vec::new();
+    let mut ptr_writes: std::collections::HashMap<u64, (u8, u8)> = std::collections::HashMap::new();
+    for (pf, pa, pv) in &probe {
+        match pa {
+            0x2F => {
+                let e = ptr_writes.entry(*pf).or_insert((0, 0));
+                e.0 = *pv;
+            }
+            0x30 => {
+                let e = ptr_writes.entry(*pf).or_insert((0, 0));
+                e.1 = *pv;
+            }
+            _ => {}
+        }
+    }
     let mut trace_oam: Option<String> = None;
     let apply_frame_writes = |buf: &mut [u8; 0x31], attrs: &mut [u8; 8],
                                   regs: &mut (u8, u8, u8), pal: &mut [u8; 7],
@@ -84,12 +99,38 @@ fn main() {
         if let Some((row, at, lo, hi, al)) = pending_row.take() {
             nt.nmi_flush(&row, &at, lo, hi, al, 1);
         }
+        if let Some(i) = line.find("\"iram\":\"") {
+            let rest = &line[i + 8..];
+            iram = hex_decode(&rest[..rest.find('"').unwrap()]);
+        }
         let zi = line.find("\"zp\":\"").unwrap();
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
         // —— 主循环相位：probe 写事件填充缓冲 ——
         apply_frame_writes(&mut buf, &mut attrs, &mut addr_regs, &mut palette_src, f, &mut probe_i);
         // 帧末挂起：行缓冲若本帧被写过（扫写）→ 排队下帧 NMI 上传（地址取当帧 zp）
         let wrote = probe.iter().any(|(pf, pa, _)| *pf == f && (0x0130..=0x0150).contains(pa));
+        // —— 文本通道（t118 ①②③四段链复刻）：$2F/$30 流指针（RAM 中转 W50 实证）→
+        // iram 流字节 → 地址合成三类 → nametable 直写（$E6DF/$E828/$E7DC 语义）——
+        if let Some(&(slo, hi)) = ptr_writes.get(&f) {
+            let mut ch = game_core::terrain::TextChannel {
+                stream_lo: slo, stream_hi: hi,
+                addr_lo: zp[0x14], addr_hi: zp[0x15], count: 0, tier7e: false,
+            };
+            for _ in 0..64 {
+                let sa = ((ch.stream_hi as u16) << 8 | ch.stream_lo as u16).wrapping_sub(0x0300) as usize;
+                let Some(&b) = iram.get(sa) else { break };
+                if let Some((addr, tile)) = game_core::terrain::text_channel_byte(&mut ch, b) {
+                    if (0x2000..0x3000).contains(&addr) {
+                        let rel = (addr - 0x2000) as usize;
+                        let (n, off) = (rel / 0x400, rel % 0x400);
+                        if n < 4 && off < 0x3C0 {
+                            nt.tiles[n][off] = tile;
+                        }
+                    }
+                }
+                if b >= 0xFE { break; }
+            }
+        }
         if wrote {
             let mut row = [0u8; 32];
             row.copy_from_slice(&buf[0x00..0x20]);

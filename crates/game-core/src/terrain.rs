@@ -374,3 +374,76 @@ pub fn place_text_records(nt: &mut Nametable, records: &[TextPlacement]) {
         }
     }
 }
+
+// ============ 文本通道四段链（t118；text-record-write.md §1/§4 A 级定谳） ============
+
+/// 文本通道状态（四段链寄存器组）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TextChannel {
+    pub stream_lo: u8, // $12
+    pub stream_hi: u8, // $13
+    pub addr_lo: u8,   // $14（目标地址累加器）
+    pub addr_hi: u8,   // $15
+    pub count: u8,     // $20（已写计数）
+    pub tier7e: bool,  // $7E（预算档选择）
+}
+
+/// 预算档（$E828：`$7E ? $30 : $50`）。
+pub fn vram_budget(tier7e: bool) -> u8 {
+    if tier7e { 0x30 } else { 0x50 }
+}
+
+/// 地址合成（$96D8-$9708）：三类字节语义。
+/// - `$20-$7F` 数据：`(byte & $1F) + addr_lo | $20`（$14 累加/ORA #$20）→ 目标低字节；
+/// - `<$20` 偏移：addr 累加续址（ADC $14）；
+/// - `≥$80` 控制：$FE=终止/继续，其余 → $0180 标志（本层不解释标志）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextByte {
+    Data(u8),
+    Offset(u8),
+    Control(u8),
+}
+
+pub fn classify_text_byte(b: u8) -> TextByte {
+    match b {
+        0x20..=0x7F => TextByte::Data(b),
+        0x00..=0x1F => TextByte::Offset(b),
+        _ => TextByte::Control(b),
+    }
+}
+
+/// 数据字节合成目标低字节（`AND #$1F / ADC $14 / ORA #$20`）。
+pub fn synth_addr_lo(data: u8, addr_lo: u8) -> u8 {
+    (data & 0x1F).wrapping_add(addr_lo) | 0x20
+}
+
+/// 预算门（$E828）：`budget − count < 4` ⇒ 需 flush（写 + 递归排空）。
+pub fn budget_needs_flush(ch: &TextChannel) -> bool {
+    vram_budget(ch.tier7e).wrapping_sub(ch.count) < 4
+}
+
+/// 单字节推进（$E6DF 推进语义）：返回 (可写 tile?, 更新后状态)。
+pub fn text_channel_byte(ch: &mut TextChannel, b: u8) -> Option<(u16, u8)> {
+    match classify_text_byte(b) {
+        TextByte::Data(d) => {
+            // 位置来自字节低 5 位（序列运行实证：34 35 36…/a8 a9 aa…）——$14 不自增
+            let lo = synth_addr_lo(d, ch.addr_lo);
+            let addr = ((ch.addr_hi as u16) << 8) | lo as u16;
+            ch.count = ch.count.wrapping_add(1);
+            Some((addr, d))
+        }
+        TextByte::Offset(o) => {
+            ch.addr_lo = ch.addr_lo.wrapping_add(o);
+            None
+        }
+        TextByte::Control(c) => {
+            if c >= 0xFE {
+                ch.stream_lo = ch.stream_lo.wrapping_add(1); // $E6DF：指针推进
+                if ch.stream_lo == 0 {
+                    ch.stream_hi = ch.stream_hi.wrapping_add(1);
+                }
+            }
+            None
+        }
+    }
+}
