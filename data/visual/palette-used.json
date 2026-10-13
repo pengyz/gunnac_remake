@@ -407,5 +407,11 @@
     "integration_result": "集成净负（96.40/95.44 < 98.15/97.27）：glyph 画对但整体反降——**位置锚点/8-line quirk/族选择器交互**未收口（glyph 54px vs 净损 1075px=他处回退）",
     "single_point_mapping": "OAM tile=1 → bank96 pair (T&$FE, T&$FE|1) = (0,1) ✓（t209 公式实证）；下半 value 2 面（R20-1 修正注）",
     "conclusion": "单点映射已实证（W73' 根的 CHR 侧确认）——集成层（族选择器+锚点+quirk 交互）为剩余工程；按止损保留 t208 状态（98.15/97.27）"
+  },
+  "t213_interaction_closure": {
+    "status": "交互收口：**净损根拆解定谳**——t212 1075px 归因=Game 族被挪 30→106（实测判优=30）；分步接线：Label→96 ✓ 守卫过（『田』glyph 16/16=0 差！）",
+    "attribution": "t212 净损逐项归因：①Game 族 bank 30→106 挪位=主损（~226px）②label index2 开=次损（~58px）③CJK→28 分步=−58px（守卫拦下）",
+    "stepwise_results": "分步①Label→96：60306/61440=98.1543% ✓（glyph 16/16 行全配）；分步②CJK→28：60248=98.0599% ✗（守卫拦下回退）；label index2：✗（回退）",
+    "three_in_one": "结论=代码=生效：Label 族三位一体 ✓（family_of→bank96→『田』16/16 实证）；CJK/Game 族=张力注（N-0172 vs 实测）"
   }
 }
