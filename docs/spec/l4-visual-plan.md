@@ -98,6 +98,34 @@
 - 【t101 W-NEW2 收口注】t99"调色板源 0 写之谜"**收口=采样窗缺口**（`$161+` 在 t94 probe 窗外，纯窗口问题非装载绕行）——原地更正留档；t99 路由 b（调色板绑定像素级证明）**解锁**
 - 【t101 四层观测模型注】观测模型**四层全绿**：BG 装载（linebuf-7）/属性（`$90` `$C0` 族）/调色板（linebuf-8）/地址相位（linebuf-5/6）——L4 收敛断言面补全
 
+## 3.6 R-sprite-* 精灵层规则（2026-10-12 t105 入档；t103 A 级）
+
+> 证据：`docs/findings/sprite-layer-w.md` §5（OAM 链定谳）+ t103（发射器 `bank14:$CFC5` 逐字节）。
+
+### R-sprite-1: entry 四元组格式：**Y/tile/attr/X → `$0200+4n`**；**Y=`$F8` 预置隐藏协议**
+- 证据: `bank14:$CFC5-$CFE8`（`$55/$56/$57/$58` 参数 + `$52` 槽 + `$F8` 隐藏）+ sprite-layer-w.md §5
+- 可判定性: **机器可判定（L2 写集断言 + L4 帧内容断言）**
+
+### R-sprite-2: attr 位语义（NES 标准）：**bit7=V 翻转 / bit6=H 翻转 / bit5=优先级 / bits1-0=调色板**；运动码→(tile,attr) 表：**`$88E3` tile LUT + `$88F7` attr LUT（20 项，`$41/$C1/$81` 族 = 弹旋转动画）**
+- 证据: `xxd -s 0x48F3 -l 40`（双 LUT 实录）+ sprite-layer-w.md §5
+- 可判定性: 机器可判定（L2 表断言 + L4 像素断言）
+
+### R-sprite-3: NMI DMA：**`$2003:=0` + `STA $4014` 整页 `$0200` 传输**（vblank 全量）
+- 证据: `bank15:EF9B-EFA3` + sprite-layer-w.md §5
+- 可判定性: 机器可判定（L2 序列断言 + L4 帧内容断言）
+
+### R-sprite-4: OAM 槽分区：**`$10` 游戏对象 / `$F0` 分流（bit6）** + 发射门 **`$54` bit0**；`$00-$0C` = HUD 槽候选（**W43**）
+- 证据: `bank14:CDE0-CDF0` + sprite-layer-w.md §5（A 级分区）
+- 可判定性: 部分（分区 L2 可判；HUD 槽分配例程 → W43）
+
+### R-sprite-5: **8/行溢出闪烁 = D4 保真对象**（硬件 quirk：Stage A **不修**，BUG 登记通道）
+- 证据: sprite-layer-w.md §5 + AGENTS.md D4/§6（quirk 保真纪律）
+- 可判定性: 保真约束（L4 断言须含闪烁行为；运行时观测待密集场景 trace → **W44**）
+- 【t105 D4 保真注】8/行溢出闪烁=**保真保留**（Stage B 才修）——L4 断言面按含闪烁基准比对；BUG 登记通道预告（`docs/bug-ledger.md`，观测落地时登记 `BUG-xxx`）
+
+### R-l4-linebuf 双层联动注（t105）
+- 【t105 精灵层联动】L4 内容帧 = **BG + sprite 双层**：BG 侧= linebuf-1..8（行缓冲/属性/调色板/地址相位），sprite 侧=R-sprite-1..5（OAM 链）——内容帧断言面双层合取
+
 ## 4. 与 L5 的关系
 
 L5 检查点 A4（视觉点）直接复用本口径；L4 全绿定义 = **白名单外像素一致**（master-plan M4 判据）。
