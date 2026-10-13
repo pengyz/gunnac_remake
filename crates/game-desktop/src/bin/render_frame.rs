@@ -267,11 +267,12 @@ fn main() {
                 // t206 ①实测注：二维墨表（族 B=CJK 槽 1=teal/3=white）96.25/95.41
                 // < 族 A 单式 98.15/97.27——CJK 族 glyph 形状根（W73'）阻墨表生效；
                 // 保持族 A 单式（index2）为实测判优默认，二维墨表留 t204/t206 档注
+                // ③ 二维墨表落地（t204/t207）：Game 族映射=当前判优配置（lossless）
                 let bg_pal: [game_desktop::Rgba; 4] = [
-                    [0, 0, 0, 255],
-                    [0, 0, 0, 255],
-                    [0xFF, 0xFE, 0xFF, 255],
-                    [0, 0, 0, 255],
+                    game_desktop::render_rules::ink_table(game_desktop::render_rules::SpriteFamily::Game, 0),
+                    game_desktop::render_rules::ink_table(game_desktop::render_rules::SpriteFamily::Game, 1),
+                    game_desktop::render_rules::ink_table(game_desktop::render_rules::SpriteFamily::Game, 2),
+                    game_desktop::render_rules::ink_table(game_desktop::render_rules::SpriteFamily::Game, 3),
                 ];
                 canvas.draw_chr(&rom, bank, tile % 64, px, py, &bg_pal);
             }
@@ -308,7 +309,7 @@ fn main() {
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0xFF, 0xFE, 0xFF)],
         [unk, mk(0xBC, 0xBE, 0x00), unk, mk(0xBC, 0xBE, 0x00)],
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0xE4, 0xE5, 0x94)],
-    ]; // R20-1：精灵面墨=pal[1]/pal[3]（p0 面值 1/3）
+    ]; // R20-1 精灵墨（1/3）——label index2 开净负注（t212 回归守卫）
     let bg_opaque = [[false; 256]; 240]; // BG 面重建为空（黑场）——掩码全透明
     game_desktop::render_sprites(&mut canvas, &rom, &sprites, 30, &sprite_pals, &bg_opaque);
 

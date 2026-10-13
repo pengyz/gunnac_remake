@@ -40,7 +40,7 @@ pub fn decode_tile(tile: &[u8; CHR_TILE_SIZE]) -> [[u8; 8]; 8] {
     for py in 0..8 {
         let (p0, p1) = (tile[py], tile[py + 8]);
         for px in 0..8 {
-            out[py][px] = (((p0 >> (7 - px)) & 1) | (((p1 >> (7 - px)) & 1) << 1)) as u8;
+            out[py][px] = ((p0 >> (7 - px)) & 1) | (((p1 >> (7 - px)) & 1) << 1); // ④合成规则（t199 index=p0|(p1<<1)）
         }
     }
     out
