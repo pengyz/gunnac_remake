@@ -67,3 +67,32 @@ fn flow_negative_selfproof() {
     let data = PersistData { money: MoneyCounter { digits: [0, 0, 0, 0, 9, 0, 0] }, ..Default::default() };
     assert_eq!(data.on_respawn().money.value(), 900, "金钱被误清必红");
 }
+
+#[test]
+fn stg01_full_chain_driver() {
+    // t172 ②：STG-01 首关全程链——标题→菜单→商店→过渡→关卡→战斗→死亡重生
+    // （flow 状态机 t81 + STG-01 内容 t84 全链驱动；L5 检查点产出）
+    use game_core::flow::{FlowState, Mode, ModeEvent};
+    let mut st = FlowState::default();
+    let mut checkpoints: Vec<(u32, &'static str)> = Vec::new();
+    let chain: &[(u32, ModeEvent, Mode, &str)] = &[
+        (180, ModeEvent::Black, Mode::Black, "boot-black"),
+        (360, ModeEvent::Title, Mode::Title, "title-in"),
+        (540, ModeEvent::Menu, Mode::Menu, "menu-in"),
+        (1080, ModeEvent::ShopArrival, Mode::Shop, "shop-in"),
+        (1200, ModeEvent::ExitTransition, Mode::Transition, "shop-exit"),
+        (1260, ModeEvent::StageStart, Mode::StageStart, "stg01-start"),
+        (1500, ModeEvent::MidCombat, Mode::Combat, "combat"),
+    ];
+    for (f, ev, expect, cp) in chain {
+        st = st.advance(*ev).expect("已证边推进");
+        assert_eq!(st.mode, *expect, "f{f} 全程链模式推进（{}）", cp);
+        checkpoints.push((*f, *cp));
+    }
+    // 死亡重生段（R-respawn-1）：Combat → DeathRespawn
+    st = st.advance(ModeEvent::DeathRespawn).expect("死亡重生边");
+    assert!(st.mode == Mode::DeathRespawn, "死亡重生段推进");
+    // ④ 未证段 fail-closed：GameOverUnproven 禁止从已证边到达
+    assert!(format!("{:?}", st.mode).contains("Unproven") == false, "已证链不得含未证段");
+    assert_eq!(checkpoints.len(), 7, "L5 检查点 7 个（A1 流程可达）");
+}

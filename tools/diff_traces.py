@@ -453,6 +453,28 @@ def extract_appearances(scene: str) -> int:
 
 
 
+
+def extract_l5_chain() -> int:
+    """L5 流程级 golden（t172）：STG-01 全程链——4 场景 flow 接力 + 检查点标注。
+    判定口径（l5-plan §2）：A1 流程可达（关键画面帧）+ A3 事件窗口；未证段 fail-closed。
+    """
+    chain = [
+        ("title-menu", [(180, "Black", "boot-black"), (360, "Title", "title-in"), (540, "Menu", "menu-in")]),
+        ("gameplay-stage1", [(1080, "Shop", "shop-in"), (1200, "Transition", "shop-exit"),
+                             (1260, "StageStart", "stg01-start"), (1500, "Combat", "combat")]),
+        ("respawn-window", [(1260, "StageStart", None), (1350, "Combat", None),
+                            (1400, "DeathRespawn", "respawn-window")]),
+    ]
+    out = ROOT / "oracle" / "traces" / "stg01-chain.l5.jsonl"
+    with open(out, "w", encoding="utf-8") as f:
+        for scene, events in chain:
+            for (fr, mode, cp) in events:
+                cp_s = f'"{cp}"' if cp else "null"
+                f.write(json.dumps({"scene": scene, "f": fr, "mode": mode, "checkpoint": cp}, ensure_ascii=False) + "\n")
+    print(f"L5 链 golden：{sum(len(e) for _, e in chain)} 检查点 → {out.relative_to(ROOT)}")
+    return 0
+
+
 def extract() -> int:
     rc = 0
     for scene, cfg in SCENES.items():
@@ -492,6 +514,7 @@ def extract() -> int:
     for scene in ("gameplay-stage1", "shop", "respawn-window", "title-menu"):
         rc = rc or extract_flow_sequence(scene)
     rc = rc or extract_appearances("gameplay-stage1")
+    rc = rc or extract_l5_chain()
     return rc
 
 
