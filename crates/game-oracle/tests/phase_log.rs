@@ -57,7 +57,10 @@ fn phase_dataset_chain_produces_writes() {
         }
     }
     assert!(!bus.ppu_log.is_empty(), "文本链必须产出 PPU 写（负向哨兵）");
-    let has_addr = bus.ppu_log.iter().any(|w| w.addr == 0x2006);
-    let has_data = bus.ppu_log.iter().any(|w| w.addr == 0x2007);
-    assert!(has_addr && has_data, "$2006 地址对 + $2007 数据写序列");
+    // AR3-D 层1 真比对（非自比对）：段1 内容 = t130 §2 表 A 级判读（74 74 74 83…）
+    let data: Vec<u8> = bus.ppu_log.iter().filter(|w| w.addr == 0x2007).map(|w| w.val).collect();
+    assert!(data.len() >= 4 && data[0] == 0x4A && data[1] == 0x4A && data[2] == 0x4A && data[3] == 0x53, "段1 内容=t130 §2 真值（真比对）：实际 {:?}", &data[..4.min(data.len())]);
+    // 地址对：段1 起点 $2170（高 $21 低 $70）
+    let addr_writes: Vec<u8> = bus.ppu_log.iter().filter(|w| w.addr == 0x2006).map(|w| w.val).collect();
+    assert!(addr_writes.len() >= 2 && addr_writes[0] == 0x21 && addr_writes[1] == 0x70, "段1 起点 $2170（$2006 对真比对）：实际 {:?}", &addr_writes[..2.min(addr_writes.len())]);
 }
