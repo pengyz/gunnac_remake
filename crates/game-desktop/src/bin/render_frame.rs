@@ -234,7 +234,6 @@ fn main() {
     }
     // 渲染：nametable 32×30 + 卷轴
     let mut canvas = Canvas::new();
-    let font_bank = game_data::chr::FONT_BANK_START;
     let ntr: usize = std::env::var("RENDER_NT").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
     for ty in 0..30usize {
         for tx in 0..32usize {
@@ -249,7 +248,8 @@ fn main() {
             let py = (ty as i32) * 8 - sy as i32; // t131 实测：+8 更劣（94.17<94.50）——偏移非主因
             // t157 三行映射（t154 A 级）：字模族→124/126 对，游戏族→$6A(106) 对
             // ② 字模 CHR 直读（t167 A 级）：bank124 基 + tile×16 **线性区**（跨 bank 124-127 连续）
-            let bank = if tile_page[ntr][ty] == 2 { 28 + tile / 64 } else { font_bank + (tile / 64) * 2 }; // t184 ①：关卡 CJK=bank28 族，菜单 ASCII=124+nnk=124+code//64）nk 邻接对）胜
+            // R16-1：恒等式保真维持（低误差域复测 pair≡linear 98.07 同值）
+            let bank = if tile_page[ntr][ty] == 2 { 28 + tile / 64 } else { 124 + tile / 64 };
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 // ③ 高平面渲染（t184）：CJK 字形=高平面（色彩索引 2）——低平面留底
@@ -286,6 +286,9 @@ fn main() {
         [r, g, b, if r == 0 && g == 0 && b == 0 { 0 } else { 255 }]
     };
     let unk = mk(0, 0, 0);
+    // t186 ③：精灵面同高平面语义——index 2 = CJK 字形面（此前透明=字形缺失根）
+    // t186 ③实测注：精灵面 index2 开=净负（98.05/96.75 & 98.07/97.09 < 全闭 98.13/97.22）
+    // ——维持全闭，精灵形残余另有根（待后续）
     let sprite_pals: [[game_desktop::Rgba; 4]; 4] = [
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0x00, 0x40, 0x4D)],
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0xFF, 0xFE, 0xFF)],
