@@ -324,12 +324,9 @@ pub fn render_sprites(
             let (it, ib) = crate::render_rules::pair_indices(t as u8); // ②映射规则（t209 Hamming=0）
             // ①分步接线（t213 ①交互归因）：t212 净损根=Game 族被挪 30→106（实测判优=30）
             // ——分步：仅 Label 族换 bank96，其余保持 sprite_chr_base（回归守卫）
-            let fam = crate::render_rules::family_of(_slot_idx, spr.tile);
-            let base = match fam {
-                crate::render_rules::SpriteFamily::Label => 96, // t210 Hamming=0（『田』16/16）
-                // CJK→28 分步②实测 98.0599%（−58px 守卫拦下）→ 暂缓注（N-0172 张力）
-                _ => sprite_chr_base, // 实测判优（30）——Game=106 张力注
-            };
+            // ①T bit0 分窗（t214 裁定版 N-0172）：odd→96/97、even→28/29——
+            // 对基 T&$FE 连续对（30/106 之争消解：规则统一）
+            let base = if t & 1 == 1 { 96 } else { 28 };
             let bank_top = base + it / 64;
             let bank_bot = base + ib / 64;
             [
