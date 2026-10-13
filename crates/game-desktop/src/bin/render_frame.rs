@@ -18,6 +18,7 @@ fn main() {
     let frame: u64 = args.get(1).expect("帧号").parse().expect("帧号");
     let name = args.get(2).expect("输出名").clone();
     let scene = args.get(3).cloned().unwrap_or_else(|| "gameplay-stage1".into());
+    let tbank: usize = std::env::var("TEXT_BANK").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
     let base: usize = args.iter().position(|a| a == "--base")
         .and_then(|i| args.get(i + 1)).and_then(|v| v.parse().ok()).unwrap_or(0);
     let rom = std::fs::read("rom/gunnac_cn.nes").expect("ROM");
@@ -117,8 +118,15 @@ fn main() {
                 addr_lo: zp[0x14], addr_hi: zp[0x15], count: 0, tier7e: false,
             };
             for _ in 0..64 {
-                let sa = ((ch.stream_hi as u16) << 8 | ch.stream_lo as u16).wrapping_sub(0x0300) as usize;
-                let Some(&b) = iram.get(sa) else { break };
+                let sp = (ch.stream_hi as u16) << 8 | ch.stream_lo as u16;
+                let b = if sp >= 0x8000 {
+                    // ② 文本流 bank 绑定（R7 语义）：ROM 直指流按 TEXT_BANK 变体读
+                    let off = sp.wrapping_sub(0xA000) as usize;
+                    *rom.get(0x10 + tbank * 0x2000 + off).unwrap_or(&0xFE)
+                } else {
+                    let sa = sp.wrapping_sub(0x0300) as usize;
+                    match iram.get(sa) { Some(&v) => v, None => break }
+                };
                 if let Some((addr, tile)) = game_core::terrain::text_channel_byte(&mut ch, b) {
                     if (0x2000..0x3000).contains(&addr) {
                         let rel = (addr - 0x2000) as usize;

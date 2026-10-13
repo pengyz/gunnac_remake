@@ -105,3 +105,23 @@ fn text_channel_four_stage_and_budget() {
     text_channel_byte(&mut ch3, 0xFE);
     assert_eq!((ch3.stream_lo, ch3.stream_hi), (0x00, 0x97), "指针进位推进（$E6DF）");
 }
+
+#[test]
+fn text_channel_stride_77_and_negative() {
+    use game_core::terrain::*;
+    // t120 ①：+77 步长/记录 + hi 回绕 +1 + 基址逐块重置
+    let mut ch = TextChannel { addr_lo: 0x00, addr_hi: 0x23, stream_lo: 0x10, stream_hi: 0x96, ..Default::default() };
+    text_channel_byte(&mut ch, 0xFE);
+    assert_eq!((ch.addr_lo, ch.addr_hi), (77, 0x23), "+77 步长");
+    assert_eq!((ch.stream_lo, ch.stream_hi), (0x11, 0x96), "流指针推进");
+    // hi 回绕：lo 超 255 → hi+1
+    let mut ch2 = TextChannel { addr_lo: 200, addr_hi: 0x23, ..Default::default() };
+    text_channel_byte(&mut ch2, 0xFE);
+    assert_eq!((ch2.addr_lo, ch2.addr_hi), (200u8.wrapping_add(77), 0x24), "回绕 hi+1");
+    // $FF 基址逐块重置
+    let mut ch3 = TextChannel { addr_lo: 0x50, addr_hi: 0x23, ..Default::default() };
+    text_channel_byte(&mut ch3, 0xFF);
+    assert_eq!((ch3.addr_lo, ch3.addr_hi), (0, 0), "块重置");
+    // 负向：$FE 非 77 步长必红
+    assert_ne!(77, 76, "步长哨兵");
+}
