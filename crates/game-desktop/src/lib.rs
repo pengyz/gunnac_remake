@@ -287,7 +287,8 @@ pub fn render_sprites(
     bg_opaque: &[[bool; 256]; 240],
 ) {
     let mut per_line = [0u8; 240];
-    for (_slot_idx, spr) in sprites.iter().enumerate() { // slot_idx=族选择器接线用（t212 暂缓）
+    for (_slot_idx, spr) in sprites.iter().enumerate() {
+        #[allow(unused_variables)] let slot_idx = _slot_idx;
         if spr.player_cutoff() {
             continue; // 自机截止门 <$30（t107 参数表）
         }
@@ -321,11 +322,16 @@ pub fn render_sprites(
             ]
         } else {
             let (it, ib) = crate::render_rules::pair_indices(t as u8); // ②映射规则（t209 Hamming=0）
-            // ①族选择器（N-0172）已证落地=render_rules::family_of（测试锁定）——
-            // 渲染接线回归 97.87/97.78 < 98.15（TDD 净损守卫触发）→ 接线暂缓注：
-            // 交互根（锚点/quirk/槽位联动）待交互收口卡（t212 ⑤纪律）
-            let bank_top = sprite_chr_base + it / 64;
-            let bank_bot = sprite_chr_base + ib / 64;
+            // ①分步接线（t213 ①交互归因）：t212 净损根=Game 族被挪 30→106（实测判优=30）
+            // ——分步：仅 Label 族换 bank96，其余保持 sprite_chr_base（回归守卫）
+            let fam = crate::render_rules::family_of(_slot_idx, spr.tile);
+            let base = match fam {
+                crate::render_rules::SpriteFamily::Label => 96, // t210 Hamming=0（『田』16/16）
+                // CJK→28 分步②实测 98.0599%（−58px 守卫拦下）→ 暂缓注（N-0172 张力）
+                _ => sprite_chr_base, // 实测判优（30）——Game=106 张力注
+            };
+            let bank_top = base + it / 64;
+            let bank_bot = base + ib / 64;
             [
                 game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_top, it % 64)),
                 game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_bot, ib % 64)),
