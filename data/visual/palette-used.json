@@ -50,26 +50,27 @@
     "sprite_slots": {
       "sp0[1]": {
         "rgb": "#FFFEFF",
-        "hits": 27
+        "hits": 60
       },
       "sp0[3]": {
-        "rgb": "#00404D",
-        "hits": 175
+        "rgb": "#FFFEFF",
+        "hits": 228
       },
       "sp1[1]": {
         "rgb": "#FFFEFF",
-        "hits": 12
+        "hits": 19
       },
       "sp1[3]": {
-        "rgb": "#FFFEFF",
-        "hits": 35
+        "rgb": "#B53120",
+        "hits": 73
       },
       "sp2[3]": {
         "rgb": "#BCBE00",
-        "hits": 25
+        "hits": 24
       }
     },
-    "method": "OAM 位置 × CHR 2bpp 像素 × oracle 截图 RGB 逐像素收集（非黑命中投票）——像素级证明（W-42 执行）"
+    "method": "OAM 位置 × CHR 2bpp 像素 × oracle 截图 RGB 逐像素收集（非黑命中投票）——像素级证明（W-42 执行）",
+    "anchor_note": "t107 修正：Y 锚点=+8（弹/敌/文本族实测；自机 +0x2C 族待槽分区识别——palette-1 判据误分类实测弃用）"
   },
   "palette_src_probe": "$161-$167 全程 0 写事件（t99 实测）——调色板装载路径与行缓冲装载同为未观测路径",
   "content_frame_convergence": {
