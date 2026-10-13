@@ -6,7 +6,7 @@
 //! BG 图案表基址（PPUCTRL bit4）未证——--base 0|1 双候选由 L4 对拍裁定（③）。
 
 use game_core::terrain::Nametable;
-use game_desktop::{Canvas, GREY4, SCREEN_H, SCREEN_W};
+use game_desktop::{Canvas, SCREEN_H, SCREEN_W};
 use std::io::Write;
 
 fn hex_decode(s: &str) -> Vec<u8> {
@@ -18,10 +18,6 @@ fn main() {
     let frame: u64 = args.get(1).expect("帧号").parse().expect("帧号");
     let name = args.get(2).expect("输出名").clone();
     let scene = args.get(3).cloned().unwrap_or_else(|| "gameplay-stage1".into());
-    let tbank: usize = std::env::var("TEXT_BANK").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
-    let tb_early: usize = std::env::var("TEXT_BANK_EARLY").ok().and_then(|v| v.parse().ok()).unwrap_or(tbank);
-    let tb_late: usize = std::env::var("TEXT_BANK_LATE").ok().and_then(|v| v.parse().ok()).unwrap_or(tbank);
-    let tb_phase: u64 = std::env::var("TEXT_PHASE").ok().and_then(|v| v.parse().ok()).unwrap_or(9999);
     let base: usize = args.iter().position(|a| a == "--base")
         .and_then(|i| args.get(i + 1)).and_then(|v| v.parse().ok()).unwrap_or(0);
     let rom = std::fs::read("rom/gunnac_cn.nes").expect("ROM");
@@ -51,8 +47,16 @@ fn main() {
         }).collect()
     }).unwrap_or_default();
     let mut probe_i = 0usize;
-    let mut iram: Vec<u8> = Vec::new();
     let mut ptr_writes: std::collections::HashMap<u64, (u8, u8)> = std::collections::HashMap::new();
+    let text_writes: Vec<(u32, u16, u8)> = std::fs::read_to_string("analysis/phase/gameplay-stage1-text.jsonl")
+        .map(|t| t.lines().filter_map(|l| {
+            let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
+            let a = u16::from_str_radix(l.split("\"addr\":\"").nth(1)?.split('"').next()?, 16).ok()?;
+            let v = l.split("\"val\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
+            Some((f, a, v))
+        }).collect())
+        .unwrap_or_default();
+    let mut text_i = 0usize;
     for (pf, pa, pv) in &probe {
         match pa {
             0x2F => {
@@ -103,46 +107,23 @@ fn main() {
         if let Some((row, at, lo, hi, al)) = pending_row.take() {
             nt.nmi_flush(&row, &at, lo, hi, al, 1);
         }
-        if let Some(i) = line.find("\"iram\":\"") {
-            let rest = &line[i + 8..];
-            iram = hex_decode(&rest[..rest.find('"').unwrap()]);
-        }
         let zi = line.find("\"zp\":\"").unwrap();
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
         // —— 主循环相位：probe 写事件填充缓冲 ——
         apply_frame_writes(&mut buf, &mut attrs, &mut addr_regs, &mut palette_src, f, &mut probe_i);
         // 帧末挂起：行缓冲若本帧被写过（扫写）→ 排队下帧 NMI 上传（地址取当帧 zp）
         let wrote = probe.iter().any(|(pf, pa, _)| *pf == f && (0x0130..=0x0150).contains(pa));
-        // —— 文本通道（t118 ①②③四段链复刻）：$2F/$30 流指针（RAM 中转 W50 实证）→
-        // iram 流字节 → 地址合成三类 → nametable 直写（$E6DF/$E828/$E7DC 语义）——
-        // ② $1A/$1B 门控（bank15:$E7DC-$E7E9 定谳）：($1B & $18)==0 且 $1A bit7==0 才写
-        let gate_open = (zp[0x1B] & 0x18) == 0 && (zp[0x1A] & 0x80) == 0;
-        if let Some(&(slo, hi)) = ptr_writes.get(&f).filter(|_| gate_open) {
-            let mut ch = game_core::terrain::TextChannel {
-                stream_lo: slo, stream_hi: hi,
-                addr_lo: zp[0x14], addr_hi: zp[0x15], count: 0, tier7e: false,
-            };
-            for _ in 0..64 {
-                let sp = (ch.stream_hi as u16) << 8 | ch.stream_lo as u16;
-                let b = if sp >= 0x8000 {
-                    // ② 文本流 bank 绑定（R7 语义）：ROM 直指流按 TEXT_BANK 变体读
-                    let off = sp.wrapping_sub(0xA000) as usize;
-                    let bk = if f < tb_phase { tb_early } else { tb_late };
-                    *rom.get(0x10 + bk * 0x2000 + off).unwrap_or(&0xFE)
-                } else {
-                    let sa = sp.wrapping_sub(0x0300) as usize;
-                    match iram.get(sa) { Some(&v) => v, None => break }
-                };
-                if let Some((addr, tile)) = game_core::terrain::text_channel_byte(&mut ch, b) {
-                    if (0x2000..0x3000).contains(&addr) {
-                        let rel = (addr - 0x2000) as usize;
-                        let (n, off) = (rel / 0x400, rel % 0x400);
-                        if n < 4 && off < 0x3C0 {
-                            nt.tiles[n][off] = tile;
-                        }
-                    }
+        // —— 文本放置（t129 机制终版）：核回放写集（phase-batch 产物）直接落 nametable——
+        // 77+46 变长足迹表由 ROM 链原生产出（与 t128 A 级裁定逐址一致）——
+        while text_i < text_writes.len() && text_writes[text_i].0 <= f as u32 {
+            let (_f, addr, val) = text_writes[text_i];
+            text_i += 1;
+            if (0x2000..0x3000).contains(&addr) {
+                let rel = (addr - 0x2000) as usize;
+                let (n, off) = (rel / 0x400, rel % 0x400);
+                if n < 4 && off < 0x3C0 {
+                    nt.tiles[n][off] = val;
                 }
-                if b >= 0xFE { break; }
             }
         }
         if wrote {
@@ -186,7 +167,14 @@ fn main() {
             let py = (ty as i32) * 8 - sy as i32;
             let bank = font_bank + tile / 64;
             if bank < 128 {
-                canvas.draw_chr(&rom, bank, tile % 64, px, py, &GREY4);
+                // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
+                let bg_pal: [game_desktop::Rgba; 4] = [
+                    [0, 0, 0, 255],
+                    [0xFF, 0xFE, 0xFF, 255],
+                    [0xFF, 0xFE, 0xFF, 255],
+                    [0xFF, 0xFE, 0xFF, 255],
+                ];
+                canvas.draw_chr(&rom, bank, tile % 64, px, py, &bg_pal);
             }
         }
     }
