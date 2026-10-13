@@ -78,4 +78,11 @@ probe_mem 0161 016f
 probe_mem 008d 008d
 # W50 装配源探针（t118 ⑤：$2F/$30 流指针——ROM 直指 or RAM 中转）
 probe_mem 002f 0030
+# ② CPU trace 双轨（t127）：PPU I/O 写点回调测试（W36 I/O 盲区验证）
+probe_mem 2006 2007
 probe_mem 0200 02ff
+probe_mem 0014 0015
+probe_mem 002f 0030
+# ② CPU trace 双轨（t127）：PPU I/O 写点回调测试（W36 I/O 盲区验证）
+probe_mem 2006 2007
+probe_mem 0020 0021

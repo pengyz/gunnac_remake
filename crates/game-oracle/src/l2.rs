@@ -27,6 +27,19 @@ pub struct L2Bus {
     r7: usize,
     pub writes: BTreeMap<u16, u8>,
     pub fault: Option<String>,
+    /// ① PPU 写日志（t127）：$2000-$2007 逐写点（步序=cycle 近似 + 门控态快照）
+    pub ppu_log: Vec<PpuWrite>,
+    pub steps: u32,
+}
+
+/// 帧内相位数据集条目（③：写时刻/写值/门控态逐写点）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PpuWrite {
+    pub step: u32,
+    pub addr: u16,
+    pub val: u8,
+    pub gate_a: u8, // $1A 快照
+    pub gate_b: u8, // $1B 快照
 }
 
 impl L2Bus {
@@ -38,7 +51,7 @@ impl L2Bus {
         if r6 > 15 || r7 > 15 {
             return Err(format!("bank 上下文越界 r6={r6} r7={r7}"));
         }
-        Ok(Self { ram: [0; 0x800], prg_ram: [0; 0x2000], prg, r6, r7, writes: BTreeMap::new(), fault: None })
+        Ok(Self { ram: [0; 0x800], prg_ram: [0; 0x2000], prg, r6, r7, writes: BTreeMap::new(), fault: None, ppu_log: Vec::new(), steps: 0 })
     }
 }
 
@@ -58,6 +71,15 @@ impl Bus for L2Bus {
 
     fn write(&mut self, addr: u16, val: u8) {
         self.writes.insert(addr, val);
+        if (0x2000..=0x2007).contains(&addr) {
+            self.ppu_log.push(PpuWrite {
+                step: self.steps,
+                addr,
+                val,
+                gate_a: self.ram[0x01A],
+                gate_b: self.ram[0x01B],
+            });
+        }
         match addr {
             0x0000..=0x1FFF => self.ram[(addr & 0x07FF) as usize] = val,
             0x6000..=0x7FFF => self.prg_ram[(addr - 0x6000) as usize] = val,
@@ -356,6 +378,7 @@ pub fn run_rom_case(rom: &[u8], case: &Case) -> Result<Out, String> {
         if stops.contains(&cpu.pc) {
             return Ok(Out { a: cpu.a, x: cpu.x, y: cpu.y, writes: bus.writes, exit: cpu.pc });
         }
+        bus.steps += 1;
         match cpu.step(&mut bus)? {
             StepResult::Continue => {}
             StepResult::Jsr => depth += 1,

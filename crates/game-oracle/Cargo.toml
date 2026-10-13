@@ -14,3 +14,7 @@ path = "src/bin/l2_diff.rs"
 [[bin]]
 name = "l3-diff"
 path = "src/bin/l3_diff.rs"
+
+[[bin]]
+name = "phase-log"
+path = "src/bin/phase_log.rs"
