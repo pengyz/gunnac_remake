@@ -257,9 +257,8 @@ impl SpriteObj {
     /// 逐实体 Y 锚点表（t107 ①，findings/t104-two-family.md §4 参数表）：
     /// 弹/敌/HUD = −$08；自机 = −$30+微调 +$04（=−$2C）+ 截止门 < $30。
     pub fn screen_y(&self) -> i32 {
-        // t138 ②统一锚点：Ruling『entity_y−8』实测反向（−8=91.79% vs +8=92.20%——
-        // A 级 oracle 真值判优，AGENTS.md D3 精神）——保留 +8 + 符号约定差异 F 注
-        self.y as i32 + 0x08
+        // 8×16 锚点（t165 实测）：16 行精灵锚 y（上缘）——8×8 时代 +8 不适配高精灵
+        self.y as i32
     }
     /// 自机判据（t107）：调色板 1 + 非 HUD 区（slot≥4）——t103 分区候选注。
     pub fn is_player(&self) -> bool {
@@ -296,7 +295,7 @@ pub fn render_sprites(
         let y0 = spr.screen_y();
         // 8/行溢出（D4 quirk 保真）：任一扫描线超 8 ⇒ 整精灵丢弃（NESdev 评估语义候选，待证注）
         let mut dropped = false;
-        for row in 0..8i32 {
+        for row in 0..16i32 {
             let y = y0 + row;
             if (0..240).contains(&y) && per_line[y as usize] >= 8 {
                 dropped = true;
@@ -306,22 +305,28 @@ pub fn render_sprites(
         if dropped {
             continue;
         }
-        let bank = sprite_chr_base + spr.tile as usize / 64;
-        if bank >= 128 {
+        // ① 8×16 精灵解析（W42 收口：$1A bit5=1 全程——t103 8×8 证伪）：
+        // tile 奇偶=上下半身（偶=上/奇=下），配对规则 NESdev 标准
+        let t_even = spr.tile as usize & 0xFE;
+        let bank_top = sprite_chr_base + t_even / 64;
+        let bank_bot = sprite_chr_base + (t_even | 1) / 64;
+        if bank_top >= 128 || bank_bot >= 128 {
             continue;
         }
-        let raw = game_data::chr::tile_bytes(chr_rom, bank, spr.tile as usize % 64);
-        let px = game_data::chr::decode_tile(&raw);
-        for row in 0..8usize {
+        let px_top = game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_top, t_even % 64));
+        let px_bot = game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_bot, (t_even | 1) % 64));
+        let px_all: [[[u8; 8]; 8]; 2] = [px_top, px_bot];
+        for row in 0..16usize {
             let y = y0 + row as i32;
             if !(0..240).contains(&y) {
                 continue;
             }
             per_line[y as usize] += 1;
             for col in 0..8usize {
-                let sr = if spr.vflip() { 7 - row } else { row };
+                let half = row / 8;
+                let sr = if spr.vflip() { (15 - row) % 8 } else { row % 8 };
                 let sc = if spr.hflip() { 7 - col } else { col };
-                let v = px[sr][sc];
+                let v = px_all[half][sr][sc];
                 if v == 0 {
                     continue;
                 }
