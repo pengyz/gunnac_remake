@@ -100,7 +100,12 @@ fn text_channel_four_stage_and_budget() {
     assert_eq!(ch2.count, 1);
     let w2 = text_channel_byte(&mut ch2, 0x04); // 偏移（ADC $14 续址）
     assert_eq!(w2, None);
-    assert_eq!(ch2.addr_lo, 0x04, "数据不自增 $14（位置=字节低 5 位）；偏移 +4 续址");
+    assert_eq!(ch2.addr_lo, 0x05, "数据 +1（acc=1）后偏移 +4=5——t122 游程推进");
+    // 同值游程（4A 4A 4A）逐字节连续落点（t122 制核心）
+    let mut ch4 = TextChannel { addr_lo: 0x00, addr_hi: 0x23, ..Default::default() };
+    assert_eq!(text_channel_byte(&mut ch4, 0x4A), Some((0x232A, 0x4A)));
+    assert_eq!(text_channel_byte(&mut ch4, 0x4A), Some((0x232B, 0x4A)), "同值游程 +1 推进");
+    assert_eq!(text_channel_byte(&mut ch4, 0x4A), Some((0x232C, 0x4A)));
     let mut ch3 = TextChannel { stream_lo: 0xFF, stream_hi: 0x96, ..Default::default() };
     text_channel_byte(&mut ch3, 0xFE);
     assert_eq!((ch3.stream_lo, ch3.stream_hi), (0x00, 0x97), "指针进位推进（$E6DF）");

@@ -426,9 +426,11 @@ pub fn budget_needs_flush(ch: &TextChannel) -> bool {
 pub fn text_channel_byte(ch: &mut TextChannel, b: u8) -> Option<(u16, u8)> {
     match classify_text_byte(b) {
         TextByte::Data(d) => {
-            // 位置来自字节低 5 位（序列运行实证：34 35 36…/a8 a9 aa…）——$14 不自增
+            // t122 偏移+游程制：tile 游程逐字节写、位置 +1 推进（4A 4A 4A… 同值游程实证——
+            // t121 值定位说对同值游程失效，回正 +1 推进）
             let lo = synth_addr_lo(d, ch.addr_lo);
             let addr = ((ch.addr_hi as u16) << 8) | lo as u16;
+            ch.addr_lo = ch.addr_lo.wrapping_add(1);
             ch.count = ch.count.wrapping_add(1);
             Some((addr, d))
         }
