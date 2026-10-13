@@ -122,5 +122,33 @@
       "#64B0FF": "sp0[1]/sp0[3] 竞争（rank3-4）——保持竞争记录",
       "rule": "证据不足以定谳时保持竞争不发明（AGENTS.md §3）"
     }
+  },
+  "t115_stoploss_ledger": {
+    "status": "重试 #5 未收敛（97.6/96.8）→ 按止损条款带账停工，不盲打第六发",
+    "per_frame": {
+      "gameplay-stage1_f01260_stage-start": {
+        "diff": 1494,
+        "sprite_face": 885,
+        "hud_text_face": 609
+      },
+      "gameplay-stage1_f01500_mid-combat": {
+        "diff": 1984,
+        "sprite_face": 998,
+        "hud_text_face": 986
+      },
+      "gameplay-stage1_f02349_end": {
+        "diff": 2305,
+        "sprite_face": 767,
+        "hud_text_face": 1538
+      }
+    },
+    "four_class": {
+      "规格缺口_HUD文本直址": "≈3100px（文本直址体系已定谳+API 已实现——记录源（$12/$13 流或 ROM 块归属）未观测，放置未生效）",
+      "移植缺口_精灵精度": "≈2900px（伴随条已修 +0.1%；自机本体 $04 残差 W47' 待）",
+      "平台差异_W-C4": "0px（已绑定色精确一致）",
+      "参考bug": "0px"
+    },
+    "root_cause_status": "双装载体系定谳 ✓（t113 A 级）；修复端 API 就绪（place_text_records+测试）——**差最后一步：文本记录写点观测**（probe $12/$13 文本流指针 或 ROM 块归属反查）",
+    "next_review": "方案评审输入=五击变体矩阵+双装载根因+文本记录源取证需求"
   }
 }

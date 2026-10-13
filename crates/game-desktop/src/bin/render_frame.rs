@@ -147,7 +147,12 @@ fn main() {
     }
     // —— 精灵层（t104 ①）：OAM blob → 合成（BG 掩码 + 优先级 + 翻转 + 8/行 quirk）——
     let oam_blob: Vec<u8> = trace_oam.as_ref().map(|h| hex_decode(h)).unwrap_or_default();
-    let sprites = game_desktop::parse_oam(&oam_blob); // 8×8（实测优于 8×16 变体；bit5 语义注记）
+    let mut sprites = game_desktop::parse_oam(&oam_blob);
+    // ③ 伴随精灵条偏移（W47 实测：槽 29-35 = 7 件横排，Y+127/X+8×7 锁定玩家坐标系）
+    for (k, sp) in sprites.iter_mut().enumerate().skip(29).take(7) {
+        sp.y = sp.y.wrapping_add(127);
+        sp.x = sp.x.wrapping_add(8 * (k as u8 - 29));
+    }
     // 绑定表（t102/t104 ③像素级证明产物）：sp<pal][idx] → RGB
     let mk = |r: u8, g: u8, b: u8| -> game_desktop::Rgba {
         [r, g, b, if r == 0 && g == 0 && b == 0 { 0 } else { 255 }]
