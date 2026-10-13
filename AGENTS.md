@@ -91,6 +91,7 @@
 | 动手前 | 状态预检 | `python3 gates/cli.py status` | 看清 SKIP/恒红项再动 |
 | **任何 commit** | 总闸（pre-commit 自动） | `python3 gates/cli.py check` | 任一 FAIL ⇒ 不提交 |
 | 改 `data/naming/` `data/status/` `reference/` `rom/` | 证据门禁（commit-msg 自动） | commit message 含 `Evidence`/`证据` | 缺证据字段 ⇒ 拒绝 commit |
+| **任何步骤完成后** | **独立对抗复核**（2026-10-12 用户裁定） | 审核 agent（verifier 角色，**不得为实施方**）以**证伪立场**独立重导证据：重跑复现命令/重推证据链/查纪律合规（证据指针、未证不发明、门禁真绿） | **复核 verdict=pass 才算步骤完成**；findings → 四分类路由修复 → 复审；未过复核的产出只算"待审稿" |
 | 改参考投影/轨道后 | 投影回归 | `python3 gates/cli.py seed` | seed sha 不变；src 轨道 trace 不变 |
 | 改 game-data/game-core 后 | 差分（L1–L3） | `python3 gates/cli.py trace` | 任何回退 ⇒ 停止，先定位层（§4） |
 | 改渲染后 | 视觉（L4） | `python3 gates/cli.py visual` | 白名单外像素必须一致 |
@@ -98,6 +99,12 @@
 
 > 【2026-10-12 更正】敏感路径增补 `data/status/`：t11 F1 攻击链暴露"降基线提交可机器无痕入库"，
 > t14 修复已把实现纳入 commit-msg 强制，本表与 §9 同步跟进（gates/cli.py 为实现权威）。
+
+> 【2026-10-12 新增·对抗复核纪律】**每个步骤完成后必须派出独立审核 agent 做对抗复核**，
+> 确认方案合理性并修正可能问题，**只有复核通过才视作该步骤完成**（用户方法论更新）。
+> 对抗立场=以"证伪它"为默认姿态：不采信被审方自述、不复用其结论、独立重导证据；
+> 复核产出=verdict（pass/needs_revision）+ findings（四分类）+ 修正建议；
+> 被审方与审核方不得为同一 agent（实施≠审核）。captain 验收与门禁裁定不变，三闸并行。
 
 - **门禁失败不是"多跑几次"能解决的**：按 §4 定位层，修复根因，不许调阈值/加白名单掩盖。
 - 视觉白名单（字体/调色板映射等）是**唯一**允许的例外清单，变更需用户确认并记录。
