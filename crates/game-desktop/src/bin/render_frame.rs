@@ -31,6 +31,7 @@ fn main() {
     let mut addr_regs = (0u8, 0u8, 0u8); // $8E/$8F/$90（t99：probe 写点追踪，解相位陷阱）
     let mut palette_src = [0u8; 7]; // $161-$167 调色板源（t99 ①）
     let mut pending_row: Option<([u8; 32], [u8; 8], u8, u8, u8)> = None;
+    let mut hud_row_seq = 0usize; // ②基址上下文：预装载非零行按填充序 → $2000 系 LUT 行
     let mut sx = 0u8;
     let mut sy = 0u8;
     let mut zp_prev: Vec<u8> = vec![0; 256];
@@ -92,7 +93,16 @@ fn main() {
         if wrote {
             let mut row = [0u8; 32];
             row.copy_from_slice(&buf[0x00..0x20]);
-            pending_row = Some((row, attrs, addr_regs.0, addr_regs.1, addr_regs.2));
+            let addr_ok = ((addr_regs.1 as u16) << 8 | addr_regs.0 as u16) >= 0x2000;
+            if !addr_ok && row.iter().any(|&v| v != 0) && hud_row_seq < 16 {
+                // ② 基址上下文（findings §4）：HUD/菜单行 → $2000 系（LUT 行序）
+                let base = [0x2000u16, 0x2040, 0x2080, 0x20C0, 0x2100, 0x2140, 0x2180, 0x21C0,
+                            0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380, 0x2CA5][hud_row_seq];
+                pending_row = Some((row, attrs, base as u8, (base >> 8) as u8, 0xC0));
+                hud_row_seq += 1;
+            } else {
+                pending_row = Some((row, attrs, addr_regs.0, addr_regs.1, addr_regs.2));
+            }
         }
         let _ = &zp_prev;
         zp_prev = zp.clone();

@@ -254,10 +254,18 @@ impl SpriteObj {
     pub fn vflip(&self) -> bool {
         self.attr & 0x80 != 0
     }
-    /// 8×8 精灵屏上 Y——**Y 语义待证注**（NESdev=Y-1；发射器 bank14:$CFC5 写 \$55 值域
-    /// 与 Y-1 编码未逐值对拍，t103 语义=候选）：当前=Y+1（NESdev 标准）。
+    /// 逐实体 Y 锚点表（t107 ①，findings/t104-two-family.md §4 参数表）：
+    /// 弹/敌/HUD = −$08；自机 = −$30+微调 +$04（=−$2C）+ 截止门 < $30。
     pub fn screen_y(&self) -> i32 {
-        self.y as i32 + 1
+        self.y as i32 + 0x08
+    }
+    /// 自机判据（t107）：调色板 1 + 非 HUD 区（slot≥4）——t103 分区候选注。
+    pub fn is_player(&self) -> bool {
+        self.attr & 3 == 1
+    }
+    /// 自机截止门（<$30 退出，参数表）。
+    pub fn player_cutoff(&self) -> bool {
+        self.is_player() && self.y < 0x30
     }
 }
 
@@ -280,6 +288,9 @@ pub fn render_sprites(
 ) {
     let mut per_line = [0u8; 240];
     for spr in sprites {
+        if spr.player_cutoff() {
+            continue; // 自机截止门 <$30（t107 参数表）
+        }
         let y0 = spr.screen_y();
         // 8/行溢出（D4 quirk 保真）：任一扫描线超 8 ⇒ 整精灵丢弃（NESdev 评估语义候选，待证注）
         let mut dropped = false;

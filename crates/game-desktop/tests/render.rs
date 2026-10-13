@@ -181,7 +181,7 @@ fn hex_decode(s: &str) -> Vec<u8> {
 fn oam_parse_and_attr_semantics() {
     use game_desktop::{parse_oam, SpriteObj};
     let s = SpriteObj::from_oam4([0x1F, 0x05, 0x63, 0x40]);
-    assert_eq!(s.screen_y(), 0x20, "OAM Y=Y-1（NESdev）");
+    assert_eq!(s.screen_y(), 0x27, "Y 锚点 +8（t107 参数表实测——取代 t104 NESdev Y-1 初值）");
     assert_eq!(s.palette(), 3);
     assert!(s.behind_bg(), "bit5=BG 前置");
     assert!(s.hflip() && !s.vflip(), "bit6=hflip（0x63 位形）");
@@ -225,4 +225,20 @@ fn sprite_render_flip_priority_and_8line_quirk() {
     render_sprites(&mut c4, &rom, &eight, 124, &pals, &bg_clear);
     let count = |c: &Canvas| c.pixels.iter().filter(|&&p| p != 0).count();
     assert_eq!(count(&c3), count(&c4), "第 9 精灵必须丢弃（8/行 quirk）");
+}
+
+#[test]
+fn y_anchor_table_and_negatives() {
+    // t107 ①：逐实体 Y 锚点表（弹/敌/文本族 +8——实测修正版；自机族 +0x2C 待槽分区）
+    use game_desktop::SpriteObj;
+    let s = SpriteObj { y: 80, tile: 0, attr: 0, x: 0 };
+    assert_eq!(s.screen_y(), 88, "弹/敌/文本锚点 +8（实测）");
+    // 负向自证：自机截止门 <$30（参数表）
+    let p = SpriteObj { y: 0x20, tile: 0, attr: 0x01, x: 0 };
+    assert!(p.player_cutoff(), "自机 Y<$30 截止必真");
+    let p2 = SpriteObj { y: 0x30, tile: 0, attr: 0x01, x: 0 };
+    assert!(!p2.player_cutoff(), "Y=$30 边界哨兵");
+    // 负向自证 2：attr 位形哨兵
+    let a = SpriteObj { y: 0, tile: 0, attr: 0xE3, x: 0 };
+    assert!(a.hflip() && a.vflip() && a.behind_bg(), "0xE3 位形必全真");
 }
