@@ -138,8 +138,8 @@ fn main() {
                 for i in 0..32usize {
                     let off = rel + i;
                     let (n, o) = (off / 0x400, off % 0x400);
-                    if n < 4 && o < 0x3C0 && row[i] != 0 {
-                        nt.tiles[n][o] = row[i];
+                    if n < 4 && o < 0x3C0 {
+                        nt.tiles[n][o] = row[i]; // ②0 码=擦写（t243）：0 写入=擦除该格
                     }
                 }
             }
@@ -228,8 +228,9 @@ fn main() {
             // 直拷制下渲染按透明（不画 glyph）；命名值仍保留在 nametable（内容层精确不动）
             // t208 ①：≥128 族=CJK glyph tile（oracle 实证：128 位置绘字）——
             // t152 参数族仅 0-16 簇（菜单期）；高值族渲染修正
-            if raw_tile <= 16 {
-                continue;
+            // ③条带码四分路由（t243）：0 擦写/<64 图形符号/64-127 文本/≥128 参数标记
+            if raw_tile == 0 || raw_tile >= 128 {
+                continue; // 擦写格不画/参数标记不画
             }
             let tile = raw_tile as usize + base * 256;
             let px = (tx as i32) * 8 - sx as i32;
@@ -240,6 +241,8 @@ fn main() {
             // ①统一矩阵（t238/t239）：bank=窗基+T//64、tile=T%64——窗基上下文表
             // （菜单 124/CJK 28/图形 20 待条带族取证——t235/t239 实测 20/28/22/30/96/106
             // 全不匹配留档）；条带行上下文未定=中性（不画）
+            // ①③四分路由实测注（t243）：<64→图形窗 20 实测净负（97.48<98.34 守卫拦下）
+            // ——保持字体窗 124+tile/64（t238 矩阵窗基 124 实例）；四分路由注留档
             let bank = if tile_page[ntr][ty] == 2 { 28 } else { 124 } + tile / 64;
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
