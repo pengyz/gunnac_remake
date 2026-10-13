@@ -257,8 +257,7 @@ impl SpriteObj {
     /// 逐实体 Y 锚点表（t107 ①，findings/t104-two-family.md §4 参数表）：
     /// 弹/敌/HUD = −$08；自机 = −$30+微调 +$04（=−$2C）+ 截止门 < $30。
     pub fn screen_y(&self) -> i32 {
-        // 8×16 锚点（t165 实测）：16 行精灵锚 y（上缘）——8×8 时代 +8 不适配高精灵
-        self.y as i32
+        self.y as i32 // t195 ②实测：全局 y-1 反降（98.07<98.13）——『地』1px 纵相位=glyph 局部项（全局锚不适用）
     }
     /// 自机判据（t107）：调色板 1 + 非 HUD 区（slot≥4）——t103 分区候选注。
     pub fn is_player(&self) -> bool {

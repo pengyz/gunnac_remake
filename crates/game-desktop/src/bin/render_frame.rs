@@ -258,7 +258,14 @@ fn main() {
                 // 【2026-10-13 t192 裁定】双色渲染调色板依赖——两平面各自精确，墨色按 palette
                 // 映射勿固定 index（R18-1/p2 争议闭合：p0 稠墨暴露放置缺口/p2 稀疏被指标奖励
                 // ——均非真根，真根=palette 映射）——非零索引全可见（绑定白）
-                let bg_pal: [game_desktop::Rgba; 4] = [[0, 0, 0, 255], [0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255], [0, 0, 0, 255]];
+                // 【R19-1 逐块 palette 映射】文本块 index2→白（已证）——勿全局 2only
+                // （可见文本帧按 2only 丢字）；CJK 精灵 pal index1=白=墨（256/256 正确）
+                let bg_pal: [game_desktop::Rgba; 4] = [
+                    [0, 0, 0, 255],
+                    [0, 0, 0, 255],
+                    [0xFF, 0xFE, 0xFF, 255],
+                    [0, 0, 0, 255],
+                ];
                 canvas.draw_chr(&rom, bank, tile % 64, px, py, &bg_pal);
             }
         }
