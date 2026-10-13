@@ -106,6 +106,7 @@ fn main() {
     let mut text_i = 0usize;
     let mut last_grp: u32 = u32::MAX;
     let mut ppu_addr: u16 = 0;
+    let mut tile_page = [[0u8; 32]; 4]; // 1=字模页族（f1207 前装载），2=游戏页族（$6A）
     let mut ppu_addr_latch_high = true;
     for (pf, pa, pv) in &probe {
         match pa {
@@ -186,8 +187,14 @@ fn main() {
                     if (0x2000..0x3000).contains(&ppu_addr) {
                         let rel = (ppu_addr - 0x2000) as usize;
                         let (n, off) = (rel / 0x400, rel % 0x400);
-                        if n < 4 && off < 0x3C0 {
-                            nt.tiles[n][off] = val;
+                        if n < 4 {
+                            if off < 0x3C0 {
+                                nt.tiles[n][off] = val;
+                                // t157 ② 切换时机：装载帧 <f1207（首切换帧）=字模族
+                                tile_page[n][off / 32] = if f < 1207 { 1 } else { 2 };
+                            } else {
+                                nt.attrs[n][off - 0x3C0] = val; // R3-1：属性区写不丢
+                            }
                         }
                     }
                     ppu_addr = ppu_addr.wrapping_add(1);
@@ -240,7 +247,8 @@ fn main() {
             let tile = raw_tile as usize + base * 256;
             let px = (tx as i32) * 8 - sx as i32;
             let py = (ty as i32) * 8 - sy as i32; // t131 实测：+8 更劣（94.17<94.50）——偏移非主因
-            let bank = font_bank + (tile / 64) * 2; // t143/t152 实测最优 // 2KB 对：R0=124/125（值 0-127），R1=126/127（128-255） // t143 实测最优（92.20%）——W45 映射=码表转换待证（见账）
+            // t157 三行映射（t154 A 级）：字模族→124/126 对，游戏族→$6A(106) 对
+            let bank = if tile_page[ntr][ty] == 2 { 106 + (tile / 64) * 2 } else { font_bank + (tile / 64) * 2 };
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 let bg_pal: [game_desktop::Rgba; 4] = [
