@@ -347,3 +347,30 @@ impl Nametable {
         (b >> shift) & 3
     }
 }
+
+// ============ 文本直址体系（t115 ①；t113 双装载体系定谳——N-0127 根因修复） ============
+
+/// t2 文本记录（`{ppu_lo, ppu_hi, tiles…, $FE/$FF}`）——记录内嵌 PPU 地址**直写**。
+/// 与行 LUT 体系并列（双装载体系 A 级）：菜单/商店/HUD 文本走本体系。
+pub struct TextPlacement {
+    pub ppu_addr: u16,
+    pub tiles: Vec<u8>,
+}
+
+/// 文本直址放置：记录内嵌地址 → nametable 直写（$2006/$2007 语义等效）。
+/// 地址在 $2xxx NT 域时落 nametable；否则忽略（fail-closed 不发明）。
+pub fn place_text_records(nt: &mut Nametable, records: &[TextPlacement]) {
+    for rec in records {
+        for (i, &t) in rec.tiles.iter().enumerate() {
+            let raw = rec.ppu_addr.wrapping_add(i as u16);
+            if !(0x2000..0x3000).contains(&raw) {
+                continue;
+            }
+            let rel = (raw - 0x2000) as usize;
+            let (n, off) = (rel / 0x400, rel % 0x400);
+            if n < 4 && off < 0x3C0 {
+                nt.tiles[n][off] = t;
+            }
+        }
+    }
+}

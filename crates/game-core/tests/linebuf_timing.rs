@@ -49,3 +49,23 @@ fn linebuf_negative_selfproof() {
     assert_eq!(nt2.tiles[0][0x2CE], 0, "$22CF 前一字节不得有内容（偏移哨兵）");
     assert_ne!(nt2.tiles[0][0x2CF], 0, "基址字节必有内容");
 }
+
+#[test]
+fn text_direct_address_system_and_negative() {
+    // t115 ①：文本直址体系（t2 记录内嵌 PPU 地址直写）——N-0127 根因修复
+    use game_core::terrain::{place_text_records, Nametable, TextPlacement};
+    let mut nt = Nametable::default();
+    let recs = vec![TextPlacement { ppu_addr: 0x2345, tiles: vec![7, 8, 9] }];
+    place_text_records(&mut nt, &recs);
+    assert_eq!(nt.tiles[0][0x345], 7);
+    assert_eq!(nt.tiles[0][0x347], 9);
+    // 负向自证：非 PPU 域地址 fail-closed
+    let mut nt2 = Nametable::default();
+    place_text_records(&mut nt2, &[TextPlacement { ppu_addr: 0x1234, tiles: vec![5] }]);
+    assert_eq!(nt2.tiles[0][0], 0, "非 PPU 域必红");
+    // 负向自证 2：跨行连续写（$2007 自增语义）
+    let mut nt3 = Nametable::default();
+    place_text_records(&mut nt3, &[TextPlacement { ppu_addr: 0x23BE, tiles: vec![4, 5, 6] }]);
+    assert_eq!(nt3.tiles[0][0x3BE], 4);
+    assert_eq!(nt3.tiles[0][0x3BF], 5, "跨至属性区前界");
+}
