@@ -55,7 +55,7 @@ $AC4D: 00 0C 52 AC 00 00 0D 01 10 00 80 …            （含指针 $AC52 + $80 
 ## 5. 复现命令
 
 ```bash
-xxd -s 0x12C0D -l 112 rom/gunnac_cn.nes   # bank8 $ABFD 区
+xxd -s 0x10C0D -l 112 rom/gunnac_cn.nes   # bank8 $ABFD 区（【2026-10-13 更正（AR2-C）】原 0x12C0D 系 bank9 错址）
 sed -n '/bank00:8FA8/,/bank00:8FE7/p' reference/seed/gunnac.asm
 ```
 
