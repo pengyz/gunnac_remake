@@ -437,8 +437,27 @@ pub fn text_channel_byte(ch: &mut TextChannel, b: u8) -> Option<(u16, u8)> {
             None
         }
         TextByte::Control(c) => {
-            if c >= 0xFE {
+            if c == 0xFE {
+                // t120 ①：+77 步长/记录（文本记录 PPU 足迹常数；hi 随回绕 +1）
+                let (lo, carry) = ch.addr_lo.overflowing_add(77);
+                ch.addr_lo = lo;
+                if carry {
+                    ch.addr_hi = ch.addr_hi.wrapping_add(1);
+                }
                 ch.stream_lo = ch.stream_lo.wrapping_add(1); // $E6DF：指针推进
+                if ch.stream_lo == 0 {
+                    ch.stream_hi = ch.stream_hi.wrapping_add(1);
+                }
+            } else if c == 0xFF {
+                // 基址逐块重置（t120）
+                ch.addr_lo = 0;
+                ch.addr_hi = 0;
+                ch.stream_lo = ch.stream_lo.wrapping_add(1);
+                if ch.stream_lo == 0 {
+                    ch.stream_hi = ch.stream_hi.wrapping_add(1);
+                }
+            } else {
+                ch.stream_lo = ch.stream_lo.wrapping_add(1);
                 if ch.stream_lo == 0 {
                     ch.stream_hi = ch.stream_hi.wrapping_add(1);
                 }
