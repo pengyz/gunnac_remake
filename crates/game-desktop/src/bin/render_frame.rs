@@ -240,8 +240,10 @@ fn main() {
             let raw_tile = nt.tiles[ntr][ty * 32 + tx];
             // ② 小值参数族分离（t152）：0-16 簇=参数字节非 tile（AR2-D bit5 同族）——
             // 直拷制下渲染按透明（不画 glyph）；命名值仍保留在 nametable（内容层精确不动）
-            if raw_tile <= 16 || raw_tile >= 128 {
-                continue; // 参数族（0-16 簇）+ 高值族（≥128）非 glyph tile（t152 实测）
+            // t208 ①：≥128 族=CJK glyph tile（oracle 实证：128 位置绘字）——
+            // t152 参数族仅 0-16 簇（菜单期）；高值族渲染修正
+            if raw_tile <= 16 {
+                continue;
             }
             let tile = raw_tile as usize + base * 256;
             let px = (tx as i32) * 8 - sx as i32;
@@ -249,7 +251,7 @@ fn main() {
             // t157 三行映射（t154 A 级）：字模族→124/126 对，游戏族→$6A(106) 对
             // ② 字模 CHR 直读（t167 A 级）：bank124 基 + tile×16 **线性区**（跨 bank 124-127 连续）
             // R16-1：恒等式保真维持（低误差域复测 pair≡linear 98.07 同值）
-            let bank = if tile_page[ntr][ty] == 2 { 28 + tile / 64 } else { 124 + tile / 64 };
+            let bank = if tile_page[ntr][ty] == 2 { 28 + tile / 64 } else { 124 + tile / 64 }; // t208：128+ 族实测（bank28 劣 98.05）回 context 派发nk28
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 // 【2026-10-13 更正（t185 R18-1 高危）】墨掩码=p0 置位（索引 1/3 为墨、
