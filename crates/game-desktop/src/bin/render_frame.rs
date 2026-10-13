@@ -147,7 +147,7 @@ fn main() {
     }
     // —— 精灵层（t104 ①）：OAM blob → 合成（BG 掩码 + 优先级 + 翻转 + 8/行 quirk）——
     let oam_blob: Vec<u8> = trace_oam.as_ref().map(|h| hex_decode(h)).unwrap_or_default();
-    let sprites = game_desktop::parse_oam(&oam_blob); // ② $04=0 近似（W46 参数表：误差 ≤5px 注记）
+    let sprites = game_desktop::parse_oam(&oam_blob); // 8×8（实测优于 8×16 变体；bit5 语义注记）
     // 绑定表（t102/t104 ③像素级证明产物）：sp<pal][idx] → RGB
     let mk = |r: u8, g: u8, b: u8| -> game_desktop::Rgba {
         [r, g, b, if r == 0 && g == 0 && b == 0 { 0 } else { 255 }]

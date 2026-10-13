@@ -1,5 +1,5 @@
 {
-"note": "W45 \u5b57\u6a21\u5bf9\u7167\u8868\u57fa\uff08$1A bit3+MMC3 bank \u57fa\u5740\u5f85\u8bc1\u6ce8\uff09",
+"note": "W45 字模对照表基（$1A bit3+MMC3 bank 基址待证注）",
 "tiles": {
 "124:0": {
 "nonzero": 0,
@@ -3329,5 +3329,13 @@
 "00000000"
 ]
 }
+},
+"w45_ruling_status": {
+"result": "**字模基址定谳**：字模 bank（文件 124-127）经 MMC3 映射在 PPU $0000——$1A=$A0 实测（bit3=0=图案表 $0000 ✓ 一致）；empirical 组合矩阵 5 配置实测：8×8+base124+8 锚 = 最优（97.5/96.8）",
+"ppuctrl_shadow_1A": "$A0 实测（f1260/f1500 一致）：bit3=0 → 精灵图案表 $0000；bit0-1=0 → 基 nametable $2000；bit5=1 语义注记（8×16 变体实测更劣 95.9/94.7——按 8×8 实测口径，bit5 影子语义 W42 注）",
+"sprite_size_matrix": "8×8/base124 97.5/96.8 ✓最优；8×8/base0 97.3/96.4；8×16/base0 95.9/94.7；8×16/base124 95.6（t104）",
+"y_offset_bimodal": "dy 双峰（9 / 12-14）——两族锚点实证保留",
+"method_negative_selfproof": "自匹配 64/64 + 错 tile <64",
+"tail": "逐 tile 票散射=形状碰撞（MMC3 映射已释基址层）；W45 尾项=MMC3 CHR 交换配置逐 bank 清单"
 }
 }
