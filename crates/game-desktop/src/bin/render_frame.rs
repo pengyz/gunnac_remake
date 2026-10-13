@@ -67,9 +67,9 @@ fn main() {
     for (f, a, v, inv, seg) in &raw_writes {
         groups.entry((*inv, *seg)).or_default().push((*f, *a, *v));
     }
-    let mut text_writes: Vec<(u32, u16, u8)> = Vec::new();
-    for ((_, _), ws) in &groups {
-        // 段起点 = 首个 $2006 对合成
+    // ③ 滤表钉死最后写者（R3-3）：同起点只保留最后 (inv,seg) 组（真覆盖族同起点不误归属）
+    let mut chosen: std::collections::HashMap<u16, ((u32, u32), Vec<(u32, u16, u8)>)> = std::collections::HashMap::new();
+    for (key, ws) in &groups {
         let mut hi = None;
         let mut start = None;
         for (_f, a, v) in ws {
@@ -84,13 +84,27 @@ fn main() {
         }
         if let Some(st) = start {
             if seg_starts.contains(&st) {
-                text_writes.extend(ws.iter().map(|(f, a, v)| (*f, *a, *v)));
+                let e = chosen.entry(st).or_insert((*key, Vec::new()));
+                // R3-3 修正：按**最后写时刻**（组末帧）钉死，非 (inv,seg) 字典序
+                let t_new = ws.iter().map(|w| w.0).max().unwrap_or(0);
+                let t_old = e.1.iter().map(|w| w.0).max().unwrap_or(0);
+                if (t_new, *key) >= (t_old, e.0) {
+                    e.0 = *key;
+                    e.1 = ws.iter().map(|(f, a, v)| (*f, *a, *v)).collect();
+                }
             }
+        }
+    }
+    let mut text_writes: Vec<(u32, u16, u8, u32)> = Vec::new(); // 带组序号（消费序分组）
+    for (_st, (key, ws)) in &chosen {
+        for (f, a, v) in ws {
+            text_writes.push((*f, *a, *v, (key.0 << 16) | key.1)); // 组标识
         }
     }
     text_writes.sort_by_key(|w| w.0);
     let text_writes = text_writes;
     let mut text_i = 0usize;
+    let mut last_grp: u32 = u32::MAX;
     let mut ppu_addr: u16 = 0;
     let mut ppu_addr_latch_high = true;
     for (pf, pa, pv) in &probe {
@@ -153,7 +167,11 @@ fn main() {
         // PPU 协议解释（t131 归属合并击根修）：$2006 写锁存地址（高/低），
         // $2007 写落 tile（地址自增）——注册器写序列 → nametable 态
         while text_i < text_writes.len() && text_writes[text_i].0 <= f as u32 {
-            let (_f, addr, val) = text_writes[text_i];
+            let (_f, addr, val, grp) = text_writes[text_i];
+            if grp != last_grp {
+                ppu_addr_latch_high = true; // R3-1：每组新鲜锁存（修相位错位）
+                last_grp = grp;
+            }
             text_i += 1;
             match addr {
                 0x2006 => {
