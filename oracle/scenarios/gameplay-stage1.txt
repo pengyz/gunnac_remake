@@ -75,3 +75,7 @@ watch_range 6000-7fff wram
 probe_mem 2005 2006
 probe_mem 008e 008f
 probe_mem 0161 016f
+probe_mem 008d 008d
+# W50 装配源探针（t118 ⑤：$2F/$30 流指针——ROM 直指 or RAM 中转）
+probe_mem 002f 0030
+probe_mem 0200 02ff

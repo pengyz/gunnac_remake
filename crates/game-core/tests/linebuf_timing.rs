@@ -69,3 +69,39 @@ fn text_direct_address_system_and_negative() {
     assert_eq!(nt3.tiles[0][0x3BE], 4);
     assert_eq!(nt3.tiles[0][0x3BF], 5, "跨至属性区前界");
 }
+
+#[test]
+fn text_channel_four_stage_and_budget() {
+    use game_core::terrain::*;
+    // 地址合成三类字节（§4 参数 2）
+    assert!(matches!(classify_text_byte(0x30), TextByte::Data(_)));
+    assert!(matches!(classify_text_byte(0x10), TextByte::Offset(_)));
+    assert!(matches!(classify_text_byte(0xFE), TextByte::Control(_)));
+    assert!(matches!(classify_text_byte(0x80), TextByte::Control(_)));
+    // 数据合成：(byte & $1F) + $14 | $20
+    assert_eq!(synth_addr_lo(0x30, 0x00), 0x30, "(0x10)+0 | 0x20");
+    assert_eq!(synth_addr_lo(0x2F, 0x08), 0x37, "(0x0F)+8=0x17 | 0x20 = 0x37");
+    assert_ne!(synth_addr_lo(0x30, 0x00), 0x10, "ORA #$20 不可丢（负向）");
+    // 预算门（$E828）：$7E? $30 : $50；−count < 4 ⇒ flush
+    let mut ch = TextChannel { tier7e: false, ..Default::default() };
+    assert_eq!(vram_budget(false), 0x50);
+    assert_eq!(vram_budget(true), 0x30);
+    ch.count = 0x4D;
+    assert!(budget_needs_flush(&ch), "$50−$4D=3<4 必 flush");
+    ch.count = 0x40;
+    assert!(!budget_needs_flush(&ch), "$50−$40=16 不 flush");
+    ch.tier7e = true;
+    ch.count = 0x2D;
+    assert!(budget_needs_flush(&ch), "$30 档同语义");
+    // 单字节推进：数据→写地址+计数；偏移→续址；$FE→指针推进
+    let mut ch2 = TextChannel { addr_lo: 0x00, addr_hi: 0x23, ..Default::default() };
+    let w = text_channel_byte(&mut ch2, 0x35);
+    assert_eq!(w, Some((0x2335, 0x35)));
+    assert_eq!(ch2.count, 1);
+    let w2 = text_channel_byte(&mut ch2, 0x04); // 偏移（ADC $14 续址）
+    assert_eq!(w2, None);
+    assert_eq!(ch2.addr_lo, 0x04, "数据不自增 $14（位置=字节低 5 位）；偏移 +4 续址");
+    let mut ch3 = TextChannel { stream_lo: 0xFF, stream_hi: 0x96, ..Default::default() };
+    text_channel_byte(&mut ch3, 0xFE);
+    assert_eq!((ch3.stream_lo, ch3.stream_hi), (0x00, 0x97), "指针进位推进（$E6DF）");
+}
