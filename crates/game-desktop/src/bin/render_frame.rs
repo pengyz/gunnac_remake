@@ -130,7 +130,20 @@ fn main() {
         if f > frame { break; }
         // —— NMI 语义边界（帧首）：上传上一帧填充的行缓冲（读后即废）——
         // t143 对账模式：行 LUT 路径暂缓（文本层 220 真值对账）
-        let _ = pending_row.take();
+        // t230 ①：条带上传（帧 N 填充→帧 N+1 NMI 落 nametable——持久化模型闭环）
+        if let Some((row, _attrs, lo, hi, _c)) = pending_row.take() {
+            let base_addr = ((hi as u16) << 8) | lo as u16;
+            if (0x2000..0x3000).contains(&base_addr) {
+                let rel = (base_addr - 0x2000) as usize;
+                for i in 0..32usize {
+                    let off = rel + i;
+                    let (n, o) = (off / 0x400, off % 0x400);
+                    if n < 4 && o < 0x3C0 && row[i] != 0 {
+                        nt.tiles[n][o] = row[i];
+                    }
+                }
+            }
+        }
         let zi = line.find("\"zp\":\"").unwrap();
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
         // —— 主循环相位：probe 写事件填充缓冲 ——
