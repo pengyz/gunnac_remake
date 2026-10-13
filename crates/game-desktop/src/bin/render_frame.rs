@@ -115,7 +115,9 @@ fn main() {
         let wrote = probe.iter().any(|(pf, pa, _)| *pf == f && (0x0130..=0x0150).contains(pa));
         // —— 文本通道（t118 ①②③四段链复刻）：$2F/$30 流指针（RAM 中转 W50 实证）→
         // iram 流字节 → 地址合成三类 → nametable 直写（$E6DF/$E828/$E7DC 语义）——
-        if let Some(&(slo, hi)) = ptr_writes.get(&f) {
+        // ② $1A/$1B 门控（bank15:$E7DC-$E7E9 定谳）：($1B & $18)==0 且 $1A bit7==0 才写
+        let gate_open = (zp[0x1B] & 0x18) == 0 && (zp[0x1A] & 0x80) == 0;
+        if let Some(&(slo, hi)) = ptr_writes.get(&f).filter(|_| gate_open) {
             let mut ch = game_core::terrain::TextChannel {
                 stream_lo: slo, stream_hi: hi,
                 addr_lo: zp[0x14], addr_hi: zp[0x15], count: 0, tier7e: false,

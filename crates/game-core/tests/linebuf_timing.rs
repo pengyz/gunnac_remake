@@ -130,3 +130,16 @@ fn text_channel_stride_77_and_negative() {
     // 负向：$FE 非 77 步长必红
     assert_ne!(77, 76, "步长哨兵");
 }
+
+#[test]
+fn register_gate_condition_and_negative() {
+    // t126 ②：$1A/$1B 门控（bank15:$E7DC-$E7E9 逐指令）：写使能 = ($1B & $18)==0 且 $1A bit7==0
+    let gate = |a: u8, b: u8| (b & 0x18) == 0 && (a & 0x80) == 0;
+    assert!(gate(0x00, 0x00), "强制消隐+关 NMI ⇒ 写使能");
+    assert!(!gate(0xA0, 0x1E), "f1260 实测值 ⇒ 门关（渲染开+NMI 开）");
+    assert!(!gate(0x00, 0x18), "$1B bit3（BG 渲染开）⇒ 门关");
+    assert!(!gate(0x00, 0x10), "$1B bit4 ⇒ 门关");
+    assert!(!gate(0x80, 0x00), "$1A bit7（NMI 开）⇒ 门关");
+    // 负向：门控哨兵
+    assert_ne!(gate(0x00, 0x00), false, "全关态必真");
+}
