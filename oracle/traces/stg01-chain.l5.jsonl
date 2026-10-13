@@ -1,0 +1,10 @@
+{"scene": "title-menu", "f": 180, "mode": "Black", "checkpoint": "boot-black"}
+{"scene": "title-menu", "f": 360, "mode": "Title", "checkpoint": "title-in"}
+{"scene": "title-menu", "f": 540, "mode": "Menu", "checkpoint": "menu-in"}
+{"scene": "gameplay-stage1", "f": 1080, "mode": "Shop", "checkpoint": "shop-in"}
+{"scene": "gameplay-stage1", "f": 1200, "mode": "Transition", "checkpoint": "shop-exit"}
+{"scene": "gameplay-stage1", "f": 1260, "mode": "StageStart", "checkpoint": "stg01-start"}
+{"scene": "gameplay-stage1", "f": 1500, "mode": "Combat", "checkpoint": "combat"}
+{"scene": "respawn-window", "f": 1260, "mode": "StageStart", "checkpoint": null}
+{"scene": "respawn-window", "f": 1350, "mode": "Combat", "checkpoint": null}
+{"scene": "respawn-window", "f": 1400, "mode": "DeathRespawn", "checkpoint": "respawn-window"}
