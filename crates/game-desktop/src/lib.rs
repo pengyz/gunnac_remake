@@ -321,17 +321,27 @@ pub fn render_sprites(
                 game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_bot, t % 64)),
             ]
         } else {
-            let (it, ib) = crate::render_rules::pair_indices(t as u8); // ②映射规则（t209 Hamming=0）
             // ①分步接线（t213 ①交互归因）：t212 净损根=Game 族被挪 30→106（实测判优=30）
             // ——分步：仅 Label 族换 bank96，其余保持 sprite_chr_base（回归守卫）
-            // ①T bit0 分窗（t214 裁定版 N-0172）：odd→96/97、even→28/29——
-            // 对基 T&$FE 连续对（30/106 之争消解：规则统一）
-            let base = if t & 1 == 1 { 96 } else { 28 };
-            let bank_top = base + it / 64;
-            let bank_bot = base + ib / 64;
+            // ①码段双制（t225）：<128 bit0 分窗 + T&$FE 对；128+ 弹幕族
+            // offset=T−221 + bank 散射副本（251→127:30/253→102/124/255→90:34）
+            let (bank_top, bank_bot, it, ib) = if t >= 128 {
+                let idx = t - 221; // 251→30 / 253→32 / 255→34
+                let b = match t {
+                    251 => 127,
+                    253 => 102,
+                    255 => 90,
+                    _ => if t & 1 == 1 { 96 } else { 28 },
+                };
+                (b, b, idx, idx + 1) // 弹幕 8×16 对（idx, idx+1）同 bank
+            } else {
+                let base = if t & 1 == 1 { 96 } else { 28 };
+                let (it, ib) = crate::render_rules::pair_indices(t as u8);
+                (base + it / 64, base + ib / 64, it % 64, ib % 64)
+            };
             [
-                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_top, it % 64)),
-                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_bot, ib % 64)),
+                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_top, it)),
+                game_data::chr::decode_tile(&game_data::chr::tile_bytes(chr_rom, bank_bot, ib)),
             ]
         };
         for row in 0..16usize {
