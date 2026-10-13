@@ -59,6 +59,8 @@ watch 018f bomb_ammo
 watch 0190 bomb_type_index
 # 弹对象 SoA 区（t32 $70 间距网格六数组 + 余量；captain t45 批准）
 watch_range 0400-06ff shot_objs
+# OAM 精灵表（t104 预批：$4014 页 DMA 语义——NMI 期 OAM 上传源）
+watch_range 0200-02ff oam
 # BG NMI 消费链（t93 定谳：$0130-$014F 行缓冲 + $0150 输出表 + $160 行挂起）
 watch_range 0130-016f bg_nmi
 # NMI 级行缓冲插桩（t96 ②采样口径：R-l4-linebuf 不变量 5——endFrame 快照不适用行缓冲域）
