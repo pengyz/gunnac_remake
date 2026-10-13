@@ -60,3 +60,4 @@
 | [gotcha-observation-granularity-fabricates-invariants.md](gotcha-observation-granularity-fabricates-invariants.md) | gotcha | 观测粒度伪造不变量——"同帧同步"声明必须绑定粒度（R-bomb-2 证伪链 f2174/f2175） |
 | [gotcha-stack-page-game-var-watch-coverage.md](gotcha-stack-page-game-var-watch-coverage.md) | gotcha | 栈页 $0100-$01FF 是游戏变量密集区——watch/写集按变量地址逐页核对，"0 断言"先查采样面 |
 | [gotcha-false-green-idle-assertions.md](gotcha-false-green-idle-assertions.md) | gotcha | 断言存在≠断言生效——解析层级错致断言空转（caed518 ss-1/2），新增断言必做负向自证 |
+| [gotcha-register-address-is-not-nametable-target.md](gotcha-register-address-is-not-nametable-target.md) | gotcha | 注册器地址≠nametable 目标——$2006 锁存+$2007 自增协议暗雷（十一击共同根因），消费 PPU 写日志先还原落点 |
