@@ -24,7 +24,7 @@ fn main() {
             _ => {}
         }
     }
-    let mut merged: Vec<(u32, u16, u8)> = Vec::new();
+    let mut merged: Vec<(u32, u16, u8, u32)> = Vec::new();
     let mut n = 0;
     for line in trace.lines() {
         let f: u64 = match line.split("\"f\":").nth(1).and_then(|s| s.split(',').next()).and_then(|s| s.parse().ok()) { Some(v) => v, None => continue };
@@ -58,15 +58,15 @@ fn main() {
             }
         }
         for w in &bus.ppu_log {
-            merged.push((f as u32, w.addr, w.val));
+            merged.push((f as u32, w.addr, w.val, n as u32)); // 归属键：调用序号
         }
         n += 1;
     }
     std::fs::create_dir_all("analysis/phase").unwrap();
     let path = format!("analysis/phase/{out_name}.jsonl");
     let mut fo = std::fs::File::create(&path).unwrap();
-    for (f, a, v) in &merged {
-        writeln!(fo, "{{\"f\":{f},\"addr\":\"{a:04X}\",\"val\":{v}}}").unwrap();
+    for (f, a, v, inv) in &merged {
+        writeln!(fo, "{{\"f\":{f},\"addr\":\"{a:04X}\",\"val\":{v},\"inv\":{inv}}}").unwrap();
     }
     println!("phase-batch: {n} 调用回放，{} 写点 → {path}", merged.len());
 }
