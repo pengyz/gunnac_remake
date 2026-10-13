@@ -55,3 +55,43 @@ fn l5_parse_roundtrip() {
     assert_eq!(evs[0].checkpoint.as_deref(), Some("stg01-start"));
     assert_eq!(evs[1].checkpoint, None);
 }
+
+#[test]
+fn l5_illegal_sequence_fails_closed() {
+    // R14-1：非法模式序列必须 fail（t81 边集校验实装后）
+    let bad = vec![
+        ev("gameplay-stage1", 100, "Black", None),
+        ev("gameplay-stage1", 200, "Combat", None), // Black→Combat 非法
+    ];
+    let problems = l5_legality(&bad);
+    assert!(problems.iter().any(|p| p.contains("非法模式序列")), "Black→Combat 必拒（负向）：{problems:?}");
+    // t81 现成负向边复用：Boot→Combat 拒 / Combat→Shop 拒
+    let bad2 = vec![
+        ev("s", 1, "Boot", None),
+        ev("s", 2, "Combat", None),
+    ];
+    assert!(l5_legality(&bad2).iter().any(|p| p.contains("非法模式序列")), "Boot→Combat 必拒");
+    let bad3 = vec![
+        ev("s", 1, "Combat", None),
+        ev("s", 2, "Shop", None),
+    ];
+    assert!(l5_legality(&bad3).iter().any(|p| p.contains("非法模式序列")), "Combat→Shop 必拒");
+    // 帧序倒退负向
+    let bad4 = vec![
+        ev("s", 100, "Combat", None),
+        ev("s", 50, "Combat", None),
+    ];
+    assert!(l5_legality(&bad4).iter().any(|p| p.contains("帧序倒退")), "帧序倒退必检出");
+}
+
+#[test]
+fn l5_scope_note_3scenes_10events() {
+    // 低危口径注（R14-2）：3 scene/10 事件/8 命名检查点（stg01-chain.l5.jsonl 对账）
+    let jsonl = std::fs::read_to_string("../../oracle/traces/stg01-chain.l5.jsonl").expect("golden");
+    let evs = parse_l5(&jsonl).expect("解析");
+    let scenes: std::collections::BTreeSet<_> = evs.iter().map(|e| e.scene.as_str()).collect();
+    let named = evs.iter().filter(|e| e.checkpoint.is_some()).count();
+    assert_eq!(scenes.len(), 3, "3 场景");
+    assert_eq!(evs.len(), 10, "10 事件");
+    assert_eq!(named, 8, "8 命名检查点（t81 flow+t84 内容 id 落档）");
+}

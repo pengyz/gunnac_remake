@@ -54,9 +54,10 @@ pub fn parse_l5(jsonl: &str) -> Result<Vec<L5Event>, String> {
 /// L5 合法性：场景内帧序单调 + 模式序列过 FlowState 已证边集 + 未证段 fail-closed。
 /// 返回违规列表（空=合法）。
 pub fn l5_legality(events: &[L5Event]) -> Vec<String> {
-    use game_core::flow::{FlowState, Mode};
     let mut problems = Vec::new();
+    use game_core::flow::Mode;
     let mut last: BTreeMap<String, u32> = BTreeMap::new();
+    let mut modes_per_scene: BTreeMap<String, Mode> = BTreeMap::new();
     for e in events {
         if let Some(&pf) = last.get(&e.scene) {
             if e.f < pf {
@@ -82,10 +83,35 @@ pub fn l5_legality(events: &[L5Event]) -> Vec<String> {
                 continue;
             }
         };
-        let _ = m;
-        let _ = FlowState::default();
+        // R14-1 边集校验（桩实装→实装）：场景内相邻模式对必须过 t81 已证边集
+        // （FlowState::advance 反演：存在 ModeEvent 使 prev→cur）
+        if let Some(&prev) = modes_per_scene.get(&e.scene) {
+            if prev != m && !edge_proven(prev, m) {
+                problems.push(format!(
+                    "{} f{}: 非法模式序列 {:?}→{:?}（t81 已证边集外，fail-closed）",
+                    e.scene, e.f, prev, m
+                ));
+            }
+        }
+        modes_per_scene.insert(e.scene.clone(), m);
     }
     problems
+}
+
+/// t81 已证边集反演：存在 ModeEvent 使 prev.advance(ev) == cur。
+fn edge_proven(prev: game_core::flow::Mode, cur: game_core::flow::Mode) -> bool {
+    use game_core::flow::{FlowState, ModeEvent};
+    let events = [
+        ModeEvent::Black, ModeEvent::Title, ModeEvent::Menu, ModeEvent::ShopArrival,
+        ModeEvent::ShopPage, ModeEvent::ExitTransition, ModeEvent::StageStart,
+        ModeEvent::MidCombat, ModeEvent::DeathRespawn,
+    ];
+    events.iter().any(|ev| {
+        FlowState { mode: prev, data: Default::default() }
+            .advance(*ev)
+            .map(|s| s.mode == cur)
+            .unwrap_or(false)
+    })
 }
 
 /// L5 差分：golden（oracle 真值）vs rust（移植侧）逐事件对拍。
