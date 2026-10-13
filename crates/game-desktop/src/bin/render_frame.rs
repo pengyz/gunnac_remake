@@ -216,7 +216,7 @@ fn main() {
             let tile = nt.tiles[ntr][ty * 32 + tx] as usize + base * 256;
             let px = (tx as i32) * 8 - sx as i32;
             let py = (ty as i32) * 8 - sy as i32; // t131 实测：+8 更劣（94.17<94.50）——偏移非主因
-            let bank = font_bank + (tile / 64) * 2; // R0:124/R1:126 2KB 对装载（t138）
+            let bank = font_bank + (tile / 64) * 2; // t143 实测最优（92.20%）——W45 映射=码表转换待证（见账）
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 let bg_pal: [game_desktop::Rgba; 4] = [
