@@ -309,7 +309,7 @@ pub fn render_sprites(
         // 模型 A（跨半对）：tile t 两半跨 bank106/107（同 t 不同 bank）；
         // 模型 B（同 bank 邻接对）：even/odd 邻接（t165 原实现）。
         let t = spr.tile as usize;
-        let model_a = std::env::var("SPRITE_MODEL").map(|v| v == "A").unwrap_or(false);
+        let model_a = false; // R12-1 裁决：模型 B 实测判优（t165/t169 对照） // t175 对照 // t175 对照 // t175 ②：t167 bit0 分半（模型 A）默认
         let px_all: [[[u8; 8]; 8]; 2] = if model_a {
             let bank_top = sprite_chr_base + t / 64;
             let bank_bot = sprite_chr_base + 1 + t / 64;
