@@ -94,10 +94,13 @@ fn main() {
             let mut row = [0u8; 32];
             row.copy_from_slice(&buf[0x00..0x20]);
             let addr_ok = ((addr_regs.1 as u16) << 8 | addr_regs.0 as u16) >= 0x2000;
-            if !addr_ok && row.iter().any(|&v| v != 0) && hud_row_seq < 16 {
-                // ② 基址上下文（findings §4）：HUD/菜单行 → $2000 系（LUT 行序）
-                let base = [0x2000u16, 0x2040, 0x2080, 0x20C0, 0x2100, 0x2140, 0x2180, 0x21C0,
-                            0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380, 0x2CA5][hud_row_seq];
+            if !addr_ok && row.iter().any(|&v| v != 0) {
+                // ① 放置序=**降序+双写**（t109 参数表：行索引逆序映射、每行双调用——
+                // 顺序填充实验反向即本因）：fills/2 → LUT 行 15 递降
+                let lut = [0x2000u16, 0x2040, 0x2080, 0x20C0, 0x2100, 0x2140, 0x2180, 0x21C0,
+                           0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380, 0x2CA5];
+                let idx = 15usize.saturating_sub(hud_row_seq / 2);
+                let base = lut[idx];
                 pending_row = Some((row, attrs, base as u8, (base >> 8) as u8, 0xC0));
                 hud_row_seq += 1;
             } else {
@@ -144,7 +147,7 @@ fn main() {
     }
     // —— 精灵层（t104 ①）：OAM blob → 合成（BG 掩码 + 优先级 + 翻转 + 8/行 quirk）——
     let oam_blob: Vec<u8> = trace_oam.as_ref().map(|h| hex_decode(h)).unwrap_or_default();
-    let sprites = game_desktop::parse_oam(&oam_blob);
+    let sprites = game_desktop::parse_oam(&oam_blob); // ② $04=0 近似（W46 参数表：误差 ≤5px 注记）
     // 绑定表（t102/t104 ③像素级证明产物）：sp<pal][idx] → RGB
     let mk = |r: u8, g: u8, b: u8| -> game_desktop::Rgba {
         [r, g, b, if r == 0 && g == 0 && b == 0 { 0 } else { 255 }]
