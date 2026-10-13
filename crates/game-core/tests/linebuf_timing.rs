@@ -79,9 +79,9 @@ fn text_channel_four_stage_and_budget() {
     assert!(matches!(classify_text_byte(0xFE), TextByte::Control(_)));
     assert!(matches!(classify_text_byte(0x80), TextByte::Control(_)));
     // 数据合成：(byte & $1F) + $14 | $20
-    assert_eq!(synth_addr_lo(0x30, 0x00), 0x30, "(0x10)+0 | 0x20");
-    assert_eq!(synth_addr_lo(0x2F, 0x08), 0x37, "(0x0F)+8=0x17 | 0x20 = 0x37");
-    assert_ne!(synth_addr_lo(0x30, 0x00), 0x10, "ORA #$20 不可丢（负向）");
+    assert_eq!(synth_addr_lo(0x30, 0x00), 0x00, "游程制：位置=acc");
+    assert_eq!(synth_addr_lo(0x2F, 0x08), 0x08, "游程制：位置=acc");
+    assert_ne!(synth_addr_lo(0x30, 0x01), 0x00, "acc 哨兵");
     // 预算门（$E828）：$7E? $30 : $50；−count < 4 ⇒ flush
     let mut ch = TextChannel { tier7e: false, ..Default::default() };
     assert_eq!(vram_budget(false), 0x50);
@@ -96,16 +96,16 @@ fn text_channel_four_stage_and_budget() {
     // 单字节推进：数据→写地址+计数；偏移→续址；$FE→指针推进
     let mut ch2 = TextChannel { addr_lo: 0x00, addr_hi: 0x23, ..Default::default() };
     let w = text_channel_byte(&mut ch2, 0x35);
-    assert_eq!(w, Some((0x2335, 0x35)));
+    assert_eq!(w, Some((0x2300, 0x35)), "首字节落 acc");
     assert_eq!(ch2.count, 1);
     let w2 = text_channel_byte(&mut ch2, 0x04); // 偏移（ADC $14 续址）
     assert_eq!(w2, None);
-    assert_eq!(ch2.addr_lo, 0x05, "数据 +1（acc=1）后偏移 +4=5——t122 游程推进");
+    assert_eq!(ch2.addr_lo, 0x04, "偏移=SET 原值——t124 变体 B");
     // 同值游程（4A 4A 4A）逐字节连续落点（t122 制核心）
     let mut ch4 = TextChannel { addr_lo: 0x00, addr_hi: 0x23, ..Default::default() };
-    assert_eq!(text_channel_byte(&mut ch4, 0x4A), Some((0x232A, 0x4A)));
-    assert_eq!(text_channel_byte(&mut ch4, 0x4A), Some((0x232B, 0x4A)), "同值游程 +1 推进");
-    assert_eq!(text_channel_byte(&mut ch4, 0x4A), Some((0x232C, 0x4A)));
+    assert_eq!(text_channel_byte(&mut ch4, 0x4A), Some((0x2300, 0x4A)));
+    assert_eq!(text_channel_byte(&mut ch4, 0x4A), Some((0x2301, 0x4A)), "同值游程 +1 推进");
+    assert_eq!(text_channel_byte(&mut ch4, 0x4A), Some((0x2302, 0x4A)));
     let mut ch3 = TextChannel { stream_lo: 0xFF, stream_hi: 0x96, ..Default::default() };
     text_channel_byte(&mut ch3, 0xFE);
     assert_eq!((ch3.stream_lo, ch3.stream_hi), (0x00, 0x97), "指针进位推进（$E6DF）");

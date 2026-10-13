@@ -19,6 +19,9 @@ fn main() {
     let name = args.get(2).expect("输出名").clone();
     let scene = args.get(3).cloned().unwrap_or_else(|| "gameplay-stage1".into());
     let tbank: usize = std::env::var("TEXT_BANK").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
+    let tb_early: usize = std::env::var("TEXT_BANK_EARLY").ok().and_then(|v| v.parse().ok()).unwrap_or(tbank);
+    let tb_late: usize = std::env::var("TEXT_BANK_LATE").ok().and_then(|v| v.parse().ok()).unwrap_or(tbank);
+    let tb_phase: u64 = std::env::var("TEXT_PHASE").ok().and_then(|v| v.parse().ok()).unwrap_or(9999);
     let base: usize = args.iter().position(|a| a == "--base")
         .and_then(|i| args.get(i + 1)).and_then(|v| v.parse().ok()).unwrap_or(0);
     let rom = std::fs::read("rom/gunnac_cn.nes").expect("ROM");
@@ -122,7 +125,8 @@ fn main() {
                 let b = if sp >= 0x8000 {
                     // ② 文本流 bank 绑定（R7 语义）：ROM 直指流按 TEXT_BANK 变体读
                     let off = sp.wrapping_sub(0xA000) as usize;
-                    *rom.get(0x10 + tbank * 0x2000 + off).unwrap_or(&0xFE)
+                    let bk = if f < tb_phase { tb_early } else { tb_late };
+                    *rom.get(0x10 + bk * 0x2000 + off).unwrap_or(&0xFE)
                 } else {
                     let sa = sp.wrapping_sub(0x0300) as usize;
                     match iram.get(sa) { Some(&v) => v, None => break }
