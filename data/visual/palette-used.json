@@ -78,5 +78,37 @@
     "bg_layer_match": "97.2-98.3%（真彩域，黑场背景逐像素一致）",
     "residual": "2-3% = sprite 层像素（HUD 文本/敌人/弹幕——OAM $0200-02FF 未 watch、精灵渲染未实现）",
     "attribution": "移植缺口（M3 渲染链仅 BG 层）——四分类：非 W-C4 平台差异；按用户裁定不报白名单残余"
+  },
+  "t111_classification_ledger": {
+    "status": "停工分类账（captain 约定：四击未收敛——带完整分类账待方案评审，不打第五发）",
+    "per_frame": {
+      "gameplay-stage1_f01260_stage-start": {
+        "diff": 1509,
+        "sprite_rect": 968,
+        "bg_face": 541,
+        "unbound_color_px": 85
+      },
+      "gameplay-stage1_f01500_mid-combat": {
+        "diff": 2190,
+        "sprite_rect": 1125,
+        "bg_face": 1065,
+        "unbound_color_px": 190
+      },
+      "gameplay-stage1_f02349_end": {
+        "diff": 2305,
+        "sprite_rect": 767,
+        "bg_face": 1538,
+        "unbound_color_px": 499
+      }
+    },
+    "four_class_totals": {
+      "移植缺口_精灵精度": "2860px（精灵矩形内：字模基址/Y 残差/tile 归属——t104/t107 变体实测族）",
+      "规格缺口_HUD行放置": "3144px（精灵矩形外 BG 面：f1204 前预装载行放置序未实证——降序+双写实测无增益）",
+      "平台差异_W47": "0px（已绑定色逐像素精确一致——无色彩空间/伽马残差）",
+      "参考bug": "0px"
+    },
+    "binding_residual": "#E4E594→sp2[3] 竞争（rank2/16 票）；#64B0FF→sp0[1]/sp0[3] 竞争（rank3-4）——票证据留档，绑定需像素精度修复后定谳",
+    "attempt4_measures": "降序+双写放置（无增益）/+$04 残差（97.36/96.44 更劣弃）/$04=0 近似采纳/2 色竞争记录",
+    "next_review_input": "四击参数全实测矩阵（t104/t107/t111）+ 两族根因（放置序/精灵精度）+ 槽分区 W47/W48 —— 待方案评审"
   }
 }
