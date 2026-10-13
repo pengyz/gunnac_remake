@@ -68,3 +68,7 @@ probe_mem 00d3 00da
 # （金钱显示源候选区，t18 负结果定向补证；MEMTYPE=8 CPU 总线视图可读）
 watch_range 0300-07ff iram
 watch_range 6000-7fff wram
+
+# t97 地址寄存器相位插桩（观察性）：$2005/$2006 写流
+probe_mem 2005 2006
+probe_mem 008e 008f
