@@ -24,7 +24,7 @@ fn main() {
             _ => {}
         }
     }
-    let mut merged: Vec<(u32, u16, u8, u32)> = Vec::new();
+    let mut merged: Vec<(u32, u16, u8, u32, u32)> = Vec::new();
     let mut n = 0;
     for line in trace.lines() {
         let f: u64 = match line.split("\"f\":").nth(1).and_then(|s| s.split(',').next()).and_then(|s| s.parse().ok()) { Some(v) => v, None => continue };
@@ -57,16 +57,25 @@ fn main() {
                 _ => break,
             }
         }
+        // 归属键 = (inv, seg)（AR3-A 修正：seg=$2006 对计数——t130 §2 段序号口径）
+        let mut seg = 0u32;
+        let mut latch_high = true;
         for w in &bus.ppu_log {
-            merged.push((f as u32, w.addr, w.val, n as u32)); // 归属键：调用序号
+            if w.addr == 0x2006 {
+                if latch_high {
+                    seg += 1; // 每个 $2006 高字节开新段
+                }
+                latch_high = !latch_high;
+            }
+            merged.push((f as u32, w.addr, w.val, n as u32, seg));
         }
         n += 1;
     }
     std::fs::create_dir_all("analysis/phase").unwrap();
     let path = format!("analysis/phase/{out_name}.jsonl");
     let mut fo = std::fs::File::create(&path).unwrap();
-    for (f, a, v, inv) in &merged {
-        writeln!(fo, "{{\"f\":{f},\"addr\":\"{a:04X}\",\"val\":{v},\"inv\":{inv}}}").unwrap();
+    for (f, a, v, inv, seg) in &merged {
+        writeln!(fo, "{{\"f\":{f},\"addr\":\"{a:04X}\",\"val\":{v},\"inv\":{inv},\"seg\":{seg}}}").unwrap();
     }
     println!("phase-batch: {n} 调用回放，{} 写点 → {path}", merged.len());
 }

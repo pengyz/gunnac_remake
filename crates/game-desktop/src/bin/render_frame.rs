@@ -48,17 +48,48 @@ fn main() {
     }).unwrap_or_default();
     let mut probe_i = 0usize;
     let mut ptr_writes: std::collections::HashMap<u64, (u8, u8)> = std::collections::HashMap::new();
-    // 归属轴（t131 ④，t130 §2）：可见文本层 = 7 调用写集（0/11/14/15/16/17/18）
-    let visible_invs: [u32; 7] = [0, 11, 14, 15, 16, 17, 18];
-    let text_writes: Vec<(u32, u16, u8, u32)> = std::fs::read_to_string("analysis/phase/gameplay-stage1-text.jsonl")
+    // 归属轴（AR3-A 修正）：按段起点址匹配 t130 §2 七段（$2006 对计数段序号）——
+    // 此前误把 JSONL inv 行号当段序号（calls 11-18 全被滤掉=假阳性源）。
+    // 七段起点（t130 §2 表）：$2170/$21A2/$2289/$22B7/$21B8/$2205/$2252
+    let seg_starts: [u16; 7] = [0x2170, 0x21A2, 0x2289, 0x22B7, 0x21B8, 0x2205, 0x2252];
+    let raw_writes: Vec<(u32, u16, u8, u32, u32)> = std::fs::read_to_string("analysis/phase/gameplay-stage1-text.jsonl")
         .map(|t| t.lines().filter_map(|l| {
             let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
             let a = u16::from_str_radix(l.split("\"addr\":\"").nth(1)?.split('"').next()?, 16).ok()?;
             let v = l.split("\"val\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
             let inv = l.split("\"inv\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
-            if visible_invs.contains(&inv) { Some((f, a, v, inv)) } else { None }
+            let seg = l.split("\"seg\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
+            Some((f, a, v, inv, seg))
         }).collect())
         .unwrap_or_default();
+    // 按 (inv,seg) 分组求段起点 → 过滤七段 → 组内按写序展开（后写胜自然成立）
+    let mut groups: std::collections::BTreeMap<(u32, u32), Vec<(u32, u16, u8)>> = std::collections::BTreeMap::new();
+    for (f, a, v, inv, seg) in &raw_writes {
+        groups.entry((*inv, *seg)).or_default().push((*f, *a, *v));
+    }
+    let mut text_writes: Vec<(u32, u16, u8)> = Vec::new();
+    for ((_, _), ws) in &groups {
+        // 段起点 = 首个 $2006 对合成
+        let mut hi = None;
+        let mut start = None;
+        for (_f, a, v) in ws {
+            if *a == 0x2006 {
+                if hi.is_none() {
+                    hi = Some(*v);
+                } else {
+                    start = Some((hi.unwrap() as u16) << 8 | *v as u16);
+                    break;
+                }
+            }
+        }
+        if let Some(st) = start {
+            if seg_starts.contains(&st) {
+                text_writes.extend(ws.iter().map(|(f, a, v)| (*f, *a, *v)));
+            }
+        }
+    }
+    text_writes.sort_by_key(|w| w.0);
+    let text_writes = text_writes;
     let mut text_i = 0usize;
     let mut ppu_addr: u16 = 0;
     let mut ppu_addr_latch_high = true;
@@ -123,7 +154,7 @@ fn main() {
         // PPU 协议解释（t131 归属合并击根修）：$2006 写锁存地址（高/低），
         // $2007 写落 tile（地址自增）——注册器写序列 → nametable 态
         while text_i < text_writes.len() && text_writes[text_i].0 <= f as u32 {
-            let (_f, addr, val, _inv) = text_writes[text_i];
+            let (_f, addr, val) = text_writes[text_i];
             text_i += 1;
             match addr {
                 0x2006 => {
