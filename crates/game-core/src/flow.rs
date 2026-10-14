@@ -484,12 +484,14 @@ fn step_game_over_menu(st: &mut DeathChainState, buttons: u8) -> DeathFx {
 /// 网格清 `$0400-$06FF`+`$6FE-$7FD`（E18C 四页；`$7FE-$7FF` 不清——AD66-1）、`$0400:=1`、
 /// `$27/$C8:=0`、`$188:=$40`（E1D3-E1DD `$26` bit7 下 `$FF`）、`$26:=($26&$F7)|$10`；
 /// **仅 `$180` 保留**（续当前关），`$017A-$017F` 减半值带入（§3.2）。
-/// 注 1：同段 bank15:$E1BB-E1BF `$26:=$26&$80` 为 A2 §3.2 未列写点（规格缺口，已上报
+/// 注 1（已裁定，复核 #69）：bank15:$E1BB-E1BF `$26:=$26&$80` 与 E0F4 瞬态写构成两写点序——
+/// 净效应 `$26&=$80`（bit4 终态=0），已按终态镜像；原缺口记录如下（历史）
 /// spec-writer）——本实现按 A2 复位集闭合，未接 E1BB。
 /// 注 2：`$16/$18` 清（E1C5-E1C7）= 输入锁存写；本链按步传参无锁存 ⇒ 不镜像。
 fn apply_continue_reset(st: &mut DeathChainState) {
     st.lives = 2; // E0EF
-    st.revive_flags = (st.revive_flags & 0xF7) | 0x10; // E0F4-E0F8
+    st.revive_flags = (st.revive_flags & 0xF7) | 0x10; // E0F4-E0F8 瞬态写（先行）
+    st.revive_flags &= 0x80; // E1BB-E1BF 终态写（后继必达——复核 #69 裁定：两写点净效应 $26&=$80，bit4=0）
     st.todo_0189 = 0; // E162
     st.bomb_type_index = 0; // E165
     st.shop_money = 0; // E168

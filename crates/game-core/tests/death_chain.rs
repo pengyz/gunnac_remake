@@ -230,8 +230,8 @@ fn f12_continue_reset_set() {
     assert_eq!(st.intro_counter, 0x40, "$188:=$40（bank15:$E1DD）");
     assert_eq!(st.entry_once_flags, 0, "$27 清零（bank15:$E1C3）——再入场可重 arm");
     assert_eq!(st.todo_c8, 0, "$C8 清零（bank15:$E19B）");
-    assert_eq!(st.revive_flags & 0x08, 0, "$26 bit3 清零=复活权恢复（bank15:$E0F4-E0F8）");
-    assert_eq!(st.revive_flags & 0x10, 0x10, "$26 bit4 置位（同上）");
+    assert_eq!(st.revive_flags & 0x08, 0, "$26 bit3 清零=复活权恢复（E0F4 瞬态写）");
+    assert_eq!(st.revive_flags & 0x10, 0, "$26 bit4 终态=0（复核 #69 净效应 $26&=$80：E0F4 瞬态→E1BB 终态两写点序）");
     // 网格清（$0400-$06FF + $6FE-$7FD）；$7FE-$7FF 保留（AR63-5/AD66-1）
     assert_eq!(st.old_state, 0, "网格具名单元清（$04A8）");
     assert_eq!(st.hit_flags, 0, "网格具名单元清（$0668）");
