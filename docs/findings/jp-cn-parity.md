@@ -52,3 +52,11 @@ Plan C 原设想"社区地址直接核"→ 修正为**签名级定位**（byte-p
 
 - 生成物：`oracle/subroutines/l2_cases_jp.jsonl`（94 条，10 条重定位；上表=坐标桥种子）
 - **R1 风险状态**：L2 子程序级 ✅ 消解；余 L3 场景级双跑 + W-P1（搬家区逐字节审计）+ W-P2
+
+## 6. 坐标桥工具化（条件 C 首期，2026-10-14）✅
+
+`tools/gen_addr_bridge.py gen|verify` → `data/reference/addr-bridge-jp-cn.json`：
+**2592 条机器映射**（same-site 2377=指针/常量操作数重写，地址恒等｜relocated 54=内容级
+唯一命中搬家块（bank00 −0x8C 族/bank01 −0x354 族/bank14 −0x2C6/−0x293 族）｜unmapped 161
+=内容未命中/多命中，**不猜**留 W-P1 审计判定）。verify 抽样 20/20 通过（对照双 ROM 字节独立重导）。
+**纪律：跨坐标换算一律走此表+verify，禁止手工换算**（N-0094 同款已 2 次）。
