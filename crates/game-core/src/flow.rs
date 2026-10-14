@@ -17,6 +17,12 @@
 //! - **粗粒度**：`Mode`/`ModeEvent`/`FlowState::advance`（场景 capture 标签锚定，L5 合法性同源）；
 //! - **细粒度**：`DeathChainState`/`death_chain_step`（A2 F1-F12 RAM 镜像 + 帧步进；
 //!   粗粒度 `FlowState::on_game_over`/`on_continue` 为其投影，两层口径以细粒度为准）。
+//!
+//! DEV-3 增补（A3 关末/通关/结局链，`docs/spec/l5-all-clear.md` R-l5-3..6）：
+//! - 粗粒度边：`Combat→StageClear`（`$26 bit4` 门）/ `StageClear→Shop`（E396→E16B→`$9BC3` 商店 init）/
+//!   `StageClear→Ending`（`$180==9` → `$95F9`）/ `StageClear→Title`（`$FFF8` 哨兵，出厂不可达）；
+//! - 细粒度：`StageClearState`/`stage_clear_step`（A3 §1.1 关末块逐写点镜像）+
+//!   `EndingFx`（staff roll→结局卡挂起枚举）。
 
 use crate::ui::MoneyCounter;
 
@@ -49,6 +55,12 @@ pub enum Mode {
     /// GAME OVER/CONTINUE 菜单（F8-F11：`$2F` 光标双出口，bank15:$E3AB-$E484；
     /// 原 `ContinueUnproven` 未证占位按 A2 闭合）。
     GameOverMenu,
+    /// 关末序列段（A3 §1.1 关末块 bank15:$E2FC-$E396，`$26 bit4` 门内进行；DEV-3，
+    /// `docs/spec/l5-all-clear.md` R-l5-3/4）。
+    StageClear,
+    /// 结局段（A3 §2/§3：`bank00:$95F9` staff roll→结局卡；**粗粒度**——内部渲染/文本流
+    /// 挂起枚举 `EndingFx`，不发明写集）。
+    Ending,
 }
 
 /// 跨模式保持数据（②：金钱/武器槽/等级/弹药——respawn 复位与 shop 结束态有证据）。
@@ -113,6 +125,17 @@ pub enum ModeEvent {
     Continue,
     /// F10：`$2F==1`+Start → 回标题（bank15:$E484 `JMP loc_E073`）。
     GameFinish,
+    /// A3 §1.1 关末门开（`$26 bit4` 置位 → bank15:$E2F3 `AND #$10/BNE E2FC` 入关末块；
+    /// 置位点 bank00:$8D02 `ORA #$10/STA $26` = 波次链完成/BOSS 击杀上游，**B 级**）。
+    StageClear,
+    /// A3 §1.1 关末完成 → 关间（E36E 清 bit4 → E37C `INC $180` → E396 `JMP loc_E16B`
+    /// → far-call `$9BC3` 商店 init，A1 A 级）——非通关路。
+    StageAdvance,
+    /// A3 §1.2 通关（E392 `$180==9` → E399-E3A1 `JSR $E649/00 01 F9 95` = `JMP $95F9`）。
+    AllClear,
+    /// A3 §1.1 提前终局哨兵（E37F `$180==byte_FFF8`〔0x0A，出厂〕→ E387-E38F `JMP loc_E073`）——
+    /// **出厂不可达死分支，保真保留**（D4）。
+    EarlyEnd,
 }
 
 impl FlowState {
@@ -145,6 +168,11 @@ impl FlowState {
             (GameOverMenu, ModeEvent::MenuToggle) => GameOverMenu,     // F11 自环
             (GameOverMenu, ModeEvent::Continue) => StageStart,         // F9 → 关首
             (GameOverMenu, ModeEvent::GameFinish) => Title,            // F10
+            // ===== DEV-3 关末/通关/结局粗粒度边（A3 §1.1/§1.2，l5-all-clear R-l5-4/5/6）=====
+            (Combat, ModeEvent::StageClear) => StageClear,       // E2F3 `$26 bit4` 门入关末块
+            (StageClear, ModeEvent::StageAdvance) => Shop,      // E396→E16B→`$9BC3` 商店 init（A1）
+            (StageClear, ModeEvent::AllClear) => Ending,        // E392 `$180==9` → `$95F9`
+            (StageClear, ModeEvent::EarlyEnd) => Title,         // E387 `$FFF8` 哨兵（不可达死分支）
             (m, ev) => {
                 return Err(format!("未证转移 {:?} + {:?}（fail-closed，不发明）", m, ev))
             }
@@ -510,4 +538,208 @@ fn apply_continue_reset(st: &mut DeathChainState) {
     st.phase = DeathPhase::Alive; // F12 → ALIVE 关首
     st.window_frames = 0;
     st.settled = false;
+}
+
+// ===== DEV-3 关末/通关链（A3 §1，ending-sequence.md；spec docs/spec/l5-all-clear.md R-l5-3..6）=====
+//
+// 架构模板同 DEV-2：RAM 镜像 + 帧步进 + 挂起枚举。与死亡链同居 ROM 主环（bank15:$E29A 族）：
+// `$0400≠0 → E2F3`（`$26 bit4` 门）→ 关末块 `E2FC-$E3A8`。帧内次序 = 行为段（bank11 `$0300`
+// 写点）→ 主环段（本链）。**未证不发明**：`$26 bit7` 直回标题支（C 级，A2 §3.4 同支）不接线；
+// 第 4 关特判 `$82/$83→$64` 字节忠实、语义 `todo_*` 登记不解释；服务/音效/渲染 ⇒ 挂起枚举。
+
+/// `$FFF8` 提前终局哨兵（ROM 尾标志，file 0x20008：CN/US/JP 三版均 **0x0A**，A3 §1.1/§6.1 ②）。
+/// 出厂值 0x0A > 可达最大 9 ⇒ 死分支；保真保留（D4）。
+pub const FFF8_SENTINEL: u8 = 0x0A;
+
+/// 关末链相位（A3 §1.1 状态图）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StageClearPhase {
+    /// 未在关末段（`$26 bit4=0`；本链静默）。
+    Idle,
+    /// 关末段进行（bit4=1）：一次性入场 → 倒数（`$2B&7` 节拍）→ 等 `$0300≠0`。
+    Clearing,
+    /// E387-E38F：`$180==$FFF8` 哨兵支完成 → 标题（出厂不可达，保真保留）。
+    EarlyEnd,
+    /// E396：`INC $180` 后 → `JMP loc_E16B` 关间（far-call `$9BC3` 商店 init）。
+    NextStage,
+    /// E399-E3A1：`$180==9` 通关 → `JSR $E649/00 01 F9 95` = `JMP $95F9` 结局入口。
+    AllClear,
+}
+
+/// 关末链挂起效果（服务/音效线未接 ⇒ 挂起枚举，不发明其写集/渲染）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StageClearFx {
+    /// 无挂起。
+    None,
+    /// E320 `JSR sub_ED56` + E323 音效 `$10`（入场服务/音效）——挂起。
+    ClearEntryPending,
+    /// E374（`LDA #4/JSR sub_EE03/JSR sub_ED56` 淡出/音乐）+ E387/E399 收尾服务
+    /// （`LDA #2/JSR sub_EE03/JSR $DB14`）——挂起。
+    ClearFinishPending,
+}
+
+/// 结局段挂起枚举（A3 §2/§3 staff roll→结局卡内部——**粗粒度边已接**（`Mode::Ending`），
+/// 渲染/文本流线未接线；变体序=入口后待办序列，逐项指针见各注）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EndingFx {
+    /// `$95F9` 入口场景服务装载（bank00:95FD `JSR $E590/$E7FB/$EED7/$E567`）——场景线未接，挂起。
+    EntryScenePending,
+    /// staff roll BGM `$13`（bank00:9609 `LDA #$13/JSR $ED3B`）——音效线未接，挂起。
+    StaffRollBgmPending,
+    /// 前置场景（bank00:960E：`$1BE==0 && $4C!=0` → `$A925($AC87)` 结局故事页序列；否则 `$AB70`+scene4）。
+    PreScenePending,
+    /// 滚屏循环（bank00:962C 流指针 `$2F:$30:=$9955`，43 记录；`$FF` 流尾 ⇒ `$180:=1`）。
+    StaffRollScrollPending,
+    /// 结局卡（bank00:971E 等 START → `sub_9763($97D3[$4C])`；`$4C==3`/`$4E!=0` 卡常驻）。
+    EndingCardPending,
+}
+
+/// 关末链 RAM 镜像（字段括注 ROM 地址；命名=已证语义名，未证语义 `todo_*` 登记不解释）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StageClearState {
+    /// 相位。
+    pub phase: StageClearPhase,
+    /// `$26` 标志字节：bit4=关末门（E2F3）、bit7=模式位（C 级 G-S5-1——分支不接线）。
+    pub flags_26: u8,
+    /// `$27` 一次性入场标志（bit7=关末入场，E2FC-E309）。
+    pub flags_27: u8,
+    /// `$2F` 关末倒数（E314 := 0x32=50；E337 每 `$2B&7==0` 帧 DEC，尽 → 飞离向量）。
+    pub countdown_2f: u8,
+    /// `$0188` 关卡介绍倒数计数器（N-0200；E318 := 0x7E）。
+    pub intro_counter: u8,
+    /// `$0300` 关末推进闸（E31D 入场清零；bank11:$82C1/$833F 置非零=飞离/关末动画完成，
+    /// 上游 B 级 G-S5-2——由 `StageClearEnv::gate_300` 外部输入，不发明时序）。
+    pub stage_advance_gate: u8,
+    /// `$0180` 关口号（开局 :=1 bank15:$E04A；E37C `INC $180`；==9 通关判定）。
+    pub stage: u8,
+    /// `$06A0` 关末免死保护（E32E := 2；非 0 时 0x0F 免死立即复活，A33E）。
+    pub no_death: u8,
+    /// `$041C` 状态向量高（E342 飞离向量 := 0xA4；与死亡链 `state_vec_hi` 同字段）。
+    pub state_vec_hi: u8,
+    /// `$0438` 状态向量低（E33D 飞离向量 := 0x0D；与死亡链 `state_vec_lo` 同字段）。
+    pub state_vec_lo: u8,
+    /// `$0082`（语义未定谳，登记不解释——E345 第 4 关特判输入）。
+    pub todo_82: u8,
+    /// `$0083`（同上）。
+    pub todo_83: u8,
+    /// `$0064`（同上；E364 特判输出，语义未定谳）。
+    pub todo_64: u8,
+}
+
+impl StageClearState {
+    /// stage 开局初值（bank15:$E04A `$180:=1`；其余 RAM 冷启动清零 + E312-E31D 首次入场写）。
+    pub fn new() -> Self {
+        StageClearState {
+            phase: StageClearPhase::Idle,
+            flags_26: 0,
+            flags_27: 0,
+            countdown_2f: 0,
+            intro_counter: 0,
+            stage_advance_gate: 0,
+            stage: 1,
+            no_death: 0,
+            state_vec_hi: 0,
+            state_vec_lo: 0,
+            todo_82: 0,
+            todo_83: 0,
+            todo_64: 0,
+        }
+    }
+}
+
+impl Default for StageClearState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 关末链外部输入（帧内次序 = 行为段（bank11 `$0300` 写点）→ 主环段（本链））。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StageClearEnv {
+    /// `$2B` 全局计数器镜像（本块仅消费 `$2B&7` 相位，E331；`$2B` 全局语义未定谳）。
+    pub frame_2b: u8,
+    /// `$0300` 本帧行为段写值（bank11:$82C1/$833F 置非零=飞离/关末动画完成事件）。
+    pub gate_300: u8,
+    /// `$0400≠0` 玩家对象存在（E304 入场等待）。
+    pub player_present: bool,
+}
+
+/// A3 §1.1 关末门开：置位点 bank00:$8D02 `ORA #$10/STA $26`（波次链完成/BOSS 击杀上游，
+/// **B 级**——调用图级未逐指令展开，本函数只镜像置位写）。
+pub fn stage_clear_arm(st: &mut StageClearState) {
+    st.flags_26 |= 0x10;
+    st.phase = StageClearPhase::Clearing;
+}
+
+/// 关末链一帧推进（bank15:$E2FC-$E3A8 逐写点镜像；语义未定谳字段 `todo_*` 登记不解释）。
+/// 返回挂起效果；派发结果在 `st.phase`（`NextStage`/`AllClear`/`EarlyEnd`）。
+/// 未证域 fail-closed 不动作（G-S5-1 `$26 bit7` 支不接线）。
+pub fn stage_clear_step(st: &mut StageClearState, env: StageClearEnv) -> StageClearFx {
+    if st.phase != StageClearPhase::Clearing {
+        return StageClearFx::None; // Idle 未 arm / 已派发（相位粘滞，派发结果保持）
+    }
+    // 行为段写点镜像：本帧 bank11 `$0300` 写（早于主环读取，E366）。
+    st.stage_advance_gate = env.gate_300;
+    // E2F3 门：`$26 bit4` 未置位不在关末块（fail-closed）。
+    if st.flags_26 & 0x10 == 0 {
+        st.phase = StageClearPhase::Idle;
+        return StageClearFx::None;
+    }
+    let mut fx = StageClearFx::None;
+    // ── ① 一次性入场（E2FC-E325）──
+    if st.flags_27 & 0x80 == 0 {
+        if !env.player_present {
+            return StageClearFx::None; // E304 `LDY $400/BEQ E2F9`：等玩家对象
+        }
+        st.flags_27 |= 0x80; // E309 `STA $27`（`$27|=$80`，先于 bit7 判定——写序忠实）
+        // E30B-E30F：`$26` bit7 → `JMP loc_E073` 直回标题支 = C 级语义（A2 §3.4 同支裁定）
+        // ⇒ **不接线**（G-S5-1）：不派发不发明；镜像保持至分支点即止。
+        if st.flags_26 & 0x80 != 0 {
+            return StageClearFx::None;
+        }
+        st.countdown_2f = 0x32;       // E314 `STA $2F`
+        st.intro_counter = 0x7E;      // E318 `STA $188`
+        st.stage_advance_gate = 0;    // E31D `STA $300`（入场帧必等——同帧 E366 读 0）
+        fx = StageClearFx::ClearEntryPending; // E320/E323 服务+音效 `$10`（挂起）
+    }
+    // ── ② 倒数环（E328-E342）──
+    if st.countdown_2f != 0 {
+        st.no_death = 2; // E32E `STA $6A0`（关末免死保护，每帧刷新）
+        if env.frame_2b & 7 == 0 {
+            // E331-E335 `$2B&7` 门 ⇒ 每 8f 一减（E337 `DEC $2F`）
+            st.countdown_2f -= 1;
+            if st.countdown_2f == 0 {
+                st.state_vec_lo = 0x0D; // E33D `STA $438`
+                st.state_vec_hi = 0xA4; // E342 `STA $41C`（飞离向量）
+            }
+        }
+    }
+    // ── ③ 第 4 关特判（E345-E364）：字节忠实，`$82/$83/$64` 语义未定谳（G-S5-3）──
+    if st.stage == 4 {
+        let v = (((st.todo_83 as u16) << 8) | st.todo_82 as u16) >> 4; // 4×`LSR $04/ROR A`
+        st.todo_64 = (v as u8).min(0x24); // E35E-E364 `CMP #$24` 封顶 → `STA $64`
+    }
+    // ── ④ 等 `$0300≠0`（E366-E36B）：闸未开 ⇒ 停留（fail-closed 不派发）──
+    if st.stage_advance_gate == 0 {
+        return fx;
+    }
+    // ── ⑤ 完成+派发（E36E-E3A1，同帧）──
+    st.flags_26 &= 0xEF;  // E370 `AND #$EF` 清关末位
+    st.stage = st.stage.wrapping_add(1); // E37C `INC $180`
+    fx = StageClearFx::ClearFinishPending; // E374+E387/E399 服务（挂起）
+    st.phase = if st.stage == FFF8_SENTINEL {
+        StageClearPhase::EarlyEnd // E37F-E38F `CMP byte_FFF8`（出厂不可达，D4 保真）
+    } else if st.stage == 9 {
+        StageClearPhase::AllClear // E392-E3A1 `CMP #9/BEQ` → `$95F9`
+    } else {
+        StageClearPhase::NextStage // E396 `JMP loc_E16B` → `$9BC3` 商店 init
+    };
+    fx
+}
+
+/// A3 §2 结局入口（`bank00:95F9 LDA #$80/STA $26`）：镜像入口写，staff roll→结局卡内部
+/// 逐项返回/登记 `EndingFx` 挂起序列（不发明渲染/文本流写集）。
+pub fn ending_entry(st: &mut StageClearState) -> EndingFx {
+    st.flags_26 = 0x80; // bank00:95F9 `STA $26`（bit7 模式位）
+    EndingFx::EntryScenePending
 }

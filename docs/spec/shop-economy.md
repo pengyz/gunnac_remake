@@ -47,6 +47,10 @@
 - 证据: `web:https://en.wikipedia.org/wiki/Gun-Nac`（E-W06 "…purchase upgrades in a shop in between levels"）+ `shot:shots/auto_f01080.png`（自动运行 5400 帧内出现该界面）
 - 可判定性: 机器可判定（S2 场景：关卡切换断言进入商店界面）——**封顶 L1**（web 证据）
 - 关联: B-SYS-SHOP
+- 【2026-10-15 DEV-3 升格】进店时机**升格 A 级**（代码链）：关末完成 `bank15:$E396 JMP loc_E16B`
+  → far-call `00 01 C3 9B` = **`bank00:$9BC3` 商店 init**（shop-purchase-flow §清零/初始化 A 级）
+  → 主菜单 `$9CFC` → 退出入口 `bank01:$A022`（"退出→开stage"）⇒ **每关开始前到店 1 次**
+  （关 1..8；第 8 关末走通关支不回店）——见 [l5-all-clear.md](l5-all-clear.md) R-l5-6。
 
 > 【2026-10-12 S2 回填】以下 R-shop-5..8 / R-money-4 / R-item-1 由 t12 场景证据提炼（B 级，绑 scenario/trace）。
 
