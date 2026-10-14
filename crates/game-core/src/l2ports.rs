@@ -188,3 +188,12 @@ pub fn shop_money_earn(money: u8) -> u8 {
         v
     }
 }
+
+/// 死亡结算金钱减半（bank03:A39F `LSR $18E`；A2 归因终局=死亡结算——findings
+/// game-over-continue.md §1.3/F5，shop-purchase-flow #55 旧注以本条为准）。
+///
+/// 语义：`$018E` 商店金钱（0..255 二进制字节）逻辑右移 1 位（丢 bit0，向下取整）。
+/// 终死/非终死两路同做（bank03:$A39A-A39F 合流后无条件执行）。
+pub fn death_money_halve(money: u8) -> u8 {
+    money >> 1
+}

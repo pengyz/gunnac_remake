@@ -297,6 +297,7 @@ fn exit_entry_and_hidden_gate() {
     s.cursor = 3;
     shop_purchase_step(&mut s, BTN_START);
     assert_eq!(s.pickup.flags, 0x20, "期望 $32 bit5（($18&$33)==$11 分支）");
+    assert_eq!((s.phase, s.prompt), (ShopPurchasePhase::Message, Some(ShopPrompt::ExitHidden)), "AR68-1：trigger-(a)-alone 须停消息相位+ExitHidden（锁死非对称分支，ack 前不转场）");
     // 门不满足：$32 不变
     let mut s = st();
     s.pad2 = 0x00;

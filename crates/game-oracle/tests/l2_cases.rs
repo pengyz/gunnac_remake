@@ -40,6 +40,7 @@ fn l2_covers_required_subroutines() {
     for required in [
         "player_x_clamp_hi", "player_x_clamp_lo", "player_y_clamp_hi", "player_y_clamp_lo",
         "digit_conversion", "consumption_lookup", "bomb_drop",
+        "death_money_halve", "bcd_sub_ammo",
     ] {
         assert!(subs.contains(required), "缺子程序用例：{required}");
     }

@@ -1,4 +1,5 @@
-//! game-core::flow 单测（t81）：模式状态机/跨模式数据流/未证段 fail-closed + 负向自证。
+//! game-core::flow 单测（t81 + DEV-2）：模式状态机/跨模式数据流/GAME OVER-Continue 粗粒度边（A2 F6-F12）
+//! + 负向自证（fail-closed）。
 
 use game_core::flow::*;
 use game_core::ui::MoneyCounter;
@@ -49,10 +50,36 @@ fn respawn_resets_weapon_keeps_money() {
 }
 
 #[test]
-fn unproven_segments_fail_closed() {
-    // GAME OVER / CONTINUE 未证段 fail-closed
-    assert!(FlowState::on_game_over_unproven().is_err());
-    assert!(FlowState::on_continue_unproven().is_err());
+fn gameover_continue_coarse_paths_wired() {
+    // A2 F6-F12 粗粒度投影（原 unproven_segments_fail_closed 按 A2 闭合）：
+    // 粗层只落模式转移 + PersistData 镜像效果；RAM 级效果在 death_chain_step（细粒度）。
+    let st = FlowState { mode: Mode::DeathRespawn, data: Default::default() };
+    let st = st.advance(ModeEvent::GameOverArm).expect("F6/F7 边：DeathRespawn→GameOverPending");
+    assert_eq!(st.mode, Mode::GameOverPending);
+    let st = st.advance(ModeEvent::GameOverArrival).expect("F8 边：pending→menu");
+    assert_eq!(st.mode, Mode::GameOverMenu);
+    let st = st.advance(ModeEvent::MenuToggle).expect("F11 自环");
+    assert_eq!(st.mode, Mode::GameOverMenu);
+    let st = st.advance(ModeEvent::GameFinish).expect("F10 边：menu→title");
+    assert_eq!(st.mode, Mode::Title);
+    // F9 续关 + F12（PersistData 镜像：$E0-$E6 清零；$33/$34/$018F 不在 F12 复位集 ⇒ 保留）
+    let data = PersistData {
+        money: MoneyCounter { digits: [0, 0, 0, 1, 3, 0, 0] },
+        weapon_slot: 3,
+        weapon_level: 7,
+        bomb_ammo: 6,
+    };
+    let st = FlowState { mode: Mode::GameOverMenu, data };
+    let st = st.on_continue().expect("F9 源态=GameOverMenu");
+    assert_eq!(st.mode, Mode::StageStart);
+    assert_eq!(st.data.money.value(), 0, "续关 $E0-$E6 清零（bank15:$E10A sub_ECBF）");
+    assert_eq!((st.data.weapon_slot, st.data.weapon_level, st.data.bomb_ammo), (3, 7, 6), "F12 不动槽/级/弹药");
+    // F6/F7 投影入口（源态守卫 fail-closed）
+    let st = FlowState { mode: Mode::DeathRespawn, data: Default::default() };
+    let st = st.on_game_over().expect("F6/F7 源态=DeathRespawn");
+    assert_eq!(st.mode, Mode::GameOverPending);
+    assert!(FlowState::new().on_game_over().is_err(), "非 DeathRespawn 源态必拒（fail-closed）");
+    assert!(FlowState::new().on_continue().is_err(), "非 GameOverMenu 源态必拒（fail-closed）");
 }
 
 #[test]
@@ -92,7 +119,7 @@ fn stg01_full_chain_driver() {
     // 死亡重生段（R-respawn-1）：Combat → DeathRespawn
     st = st.advance(ModeEvent::DeathRespawn).expect("死亡重生边");
     assert!(st.mode == Mode::DeathRespawn, "死亡重生段推进");
-    // ④ 未证段 fail-closed：GameOverUnproven 禁止从已证边到达
+    // ④ 粗粒度链不含未证段标记（A2 闭合后 GAME OVER/CONTINUE 已为已证态；F13 免死支仍 fail-closed）
     assert!(format!("{:?}", st.mode).contains("Unproven") == false, "已证链不得含未证段");
     assert_eq!(checkpoints.len(), 7, "L5 检查点 7 个（A1 流程可达）");
 }
