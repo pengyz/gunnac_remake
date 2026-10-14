@@ -143,7 +143,7 @@ STG-02..08 内容面 = `stage_skeleton(n)`（t193/t87 三级骨架，ROM root/ta
 > 【2026-10-15 G-S5-6 动态回填】帧锚分级扩三级：**trace 锚（natural）**（7 条：标题 3 + STG-01 前缀 4）+
 > **触发注入链锚（injected）**（5 条：stg01-clear f2401 / stg02-shop f3116 / stg02-exit f3400 /
 > stg02-start f3450 / stg02-combat f3900，`gs5-stg01-clear-anchor` 真机 trace）+ **f=0 占位**（32 条）。
-> 逐锚判定式/证据指针/触发来源 = `oracle/traces/s5-all-clear.anchors.jsonl`（50 条；golden 1:1
+> 逐锚判定式/证据指针/触发来源 = `oracle/traces/s5-all-clear.anchors.jsonl`（~~50 条；golden 1:1~~【2026-10-15 更正（复核 #74 A2 同族）】44 条 golden 1:1 + 6 附加；
 > 诚实锁测试并入 l5_s5.rs ①）；injected 锚触发 = poke f2400 `$26 bit4` 门位（自然可达性 =
 > 负结果，锚**不冒充**自然通关，见 `docs/findings/gs5-6-dynamic-replay.md`）。
 > 真锚段并入 `s5-stg01` 场景（同输入谱系 run 族，帧序单调不受占位污染）；
