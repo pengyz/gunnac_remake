@@ -15,8 +15,8 @@
 | 3 | 释放后主循环 `bank15:E29A` 分叉：`$26&8==0`→复活（弹药 `max(4,$18F)`、`$0400:=1`、`$0710:=1`）；`$26&8≠0`→GAME OVER 链 | A |
 | 4 | **`$018D` = 命数（BCD）**：stage 开局 `:=2`（=共 3 机），每次死亡 −1；**归零后再死**才置 `$26\|=8`（GAME OVER 待决） | A |
 | 5 | GAME OVER 菜单 `bank15:$E3AB-$E484`：文本 "CONTINUE"/"GAME OVER"（`bank15:$E4A0` 记录块）+ 光标 `$2F` 二选一，**Start 确认**；`$2F==0`→续关 `sub_E0D9`，`$2F==1`→回标题 `loc_E073` | A（静态） |
-| 6 | Continue 代价：入口 `$017A-$017F` 逐字节减半变换（语义开放，疑发货槽数量减半）；续关复位 `\$18D:=2 / \$189,\$190,\$18E:=0 / 网格全清`；**分数 `$E0-$E6`、关口号 `$180` 保留** | A（写点）/ C（$17A 语义） |
-| 7 | 双版：`$D86B` 表 CN==JP **逐字节全等**；死亡结算 bank03 JP Δ0 同址；bank15 菜单链 JP **+0x0A 一致漂移**；bank14 族 relocation（−0x2C6 同块）；**US==CN 全链逐字节全等**（九班未触碰本链） | A |
+| 6 | Continue 代价：入口 `$017A-$017F` 逐字节减半变换（语义开放；【2026-10-14 注（#63 AR63-7）】实测位级=6 位数量÷2 存 5 位）；续关复位 `\$18D:=2 / \$189,\$190,\$18E:=0 / 网格全清`；~~**分数 `$E0-$E6`、关口号 `$180` 保留**~~ 【2026-10-14 更正（复核 #63 AR63-1）】"保留 $E0-$E6"**被证伪**——续关 `bank15:$E10A JSR sub_ECBF`（ECBF-ECC9 清零 $E0-$E6 全 7 字节，进菜单必经 $26 bit7=0）⇒ **双金钱清零（$E0-$E6+$018E）**，仅 $180 关号保留；原"E0D9 段无写点"=内联扫描假负结果（漏子程序调用） | A（写点）/ C（$17A 语义） |
+| 7 | 双版：`$D86B` 表 CN==JP **逐字节全等**；死亡结算 bank03 JP Δ0 同址；bank15 菜单链 JP **+0x0A 漂移（效应段口径——【2026-10-14 收窄（#63 AR63-8）】非整体，JP 调用点 E065 同址即反例）**；bank14 族 relocation（−0x2C6 同块）；**US==CN 全链逐字节全等**（九班未触碰本链） | A |
 | 8 | **负结果**：现有双版 trace 场景段**未达 GAME OVER 屏**（两次死亡后 `$18D=0` 仍复活；第三次死才进 GAME OVER）——菜单/续关=静态定谳，动态证据止于 `$26\|=8` 前一步 | A（负结果） |
 
 ---
@@ -96,13 +96,14 @@ A36E  LDA $32 / AND #4 / BEQ / (清 $33/$34) / JSR $9177
 A37F  JSR $CDBF
 A382  LDA $18D / BNE A392        ; ★命数（BCD）
 A387  JSR sub_ED56 / LDA $26 / ORA #8 / STA $26   ; ★命数已 0→GAME OVER 待决
-A392  LDY #1 / JSR sub_ED03 / STA $18D            ; ★命数 BCD −1（sub_ED03=BCD 减法）
+A390  D0 08        BNE loc_A39A                ; ★终死跳过减一（【2026-10-14 补（#63 AR63-2）】$18D==0 时置 $26|=8 后跳过 BCD 减一，$18D 恒 0——无借位，sub_ED03 钳 0 兜底）
+A392  LDY #1 / JSR sub_ED03 / STA $18D            ; ★命数 BCD −1（sub_ED03=BCD 减法；**仅非终死执行**）
 A39A  LDA #$21 / JSR $ED3B       ; 死亡音效
 A39F  LSR $18E                   ; ★金钱减半（已登记 shop-purchase-flow #55）
 A3A2  JSR $CB4F                  ; ★自向量 trampoline
 ```
 
-- **`bank14:$CB4F` trampoline**（`PLA/CLC/ADC#1/STA $438,X / PLA/ADC#0/STA $41C,X / JMP ($24)`）=
+- **`bank14:$CB4F` trampoline**（`PLA/CLC/ADC#1/STA $438,X / PLA/ADC#0/STA $41C,X / **STA $25**（CB5E）/ **STA $24**（CB56）/ JMP ($24)`——【2026-10-14 补（#63 AR63-4）】二指令漏则 JMP($24) 断链）=
   把 JSR 返回点装入槽行为向量并跳转 ⇒ **`JSR $CB4F` 装入 `$A3:$A5`（=返回点 `$A3A5`）**。
   trace 实证：f1788 起 `$041C/$0438 = $A3/$A5` 常驻至窗口末帧（双事件一致，A 级）。
 - **窗口行为 `bank03:$A3A5`**（每帧经自向量进入）：`LDA #$50/LDY #$28/JSR $CD9D`（爆炸相位/帧计时）
@@ -209,7 +210,7 @@ sub_E487: 光标精灵（$55:=$8A if $2F==0 else $A2 / $56:=$50 / $58:=$4F）
 
 - 确认键=**Start**（`sub_E59D` = 连发包装：`$16/$18` pressed/held + `$4B` 重复计时），方向/Select 只翻转选项。
 
-### 2.5 分数区入口变换（`$017A-$017F`，A 级写点 / C 级语义）
+### 2.5 $017A-$017F 入口变换（~~"分数区"~~【2026-10-14 更正（#63 AR63-3 术语终局）】$E0-$E6 定名 **money_counter_bcd（金钱计数器，N-0028）**；"分数"=W2 开放假设（C 级）不得入结论；$018E=**商店金钱**——本文档原双"金钱/分数"用语以本注为准）（`$017A-$017F`，A 级写点 / C 级语义）
 
 ```
 E3B9  LDX #5
@@ -258,7 +259,7 @@ E3CC  DEX / BPL E3BB                      ; 逐字节：保 bit7-6、低 5 位�
 | **重设** | `$0400 := 1`（玩家态） | `bank15:$E1B6` | 复活 |
 | | `$188 := $40（或模式位下 $FF）` | `bank15:$E1DD` | intro 计数 |
 | **保留** | `$180` 关口号 | （无写）E1F9 按 `$180` 取关乐 `LDA $E50D,Y` | **续当前关** ✓ |
-| | `$E0-$E6` 玩法所得 BCD 分数 | （E0D9 段无写点） | **分数保留** |
+| | ~~`$E0-$E6` 玩法所得 BCD 分数｜（E0D9 段无写点）｜**分数保留**~~ 【2026-10-14 更正（复核 #63 AR63-1）】"保留 $E0-$E6"**被证伪**——续关 `bank15:$E10A JSR sub_ECBF`（ECBF-ECC9 清零 $E0-$E6 全 7 字节，进菜单必经 $26 bit7=0）⇒ **双金钱清零（$E0-$E6+$018E）**，仅 $180 关号保留；原"E0D9 段无写点"=内联扫描假负结果（漏子程序调用）（sub_ECBF 调用清零） |
 | | `$017A-$017F` | 入口已减半（§2.5）；标题路径才清（`E0D1-E0D7`，续关跳过） | 减半后带入 |
 
 > 对照：**关间推进**（`loc_E16B`）不经 `$18D:=2`/金钱清零/网格全清 ⇒ 命数、金钱跨关携带（B 级结构推断，
@@ -270,7 +271,7 @@ E3CC  DEX / BPL E3BB                      ; 逐字节：保 bit7-6、低 5 位�
 |---|---|---|---|
 | 每次死亡 | 命数 −1（BCD）、**金钱 `$018E` ÷2** | `bank03:$A392 / $A39F` | A |
 | GAME OVER 入口 | `$017A-$017F` 逐字节减半变换（疑=发货槽 2-7 数量减半） | `bank15:$E3B9-E3CD` | A（写点）/C（语义） |
-| Continue | 金钱清零、炸弹类型索引清零、命数重置 2、网格重置；**分数/关号保留** | `bank15:$E0EF/$E168/$E18C` | A |
+| Continue | 金钱清零、炸弹类型索引清零、命数重置 2、网格重置；~~**分数/关号保留**~~ 【2026-10-14 更正（复核 #63 AR63-1）】"保留 $E0-$E6"**被证伪**——续关 `bank15:$E10A JSR sub_ECBF`（ECBF-ECC9 清零 $E0-$E6 全 7 字节，进菜单必经 $26 bit7=0）⇒ **双金钱清零（$E0-$E6+$018E）**，仅 $180 关号保留；原"E0D9 段无写点"=内联扫描假负结果（漏子程序调用） | `bank15:$E0EF/$E168/$E18C` | A |
 | GAME OVER（结束） | 回标题；`$17A-$17F` 清零、`$32:=$40`、`$3C:=0`、`$F1/$4E` 复位 | `bank15:$E073-E0D7` | A |
 
 ### 3.4 模式位注（C 级假设区，不入结论）
@@ -322,14 +323,14 @@ E3CC  DEX / BPL E3BB                      ; 逐字节：保 bit7-6、低 5 位�
 | F2 | player.dead(0x0F) → player.dead(0x0F) | 自环（复撞无效） | `$D86B[0x0F]=0x0F` 恒等 | 窗内 128f `$0400` 恒 0x0F | R-death-immune |
 | F3 | player.dead(0x0F) → player.released(0) | 窗尽（爆炸链尾） | `bank03:$A3EA JMP $D10C` → `bank14:$D10E STA $400,X` | f1915/f2174 同帧 0F→0→1 | R-death-release |
 | F4 | player.released(0) → player.alive(1) | `$26&8==0` | `bank15:$E2A2-E2BC`（`$18F:=max(4,…)/$0400:=1/$0710:=1`） | f1915 ammo 1→4、f2174 3→4 | R-respawn |
-| F5 | player.dead → player.alive | 首帧结算：`$18D` BCD −1、`$18E` ÷2 | `bank03:$A392/$A39F` | ram.hex f1740=2→f1800=1→f2100=0 | R-death-cost |
+| F5 | ~~player.dead → player.alive~~【2026-10-14 修（#63 AR63-6）】**dead 态首帧**（非复活边）| 首帧结算：`$18D` BCD −1（终死跳过）、`$18E` ÷2 | `bank03:$A392/$A39F` | ram.hex f1740=2→f1800=1→f2100=0 | R-death-cost |
 | F6 | player.dead → gameover.pending | `$18D==0` 时死亡 | `bank03:$A387-A38E`（`$26\|=8`） | （静态；动态缺=§2.6） | R-gameover-arm |
 | F7 | player.released(0) → gameover.pending | `$26&8≠0` | `bank15:$E2BF-E2E2`（`$27\|=$40`、音效 $11） | （静态） | R-gameover-enter |
 | F8 | gameover.pending → gameover.menu | Start（`$16&$10`）或 `$0300≠0` | `bank15:$E2E2-E2F0` | （静态） | R-gameover-menu |
 | F9 | gameover.menu → stage.start | `$2F==0`+Start | `bank15:$E47D-E481 → sub_E0D9` | （静态） | R-continue |
 | F10 | gameover.menu → title | `$2F==1`+Start | `bank15:$E484 → loc_E073` | （静态） | R-gameover-finish |
 | F11 | gameover.menu → gameover.menu | Up/Down/Select 翻转 `$2F^=1`+光标重绘 | `bank15:$E43E-E463`、`sub_E487` | （静态） | R-menu-toggle |
-| F12 | stage.start → alive | 续关复位集（`$18D:=2/$189,$190,$18E:=0/网格清/$0400:=1`） | `bank15:$E0EF/$E160-E168/$E18C/$E1B6` | （静态） | R-continue-reset |
+| F12 | stage.start → alive | 续关复位集（`$18D:=2/$189,$190,$18E:=0/**$E0-$E6:=0**（sub_ECBF）/网格清 **$6FE-$7FD**（AR63-5）/$0400:=1`） | `bank15:$E0EF/$E160-E168/$E18C/$E1B6` | （静态） | R-continue-reset |
 | F13 | dead(0x0F) 免死支 | `$06A0≠0` 或 `$32 bit7`（模式）→ 立即复活 | `bank03:$A33E-$A36B` | （静态，C 级语义） | R-death-bypass（暂挂） |
 
 > 说明：F1-F5 为 A 级动态+静态双证；F6-F12 为 A 级静态链（动态待 §2.6 场景补采）；F13 依赖模式位语义（C 级），
