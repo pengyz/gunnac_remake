@@ -4,7 +4,9 @@
 //! + `diff_l5` 0 容差对拍（golden=oracle 真值/占位登记 vs `s5_chain_run()` 移植侧运行）。
 //! 通关判定真伪 = `$180` 真算术派发（`stage_clear_step`），负向测试锁非硬编码。
 
-use game_oracle::l5::{diff_l5, l5_legality, parse_l5, s5_chain_run, s5_chain_run_for, L5Event};
+use game_oracle::l5::{
+    diff_l5, l5_legality, parse_l5, parse_s5_anchors, s5_chain_run, s5_chain_run_for, L5Event,
+};
 
 fn golden() -> Vec<L5Event> {
     let jsonl = std::fs::read_to_string("../../oracle/traces/s5-all-clear.l5.jsonl").expect("S5 golden");
@@ -21,7 +23,7 @@ fn s5_golden_parses_and_legality_gate() {
     let scenes: std::collections::BTreeSet<_> = evs.iter().map(|e| e.scene.as_str()).collect();
     let named = evs.iter().filter(|e| e.checkpoint.is_some()).count();
     assert_eq!(scenes.len(), 3, "3 场景（s5-title / s5-stg01 / s5-chain）");
-    assert_eq!(evs.len(), 44, "44 事件（标题 3 + STG-01 前缀 4 + 段级链 37）");
+    assert_eq!(evs.len(), 44, "44 事件（标题 3 + STG-01 段 5 + STG-02 真锚段 4 + 占位 32）");
     assert_eq!(named, 36, "36 命名检查点（8 关×4 + 标题 3 + 结局 1）");
     // 每关 4 检查点齐（关始/战斗段/关末/商店段，任务书②）
     for n in 1..=8u8 {
@@ -34,6 +36,34 @@ fn s5_golden_parses_and_legality_gate() {
             );
         }
     }
+    // ── G-S5-6 真帧锚诚实锁：锚台账 ↔ golden 1:1 + trigger 分级约束（防发明帧锚）──
+    // 台账 = oracle/traces/s5-all-clear.anchors.jsonl（逐锚判定式/证据指针/触发来源）。
+    let ledger = std::fs::read_to_string("../../oracle/traces/s5-all-clear.anchors.jsonl")
+        .expect("S5 锚台账");
+    let anchors = parse_s5_anchors(&ledger).expect("锚台账解析");
+    let ganchors: Vec<_> = anchors.iter().filter(|a| a.golden).collect();
+    assert_eq!(ganchors.len(), evs.len(), "台账 golden 条目数 == golden 事件数");
+    for (i, (g, a)) in evs.iter().zip(ganchors.iter()).enumerate() {
+        assert_eq!(
+            (&g.scene, g.f, &g.mode, &g.checkpoint),
+            (&a.scene, a.f, &a.mode, &a.checkpoint),
+            "[{i}] golden ↔ 台账 全等（scene/f/mode/checkpoint）"
+        );
+        if a.f == 0 {
+            assert_eq!(a.trigger, "placeholder", "[{i}] f=0 必须标注 placeholder（fail-closed）");
+        } else {
+            assert!(
+                a.trigger == "natural" || a.trigger == "injected",
+                "[{i}] 真锚 trigger 必须分级（natural/injected）"
+            );
+            assert!(a.source_run.is_some(), "[{i}] 真锚必须带 source_run");
+            assert!(!a.predicate.is_empty(), "[{i}] 真锚必须带判定式（可机器重导）");
+        }
+    }
+    // 回填口径显式（R-l5-8 更新）：12 真锚（7 trace 锚 + 5 触发注入链锚）/ 32 占位
+    let real = ganchors.iter().filter(|a| a.f > 0).count();
+    let ph = ganchors.iter().filter(|a| a.f == 0).count();
+    assert_eq!((real, ph), (12, 32), "G-S5-6 回填口径：12 真锚 / 32 占位");
 }
 
 /// ② S5-ALL-CLEAR 链可跑通：移植侧运行 vs golden 0 容差对拍 + 运行面（到店/出店/购买/骨架）。

@@ -146,6 +146,82 @@ pub fn diff_l5(golden: &[L5Event], rust: &[L5Event]) -> Vec<String> {
     problems
 }
 
+// ===== G-S5-6 真帧锚台账（oracle/traces/s5-all-clear.anchors.jsonl；golden 回填诚实性锁）=====
+
+/// 锚台账条目：每条 golden 事件一条（`golden`=true）+ 附加动态锚（`golden`=false）。
+/// `trigger`：`natural`=自然输入轨道 trace 锚 / `injected`=触发注入链（poke `$26 bit4` 门位，
+/// 不冒充自然通关）/ `placeholder`=f=0 占位（fail-closed 不发明帧号）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct S5Anchor {
+    pub id: String,
+    pub golden: bool,
+    pub checkpoint: Option<String>,
+    pub mode: String,
+    pub scene: String,
+    pub f: u32,
+    pub trigger: String,
+    pub source_run: Option<String>,
+    pub predicate: String,
+}
+
+/// 解析锚台账 JSONL（字段：id/golden/checkpoint?/mode/scene/f/trigger/source_run?/predicate）。
+pub fn parse_s5_anchors(jsonl: &str) -> Result<Vec<S5Anchor>, String> {
+    let mut out = Vec::new();
+    for (lineno, line) in jsonl.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let v = crate::l2::parse_json(line).map_err(|e| format!("第 {} 行: {e}", lineno + 1))?;
+        let o = match v {
+            crate::l2::Json::Obj(o) => o,
+            _ => return Err(format!("第 {} 行非对象", lineno + 1)),
+        };
+        let get_str = |k: &str| -> Option<String> {
+            o.iter().find(|(key, _)| key == k).and_then(|(_, v)| match v {
+                crate::l2::Json::Str(s) => Some(s.clone()),
+                _ => None,
+            })
+        };
+        let get_num = |k: &str| -> Option<f64> {
+            o.iter().find(|(key, _)| key == k).and_then(|(_, v)| match v {
+                crate::l2::Json::Num(n) => Some(*n),
+                _ => None,
+            })
+        };
+        let get_bool = |k: &str| -> Option<bool> {
+            o.iter().find(|(key, _)| key == k).and_then(|(_, v)| match v {
+                crate::l2::Json::Bool(b) => Some(*b),
+                _ => None,
+            })
+        };
+        let id = get_str("id").ok_or_else(|| format!("第 {} 行缺 id", lineno + 1))?;
+        let golden = get_bool("golden").ok_or_else(|| format!("第 {} 行缺 golden", lineno + 1))?;
+        let mode = get_str("mode").ok_or_else(|| format!("第 {} 行缺 mode", lineno + 1))?;
+        let scene = get_str("scene").ok_or_else(|| format!("第 {} 行缺 scene", lineno + 1))?;
+        let f = get_num("f").ok_or_else(|| format!("第 {} 行缺 f", lineno + 1))? as u32;
+        let trigger =
+            get_str("trigger").ok_or_else(|| format!("第 {} 行缺 trigger", lineno + 1))?;
+        let predicate =
+            get_str("predicate").ok_or_else(|| format!("第 {} 行缺 predicate", lineno + 1))?;
+        out.push(S5Anchor {
+            id,
+            golden,
+            checkpoint: get_str("checkpoint"),
+            mode,
+            scene,
+            f,
+            trigger,
+            source_run: get_str("source_run"),
+            predicate,
+        });
+    }
+    if out.is_empty() {
+        return Err("锚台账为空".into());
+    }
+    Ok(out)
+}
+
 // ===== DEV-3 S5-ALL-CLEAR 段级接力驱动（R-l5-1/8；docs/spec/l5-all-clear.md）=====
 
 /// 关内拾取收入占位常量（`bank02:8FA9-$8FB5`：`$018E += 3`/次〔A 级〕；每关拾取**次数**未取证
@@ -193,9 +269,12 @@ pub fn s5_chain_run() -> S5Run {
 /// 细粒度 `StageClearState::stage_clear_step`（A3 §1.1 逐写点，`$180` **真算术派发**，
 /// 非硬编码）+ DEV-1 `shop_purchase_step`（购买流）+ `stage_skeleton(n)`（t193 八关骨架）。
 ///
-/// 帧锚分级（R-l5-8）：STG-01 前缀 = trace 锚（gameplay-stage1 f1080/1200/1260/1500）；
-/// 其余段 f=0 占位（fail-closed 不发明帧号）。`$0300` 推进闸 = 外部事件（G-S5-2）：
-/// **占位约定 = 倒数尽后开启**（非 ROM 时序主张）。
+/// 帧锚分级（R-l5-8 + G-S5-6 动态回填）：真锚 = title-menu/gameplay-stage1 trace 锚（trigger=natural）
+/// + `gs5-stg01-clear-anchor` 关末/关 2 链锚（trigger=injected：poke f2400 `$26 bit4` 门位触发，
+/// 自然可达性=Run A 负结果——锚不冒充自然通关）；其余段 f=0 占位（fail-closed 不发明帧号）。
+/// 逐锚判定式与证据指针 = `oracle/traces/s5-all-clear.anchors.jsonl`（golden 同步锁测试）。
+/// `$0300` 推进闸 = 外部事件（G-S5-2）：**占位约定 = 倒数尽后开启**（非 ROM 时序主张；
+/// 真机动态时点实测 f3066 见 anchors 台账 gate300-open 条）。
 ///
 /// `stages`≠8 仅用于负向测试（<8 不得产生结局段）；出厂 = 8。
 pub fn s5_chain_run_for(stages: u8) -> S5Run {
@@ -236,11 +315,25 @@ pub fn s5_chain_run_for(stages: u8) -> S5Run {
         // t193 八关骨架驱动（关始段内容面：目录 root/tail + 调度/内容记录）
         let sk = stage_skeleton(n).expect("八关骨架必在（t193 STG-01..08）");
         run.skeletons.push((n, sk.root, sk.tail));
-        // 段场景/帧锚分级（R-l5-8）：STG-01 前缀 trace 锚自成场景；其余段 f=0 占位入链场景
-        let (scene_run, f_shop, f_exit, f_start, f_combat, scene_clear) = if n == 1 {
-            ("s5-stg01", 1080u32, 1200, 1260, 1500, "s5-chain")
-        } else {
-            ("s5-chain", 0, 0, 0, 0, "s5-chain")
+        // 帧锚分级（R-l5-8 + G-S5-6 动态回填）：(scene, f) 逐事件查表——
+        // 真锚来源 = `oracle/traces/s5-all-clear.anchors.jsonl`（trigger 字段：natural / injected），
+        // 未回填 = ("s5-chain", 0) 占位（fail-closed 不发明帧号）。
+        // s5-stg01 场景 = gameplay-stage1 前缀锚（trigger=natural）+ gs5-stg01-clear-anchor
+        // 关末/关 2 锚（trigger=injected：触发 = poke f2400 `$26 bit4` 门位；自然可达性 = Run A
+        // 负结果，锚不冒充自然通关，见 docs/findings/gs5-6-dynamic-replay.md）。
+        let anchor = |kind: &str| -> (&'static str, u32) {
+            match (n, kind) {
+                (1, "shop") => ("s5-stg01", 1080),
+                (1, "exit") => ("s5-stg01", 1200),
+                (1, "start") => ("s5-stg01", 1260),
+                (1, "combat") => ("s5-stg01", 1500),
+                (1, "clear") => ("s5-stg01", 2401),
+                (2, "shop") => ("s5-stg01", 3116),
+                (2, "exit") => ("s5-stg01", 3400),
+                (2, "start") => ("s5-stg01", 3450),
+                (2, "combat") => ("s5-stg01", 3900),
+                _ => ("s5-chain", 0),
+            }
         };
 
         // ── 商店段（R-l5-6：n=1=R-ui-6 到店；n≥2=E396→E16B→`$9BC3` 商店 init）──
@@ -252,7 +345,8 @@ pub fn s5_chain_run_for(stages: u8) -> S5Run {
                 .expect("R-l5-4/6 StageClear→Shop（E396→E16B→$9BC3）");
         }
         run.shop_visits += 1;
-        run.events.push(ev(scene_run, f_shop, "Shop", Some(&format!("stg{:02}-shop", n))));
+        let (scene_shop, f_shop) = anchor("shop");
+        run.events.push(ev(scene_shop, f_shop, "Shop", Some(&format!("stg{:02}-shop", n))));
         // 商店 init 复位（bank00:$9BC3 init 链 → `$9CEC` 序列 → `$9CF7/$9CF9` `$0400:=0`，AD65-1）：
         // 相位/光标回主面板；持续字段（`$018E`/`$33/$34`/`$32` 等 RAM）跨店保持。
         shop.phase = ShopPurchasePhase::MainRing;
@@ -288,20 +382,24 @@ pub fn s5_chain_run_for(stages: u8) -> S5Run {
 
         // ── 关始段（R-ui-6 f1260 / R-shop-7 近黑过渡 → 开 stage）──
         flow = flow.advance(ModeEvent::ExitTransition).expect("R-shop-7 Shop→Transition");
-        run.events.push(ev(scene_run, f_exit, "Transition", None));
+        let (scene_exit, f_exit) = anchor("exit");
+        run.events.push(ev(scene_exit, f_exit, "Transition", None));
         flow = flow.advance(ModeEvent::StageStart).expect("R-ui-6 Transition→StageStart");
-        run.events.push(ev(scene_run, f_start, "StageStart", Some(&format!("stg{:02}-start", n))));
+        let (scene_start, f_start) = anchor("start");
+        run.events.push(ev(scene_start, f_start, "StageStart", Some(&format!("stg{:02}-start", n))));
 
         // ── 战斗段（R-ui-6 f1500+；推进机制 R-stage-tick-*）──
         flow = flow.advance(ModeEvent::MidCombat).expect("R-ui-6 StageStart→Combat");
-        run.events.push(ev(scene_run, f_combat, "Combat", Some(&format!("stg{:02}-combat", n))));
+        let (scene_combat, f_combat) = anchor("combat");
+        run.events.push(ev(scene_combat, f_combat, "Combat", Some(&format!("stg{:02}-combat", n))));
         // 关内拾取收入（bank02:8FA9 `$018E+=3`/次——次数占位 G-S5-6；关 1 前到店=￥0 同源）
         shop.money = shop.money.saturating_add(3u8.saturating_mul(S5_PLACEHOLDER_PICKUPS_PER_STAGE));
 
         // ── 关末段（A3 §1.1 关末块；R-l5-3/4）──
         stage_clear_arm(&mut clear);
         flow = flow.advance(ModeEvent::StageClear).expect("A3 §1.1 E2F3 Combat→StageClear");
-        run.events.push(ev(scene_clear, 0, "StageClear", Some(&format!("stg{:02}-clear", n))));
+        let (scene_clear, f_clear) = anchor("clear");
+        run.events.push(ev(scene_clear, f_clear, "StageClear", Some(&format!("stg{:02}-clear", n))));
         // 细粒度步进到派发（虚拟帧推进；`$2B` 相位 0,1,2,…；G-S5-2 占位：倒数尽后开 `$0300` 闸）
         let mut dispatched = false;
         for i in 0u32..10_000 {
