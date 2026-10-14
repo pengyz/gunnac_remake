@@ -1,0 +1,79 @@
+# 场景：B2 探针——B 长按主武器（R-shot-gen-2）+ 底部横扫闪避 + 定时炸弹（A=投放）
+# 战役：docs/findings/b2-tas-input.md（B2 TAS 输入生成）
+#
+# 目的（探针，非最终 TAS 轨）：
+#   ① 验证「B 按住=主武器连发」假设对存活的改善（G-S5-6 盲开环 4 死→GAME OVER 的输入是
+#      press_every a ——按 R-shot-gen-2/A5 收口，A=投放（炸弹）非射击，盲开环全程**未发主武器**）；
+#   ② 长跑测 tick 频率（$84/$85）随滚动变速段（脚本 rec6/rec8/rec12 set-speed）是否恒 8f/步
+#      ——B1 Wt-2/Wt-1' 残项的动态观测；
+#   ③ RNG 状态（$2B/$2C/$2D，bank15:$EC12/$EC1F）逐帧轨迹——C1 确定性探测原料。
+#
+# 输入口径：f1..f2350 前缀与 gameplay-stage1 **逐指令同源**（确定性对账）；f1250 起 B 长按
+# （=R-shot-gen-2 连发门控）+ 慢速左右横扫（底带 y 由初始位置自然下压）+ A 定时投放（炸弹预算 $018F）。
+# 全程**无 poke**（正常通关语境，README 写注入纪律）。
+name b2-fire-probe
+frames 13000
+press_len 4
+
+# ===== 输入前缀（gameplay-stage1 同源；勿改）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+
+# ===== 战斗段（f1250-12999）：B 长按连发 + 横扫 + 定时炸弹 =====
+hold 1250-12999 b
+hold 1300-1900 right
+hold 1950-2550 left
+hold 2600-3200 right
+hold 3250-3850 left
+hold 3900-4500 right
+hold 4550-5150 left
+hold 5200-5800 right
+hold 5850-6450 left
+hold 6500-7100 right
+hold 7150-7750 left
+hold 7800-8400 right
+hold 8450-9050 left
+hold 9100-9700 right
+hold 9750-10350 left
+hold 10400-11000 right
+hold 11050-11650 left
+hold 11700-12300 right
+hold 12350-12950 left
+press 2000 a
+press 3500 a
+press 5000 a
+press 6500 a
+press 8000 a
+press 9500 a
+press 11000 a
+press 12500 a
+
+# ===== watch（轻量面 + B2 专用：tick 计数 / RNG 状态 / 坐标）=====
+watch 0180 stage_no
+watch 0026 flags26
+watch 0027 flags27
+watch 002f countdown2f
+watch 002b rng_2b
+watch 002c rng_2c
+watch 002d rng_2d
+watch 0084 tick_lo
+watch 0085 tick_hi
+watch 0300 gate300
+watch 0400 pstate
+watch 04e0 player_x
+watch 04fc player_y
+watch 018d lives
+watch 018e money
+watch 018f bomb_ammo
+watch 0018 held
+
+capture_every 1000 probe
+capture 1260 combat-start
