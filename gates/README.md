@@ -41,6 +41,7 @@
 | `trace-diff` | L3：帧级状态向量逐 tick 比对（oracle vs Rust） | S6 启用 |
 | `visual-diff` | L4：截图逐像素（白名单外） | S6 启用 |
 | `completeness-ratchet` | 完备性矩阵覆盖只增不降 | 矩阵建立后启用 |
+| `addr-bridge` | 九班↔JP 坐标桥 meta sha + relocated 抽样复验（禁手工换算） | 启用 |
 
 ## 设计原则
 
