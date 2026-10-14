@@ -1,0 +1,338 @@
+# `$0401`（game_action_mode）值域语义定谳 —— H-15 收口（A5）
+
+> 日期：2026-10-14 ｜ 角色：decomp-analyst ｜ 目标：把 `docs/spec/completeness.md` H-15
+> （"$0401 除 0/7 外的值域语义（N-0024 同址多用途）"）从 C 级升 A/B 级，作为 A2 GAME OVER 分析前置。
+> 证据分级按 AGENTS.md §3；本文档严格区分【已证实】与【假设/残项】。
+
+---
+
+## 0. 结论摘要（TL;DR）
+
+**`$0401` 不是一个"游戏动作模式"枚举——它是同址多用途字节（N-0024），按运行上下文分裂为三种含义：**
+
+| 上下文 | 含义 | 实测值域 | 级别 |
+|---|---|---|---|
+| gameplay（关卡内） | **对象网格 slot 1 状态字节**（A 投放槽；网格基址 `$0400`、步长 `$1C`=28、28 槽） | `{0, 7}`（slot1 实测）；状态码域另见 §3.1 | **A** |
+| shop（商店面板） | UI 选择光标（N-0003 `ui_select_cursor`，主面板 0-5 / 炸弹子面板 0-3） | `{0..5}` | **A**（N-0003 既有，本文补全写点） |
+| scene（标题/菜单/演出） | **MMC3 CHR bank 影子（R1，PPU $0800 2K 窗）**，与 `$0400`（R0 影子）成对装载、成对写入 `$8001` | `0x2C/0x2E/0x6C(=108)/0x6E(=110)/0x7C(=124)/0x7E` | 写点/值流 **A**；"CHR 影子"命名 **B** |
+
+**110/124 裁定（§4）：既不是枚举值也不是位组合**——是 scene 上下文的 CHR bank 影子值。
+gameplay 读点只做 `0/非 0` 判定，从不比较 110/124；两值与 `$0400` 成对出现且被整体写入 MMC3
+bank-data 寄存器。H-15 的"除 0/7 外的值域"问题本身不成立：**110/124 根本不属于该地址的 gameplay 值域**。
+
+---
+
+## 1. 写点全表（A 级：ROM 字节机械扫描 + 逐点上下文）
+
+### 1.1 复现命令 R1（机械扫描，一行可独立重导）
+
+```bash
+cd /home/peng/workspace/gunnac_remake && python3 - <<'EOF'
+prg = open("rom/gunnac_cn.nes","rb").read()[16:16+131072]
+BASES = {14:0xC000, 15:0xE000, 1:0xA000, 3:0xA000, 7:0xA000, 8:0xA000, 12:0xA000}
+base = lambda b: BASES.get(b, 0x8000)
+# 操作码族 × $0400/$0401（绝对/abs,X/abs,Y）：含读/写/RMW/比较/位测试，全量覆盖本文全部断言
+OPS = {0x8D:"STA",0xAD:"LDA",0x9D:"STA,X",0xBD:"LDA,X",0x99:"STA,Y",0xB9:"LDA,Y",
+       0xCD:"CMP",0xDD:"CMP,X",0xD9:"CMP,Y",0x2D:"AND",0x0D:"ORA",0x4D:"EOR",0x6D:"ADC",0xED:"SBC",
+       0x2C:"BIT",0xEE:"INC",0xCE:"DEC",0x0E:"ASL",0x4E:"LSR",0x2E:"ROL",0x6E:"ROR"}
+for i in range(len(prg)-2):
+    op, lo, hi = prg[i], prg[i+1], prg[i+2]
+    if op in OPS and (lo, hi) in ((0x00,0x04),(0x01,0x04)):
+        b = i//0x2000
+        print(f"{OPS[op]} ${hi<<8|lo:04X}  bank{b:02d}:{base(b)+(i%0x2000):04X}")
+EOF
+```
+
+（投影核对：`reference/seed/gunnac.asm` 同址行字节与上表逐一相符；bank→文件偏移 = `bank*0x2000+(addr & 0x1FFF)`，
+见 `tools/seed_build.py` `prg_off = k * 0x2000`。
+**数据区剔除注**：R1 是字节模式扫描，会命中数据表中的巧合序列——已按 seed 逐点核对剔除
+（如 `bank01:B740` 起 `0C 0D 01 04` 为表数据、`bank09:8113` 邻域为数据；下表仅收代码区命中）。）
+
+### 1.2 绝对写点 `STA $0401`（8D 01 04）—— 9 处（CN；JP 同为 9 处，见 §5）
+
+| # | bank:addr | 上下文（谁写/写什么/什么条件） | 上下文级别 |
+|---|---|---|---|
+| W1 | `bank01:AB88-AB8B` | scene 初始化：`LDA #$7C / STA $400 / STA $401` —— CHR 影子对 ← 0x7C/0x7C（LDA 立即数，双写） | A（字节）+B（CHR 语义） |
+| W2 | `bank01:A98B-A991` | scene 脚本流装载：`LDA ($2F),Y / STA $400 / INY / LDA ($2F),Y / STA $401` —— 影子对 ← 脚本流连续两字节（实测 0x6C/0x6E） | A+B |
+| W3 | `bank00:9788` | 演出面板装载（sub_9763）：`LDA $97D7,Y / STA $401 / LDA $97D8,Y / STA $400`，Y=A×8，表 `$97D7` 8 字节记录（字段[0]→$401、[1]→$400，实测对 (0x2E,0x2C)/(0x5E,0x5C)/(0x22,0x20)） | A（字节+表值） |
+| W4 | `bank00:9D6E` | 商店主面板入场：`LDA $34 / STA $401` —— 光标 ← 当前武器槽号 | A（N-0003） |
+| W5 | `bank00:9E4F` | 光标移动（B 键回绕分支）：`LDA $10 / STA $401`（回绕到上界） | A |
+| W6 | `bank00:9E55` | 光标移动（B 键）：`DEC $401` | A |
+| W7 | `bank00:9E6A` | 光标移动（A/Select 回绕分支）：`LDA $11 / STA $401`（回绕到下界） | A |
+| W8 | `bank00:9E70` | 光标移动（A/Select）：`INC $401` | A |
+| W9 | `bank03:A2F7` | **gameplay 投放成功尾部**：`A2F5 LDA #7 / A2F7 STA $401`（前置链 R-fire-2①②通过后；同段 `A2E9-A2F2` 把玩家坐标写入 slot1 字段 `$4E1/$4FD`） | **A**（字节+trace） |
+
+### 1.3 变址写点（有效地址可命中 `$0401`）与 RMW
+
+| # | bank:addr | 命中 `$0401` 的条件 | 写值 | 上下文 |
+|---|---|---|---|---|
+| I1 | `bank02:9187-918F` | `STA $400,Y`，Y=1（前置 `A0 01 LDY #1 / A9 00 LDA #0`） | 0 | 开局清 slot1（连带 `$41C+1/$470+1`） |
+| I2 | `bank14:D10E` | `STA $400,X`，X=1 | 0 | **对象释放例程 sub_D10C**（`LDA #0` 起手，连清 `$41C/$470/$48C/$668/$4C4` 同槽字段）——slot1 投放物寿命尽的清态点 |
+| I3 | `bank15:E18C` | `STA $400,X`，X=0/1（`E189 LDA #0 / TAX` 起的下行清 RAM 循环 $0400-$04FF） | 0 | 复位/开局 RAM 清零 |
+| I4 | `bank03:A89C` | `STA $401,Y`，Y=1..N（循环体 Y=N..1，N=`$AA06[$765]`） | 7 | 批量生成对象（槽 2..N+1；同段写 `$41D+Y=$A8 / $439+Y=$E4` = 行为指针 `$A8E4`、`$4A9+Y=Y&3`） |
+| I5 | `bank14:CB84` | `STA $401,Y`，Y=8..27（分配器扫描） | $0D=13 | 脚本对象分配（`CB72/CB77` 先判 `$400,Y==0 && $401,Y==0` 双空） |
+| I6 | `bank03:AE07` | `STA $401,X`（对象初始化段 `AE05 LDA #5` 起手，同段写 `$41D/$439/$4C5`） | 5 | 对象生成器（状态码 5；未在 slot1 实测） |
+| I7 | `bank03:A74F / AA1C / AA86` | `STA $400,Y`，Y=2..3 / 2..5 / 2..6 | 7 | 批量生成（行为指针 `$A8A7` / `$AAB3` / `$AAE9`）——Y≥2，**不落 slot1**，列此说明 7 是通用"激活态"码 |
+| I8 | 其余 `STA $400,X/Y`（bank00:866B/86E6/87AF/8AC2/8745/8783/8B8B 等，全 ROM 28+33 处） | X/Y=0/1 时命中 | 流送/生成器类型码 | 关卡流送解释器（`bank00:86CE-`）按槽写状态；R1 全表见复现命令输出 |
+
+> RMW：`INC $0401`=`bank00:9E70`、`DEC $0401`=`bank00:9E55`（均为 shop 光标）；
+> `INC $0400`=`bank00:9D17`、`DEC $0400`=`bank00:9D08`（shop 页号）。
+> **间接寻址说明**：`STA ($nn),Y`(91)/`STA ($nn),X`(81) 静态不可定址到 `$0401`；
+> §6 动态插桩（逐访问抓帧+值+PC 快照）未观测到 §1 表外的 `$0401` 写值流——受 probe 快照局限（§6），
+> 该项为 **B 级否定**（写点全表的完整性以静态表+动态值流双轨交集为准）。
+
+---
+
+## 2. `$0401` 三重上下文的静态依据（N-0024 "同址多用途" 的确切所指）
+
+### 2.1 gameplay：对象网格 slot 1 状态字节（核心，A 级）
+
+对象系统是 **28 槽 SoA 网格**（步长 `$1C`=28，槽号 s 的字段基址 = `$0400+28k+s`）：
+
+| 字段数组 | 基址 | 槽0（玩家） | 槽1（A 投放） | 依据 |
+|---|---|---|---|---|
+| 状态/类型码 | `$0400` | `$0400` | **`$0401`** | 分发循环 `bank02:827F-828C`：`LDX #0 / LDY $400,X / BEQ / JSR $82F8 / INX / CPX #8`（X=0..7 逐槽读状态字节） |
+| 行为指针 hi（bit7=直跳标志） | `$041C` | | `$041D` | `bank02:82F8-8304`：`LDA $41C,X / BPL / STA $25 / LDA $438,X / STA $24 / JMP ($24)` |
+| 行为指针 lo / 计时 | `$0438` | | `$0439` | 同上 + `bank02:8314 DEC $438,X / BEQ / JMP $D10C`（计时尽→释放槽） |
+| x_subpix / y_subpix | `$0470/$048C` | watch `player_x_subpix/y_subpix` | | N-0011..N-0024 台账（A 级） |
+| x_int / y_int | `$04E0/$04FC` | watch `player_x/player_y` | `$04E1/$04FD` | `bank03:A2E9-A2F2` 投放时 `STA $4FD/STA $4E1`（玩家坐标→slot1） |
+| x/y 速度 | `$0550/$056C/$0588/$05A4` | watch 已命名 | | N-0011..N-0024 |
+
+- 槽 0 = 玩家机（`$0400` 实测 1=常态、$0F=受击/濒死态，见状态转移表）；
+  槽 1 = **A 键投放槽**（唯一由投放例程 `bank03:A2B2-A2FA` 分配的槽）；
+  槽 2+ = 流送敌人/弹/特效（`bank00:866B` 流解释器、`bank03:A89C` 批量生成、`bank14:CB70` 分配器从 Y=8 起扫）。
+- 状态/类型码被**状态转移表 `bank14:$D86B`** 索引（`bank14:D654-D66E`：`LDA $400,Y / TAX / LDA $D86B,X / CMP $400,Y / BEQ / STA $400,Y`）。
+  表实测（R1 附带 dump）：`idx0..31 = 00 0f 02 03 ...（idx1→0x0F，其余恒等）；idx32..47 = 11 11 12 ...`。
+  ⇒ **`table[7]=7`（稳定态）**——与 slot1 实测 7 保持 209 帧恒定互证；`table[1]=0x0F`——与 `$0400` 受击 1→0x0F 实测互证（A 级）。
+- 释放路径：`bank02:831A JMP $D10C`（计时尽）/ 各行为脚本 `JMP $D10C`（如 `bank03:A8E1`）→ `D10E STA $400,X ← 0`。
+
+### 2.2 shop：UI 光标（N-0003，A 级既有）
+
+`bank00:9D5D-9FE0` 商店面板族：光标= `$0401`，移动= `INC/DEC/回绕`（W5-W8，上下界 `$10/$11`），
+比较= `9D91 CMP #$05`（第 5 槽=确认行）/ `9F45 CMP $403`（前值）/ `9FD0 ROR×3` 回填炸弹 2 位字段到 `$0178,Y`。
+炸弹子面板 `9F03-9FE0`：光标值域 0-3（`9F1C` 入场写 `$180` 值、`9F72` 字段回填）。
+本次复核 R1 全表与 N-0003/N-0007 证据一致，无新增写点。
+
+### 2.3 scene：MMC3 CHR bank 影子（110/124 的归属，见 §4）
+
+`bank01:AADB-AAE9`（NMI/装载端 bank-restore）：
+
+```
+AAD6  A9 00      LDA #0
+AAD8  8D 00 80   STA $8000        ; MMC3 bank select = 0（2K CHR @ PPU $0000）
+AADB  AD 00 04   LDA $400
+AADE  8D 01 80   STA $8001        ; ← $0400 作 CHR bank data
+AAE1  A9 01      LDA #1
+AAE3  8D 00 80   STA $8000        ; bank select = 1（2K CHR @ PPU $0800）
+AAE6  AD 01 04   LDA $401
+AAE9  8D 01 80   STA $8001        ; ← $0401 作 CHR bank data
+```
+
+同族：`bank01:AB5B-AB6C` 直接写 `$7C/$7E` 到 `$8001`（sel 0/1）——**0x7C 作为 CHR bank 值的同址旁证**；
+`bank01:AB86-AB8B` 初始化影子对 `$7C/$7C`；`bank01:A986-A9B7` 场景脚本流把影子对、文本/调色板指针
+（`$7A/$7B、$12/$13、$14/$75、$15/$76`）成组装载。`bank00:9788` 面板表记录同构（字段[0]/[1]→$401/$400）。
+⇒ scene 上下文 `$0401` = **CHR 影子 R1**；观测值全部为偶数（0x2C/0x2E/0x6C/0x6E/0x7C/0x7E），
+与 "CHR 1K 单位索引（MMC3 R0/R1 忽略 LSB，等效 2K 对齐）" 相容——**单位语义（1K vs 2K 取模）为 B 级残项**。
+
+---
+
+## 3. 值域语义表（每值：写点 / 读点 / 时序锚 / 级别）
+
+> 时序锚 = `analysis/traces/<scenario>.frames.jsonl` 逐帧 watch（CN）/ `analysis_jp/traces/`（JP）。
+> 复现命令 R2（值流切换点，逐场景可重导）：
+>
+> ```bash
+> cd /home/peng/workspace/gunnac_remake && python3 - <<'EOF'
+> import json, glob
+> OFF = 0x401 - 0x300  # iram=watch_range 0300-07ff，$0401 偏移
+> for path in sorted(glob.glob("analysis/traces/*.frames.jsonl")) + sorted(glob.glob("analysis_jp/traces/*.frames.jsonl")):
+>     segs, prev, start = [], None, None
+>     for line in open(path):
+>         d = json.loads(line); w = d["w"]
+>         if "game_action_mode" in w: v = int(w["game_action_mode"])
+>         elif "iram" in w: v = bytes.fromhex(w["iram"])[OFF]
+>         else: continue
+>         if v != prev:
+>             if prev is not None: segs.append((start, d["f"]-1, prev))
+>             prev, start = v, d["f"]
+>     if prev is not None: segs.append((start, "END", prev))
+>     print(path, segs)
+> EOF
+> ```
+
+### 3.1 gameplay 上下文（值域 = 对象状态码；slot1 实测 {0, 7}）
+
+| 值 | 语义 | 写点 | 读点 | 时序锚（CN / JP） | 级别 |
+|---|---|---|---|---|---|
+| **0** | slot1 空闲 = **可投放**（R-fire-2① 的放行值） | `bank14:D10E`（释放，X=1）、`bank02:9187`（开局清）、`bank15:E18C`（RAM 清） | `bank03:A2BA`（投放门①：`LDA $401/BNE 退出`）、`bank14:D9EE`（关卡事件门：`LDA $401/BNE 退出`）、`bank14:CB72/CB77`（分配器双空判）、`bank02:8281`（分发器 BEQ 跳过） | gameplay-stage1 f913-1250、f1460-1466、f1676-1682、f1892-1922、f2132-2174 / JP f373-1250、f1460-1466、f1676-1682、f1892-1898、f2108-2114 | **A** |
+| **7** | slot1 激活（投放物在途；行为脚本驱动；寿命恒 209f；`table[7]=7` 稳定） | `bank03:A2F7`（投放成功尾部 `LDA #7`） | `bank03:A2BA`（BNE 拒投）、`bank14:D9EE`（事件跳过）、`bank02:8281→82F8`（→`JMP ($24)` 行为分发）、`bank14:D65F/D86B`（状态转移恒等） | gameplay-stage1 f1251-1459、f1467-1675、f1683-1891、f1923-2131、f2175-2400（每窗 209f）；akey-role f1521-1729（tap-A@1520+1f 置 7→f1730 清 0，N-0049 干净重跑）/ JP 同型 209f 窗 | **A** |
+| 3 / 4 | 流送/生成器写入的激活码（`bank03:A275-A29B STA $402,Y`，Y=0..count-1 → 槽 2+） | `bank03:A27C/A29B` | 同 7 的读点族 | 未在 slot1 实测（写点限槽 2+） | A（写点存在性）|
+| 5 | 生成器状态码（`bank03:AE05 LDA #5 / STA $401,X`） | `bank03:AE07` | 同族 | 未实测于 slot1 | A（写点存在性）|
+| $0D=13 | 脚本对象分配码（`bank14:CB82 LDA #$D / STA $401,Y`） | `bank14:CB84` | 同族 | 未实测于 slot1 | A（写点存在性）|
+| 其余状态码 | 流送类型码（`bank00:866B STA $400,X` ← 表值）等；码域上限由 `$D86B` 表长界定（≥$30，越界行为未证） | R1 全表 | — | 未实测于 slot1 | A（写点）/ C（完整码域枚举→**残项**）|
+
+**R-fire-2 校验链动态印证（A 级）**：`analysis/traces/gam401-probe.probe.jsonl` 中
+`bank03:A2BA` 门读事件（PC 快照=A2BD，寄存器 A=0x80=AND #$80 后）恰出现 **5 次 v=0**——
+与 5 次成功投放（f1251/1467/1683/1923/2175）一一对应；其余 A 按压帧读到 v=7 被 BNE 拒绝。
+死亡/重生窗（E1/E2，`$0400=0x0F` 期）内 A 按压**连门读都不发生**（投放例程未被调用）——
+即 1892-1922/2132-2174 的 0 窗不投放并非门①拒绝，而是调用方层冻结（归 H-16/W3 事件语义）。
+
+### 3.2 shop 上下文（N-0003 既有 + 本文补全）
+
+| 值 | 语义 | 写点 | 读点 | 时序锚 | 级别 |
+|---|---|---|---|---|---|
+| 0..5 | 主面板光标（5=确认行） | W4-W8（`bank00:9D6E/9E4F/9E55/9E6A/9E70`） | `bank00:9D91/9DFA/9E46/9E61/9E78/9F45` | shop/exp-shop-* 场景（$0401 未 watch；N-0003 静态收口） | A |
+| 0..3 | 炸弹子面板光标 | `bank00:9F1C`（入场）、`bank00:9F72`（字段回填）、W5-W8 | `bank00:9F45/9FD0`（ROR×3 回填 `$0178,Y`） | 同上 | A |
+
+### 3.3 scene 上下文（110/124 归属，详见 §4）
+
+| 值 | 语义 | 写点 | 读点 | 时序锚（CN / JP） | 级别 |
+|---|---|---|---|---|---|
+| **124 (0x7C)** | scene init CHR 影子对（`$0400=$0401=$7C`） | `bank01:AB88-AB8B`（`LDA #$7C` 双写） | `bank01:AAE6`（→`$8001` sel1） | gameplay-stage1/全部场景 f203-205（3f）/ JP f198-199（2f） | 写点/值流 **A**；CHR 命名 **B** |
+| **110 (0x6E)** | scene 脚本 CHR 影子（对值 `$0400=0x6C,$0401=0x6E`） | `bank01:A991`（脚本流装载） | `bank01:AAE6` | CN f206-912（707f，标题/菜单全程）/ JP f200-372（173f） | 同上 |
+| 0x2C/0x2E 等 | 演出面板表装载对（`bank00:9788` 表 `$97D7`） | `bank00:9788/978E` | 同上 | 未在现有场景实测（表值为静态 A 级） | A（表值）/B（CHR 命名） |
+
+---
+
+## 4. 110/124 重点裁定（L3 盲区收口）
+
+**裁定：110（0x6E）与 124（0x7C）既不是"游戏动作模式"枚举值，也不是标志位组合——
+它们是 scene 上下文的 MMC3 CHR bank 影子值（N-0024 同址多用途的第三义）。**
+
+证据链（全部可独立重导）：
+
+1. **成对读写**：`bank01:AB88-AB8B` 把同一立即数 0x7C 写入 `$0400`+`$0401`；
+   `bank01:A98B-A991` 把脚本流连续两字节（实测 0x6C/0x6E）写入 `$0400`+`$0401`；
+   trace 中两值恒成对出现（f203-205 = 124/124；f206-912 = 108/110）。
+2. **消费点=MMC3 bank-data 寄存器**：`bank01:ADB-AAE9` 将 `$0400/$0401` 依次写入 `$8001`
+   （bank select 0/1 = PPU $0000/$0800 的 2K CHR 窗）；`bank01:AB5B-AB6C` 另有 $7C/$7E 直写 `$8001` 同值旁证。
+   （动态印证：probe 事件 PC 快照落在 AADB/AAE6 后一指令，携带值 124/124→108/110 与影子值逐帧吻合。）
+3. **gameplay 读点无比较语义**：`$0401` 的全部读点只做 `0/非0` 门（`bank03:A2BA`、`bank14:D9EE`）、
+   槽占用判（`bank14:CB72/CB77`）、状态转移表索引（`bank14:D654/D65F`，表长 ~$30）——
+   **没有任何指令把 110/124 当枚举比较**（R1 对 `CMP $401` 全扫：CN/JP 均 0 命中）。
+4. **时序互斥**：110/124 只出现在标题/菜单段（f203-912），gameplay 段值域恒 {0,7}；
+   shop 段为光标域。三段值域互不相交 ⇒ 不是同一枚举的成员。
+5. **位组合说排除**：若是标志位组合，`$0400/$0401` 不会以 (0x6C,0x6E)/(0x7C,0x7C) 成对整字节写入
+   `$8001` 当 bank 号用；且 0x6E=0110_1110 与 0x7C=0111_1100 在 gameplay 读点处无任何位测试（AND/BIT）。
+
+**因此 H-15 问题的正确答案是"问题不成立"**：`game_action_mode` 名下不存在"0/7 之外的值域"；
+110/124 属于同址的另一变量（scene CHR 影子）。`game_action_mode` 这一命名本身也应收敛
+（gameplay 义实为 `obj_state_slot1`，见 §8 台账）。
+
+> 【与 L3 报告的关系】`docs/findings/l3-jp-cn-dualrun.md` 将 209f/7f 节拍称为"死亡/重生节拍器"、
+> 对 110/124 明示"不猜语义"。本文档语义层更正：**209f 周期 = slot1 投放物行为寿命（固定 209f，
+> `bank02:8314 DEC $438,X → JMP $D10C` 释放）；7f 窗 = A 按压序列（每 12f）与清 0 时刻的相位差**
+> （1460 清 0 → 最近按压 1466 → 1467 置 7，与 N-0049 "+1 帧延迟"一致）。真正的死亡/重生事件
+> （E1/E2）对应 `$0400=1→0x0F→1`（`bank14:$D86B` 转移表 idx1→0x0F），与 209f 节拍是两回事。
+
+---
+
+## 5. 双版对照小注（CN 九班 vs JP）
+
+复现命令 R4：对 `reference/jp/gunnac_jp.nes` 重跑 R1 扫描（同脚本换 ROM 路径）。
+
+| 项 | CN（rom/gunnac_cn.nes） | JP（reference/jp/gunnac_jp.nes） | 判定 |
+|---|---|---|---|
+| `STA $401` 站点数 | 9 | 9 | **结构同** |
+| gameplay 关键站点 | `bank03:A2BA`（门）、`A2F7`（置 7）、`A89C`、`AE07` | **同址全同**（A2BA/A2F7/A89C/AE07） | **A 级一致** |
+| shop/scene 站点 | bank00:9788/9D6E/9E4F/9E6A/9F1C/9F72；bank01:A991/AB8B | bank00:96F6/9BE6/9CC7/9CE2/9D94/9DEA；bank01:A63B/A81F | 汉化文本/菜单重排导致 bank00/01 地址漂移，**站点族与数量一致** |
+| 变址写点 | `STA $401,Y` ×2（A89C/CB84）、`STA $401,X` ×1（AE07） | ×2（A89C/C8BE）、×1（AE07） | 一致（bank14 内部偏移漂移） |
+| 值流（语义层） | {0,7,110,124}，209f 窗 + 7f 窗 | **同值域、同 209f/7f 节拍**（L3 已证切换点逐帧一致；本文补语义层：值的含义按 §3 同一模型解释，无需 JP 特例） | **语义一致** |
+| 110 窗长 | f206-912（707f） | f200-372（173f） | 内容驱动时序差（L3 ①）；语义同为 scene CHR 影子 |
+
+结论：**JP 与 CN 在 `$0401` 值域语义上完全一致**（gameplay 站点地址都相同）；差异仅在
+标题/菜单流程时长与 bank00/01 场景代码布局（汉化重排）。Rust 侧无需为 JP 分叉语义。
+
+---
+
+## 6. 动态取证（gam401-probe 场景）与 probe 语义局限（如实登记）
+
+新场景 `oracle/scenarios/gam401-probe.txt` = gameplay-stage1 输入计划 + `probe_mem 0400 0401`
+（逐访问记录 `{f,pc,a,v,x,y,ar}`）。复现命令 R3：
+
+```bash
+cd /home/peng/workspace/gunnac_remake && python3 tools/scenario_run.py run gam401-probe
+# 产物: analysis/traces/gam401-probe.{frames.jsonl,probe.jsonl,run.json}
+```
+
+值流与 watch 双轨互证（A 级）：probe 值流切换点与 `gameplay-stage1.frames.jsonl`/本次
+`gam401-probe.frames.jsonl` 的 watch 切换点**完全同构**（203/206/913/1193/1251/1460/…/2175）。
+
+**逐点自洽、可作辅助证据的 PC 观测**（PC 快照=访问指令的下一指令地址）：
+
+| 观测 | 含义 | 自洽性 |
+|---|---|---|
+| PC=8284 ×1192（x=0→$0400,x=1→$0401，值=当帧状态） | `bank02:8281 LDY $400,X` 分发器逐槽读（X=0..7） | 指令+索引+值三吻合 |
+| PC=A2BD ×71（A=0x80；v=0 恰 5 次） | `bank03:A2BA LDA $401` 投放门①逐 A 按压读 | 与 R-fire-2/按压时刻吻合 |
+| PC=AADE/AAE9（v=124/124→108/110） | `bank01:ADB/AAE6` CHR 影子消费读 | 与影子值逐帧吻合 |
+| PC=D111 ×4（v=7,x=1，落 4 个 7→0 切换点） | `bank14:D10E STA $400,X` 释放 slot1（写前旧值 7） | 与 209f 寿命尽切换点吻合 |
+| PC=E18F ×2（v=108/0） | `bank15:E18C STA $400,X` 开局清 RAM（X=0/1） | 与 title→game 边界吻合 |
+| PC=918A（v=110/0） | `bank02:9187 STA $400,Y` 开局清 slot1（Y=1） | 与 f913 切换点吻合 |
+| PC=D657/D662/D667 | `bank14:D654/D65F/D664` 状态转移读/比/写 | 指令族吻合 |
+
+**局限（显式登记，不用于归因）**：一段晚期事件（PC=CC6D/CCE5/CCEE/CCF2/CCF7/CD34/D5BF/D5E0 等）
+的 PC 快照与 seed 不自洽（该址为 `$04FC,X` 族访存，无法命中 `$0401`）；判为 Mesen2 写点回调的
+状态快照漂移。**写点归属一律以 §1 静态表为准**；probe 仅贡献 {帧,地址,值} 值流与上表自洽点。
+（另：本次顺手修复 `tools/scenario_capture.lua` probeLog 读 `st.cpu.pc` 恒得 "????" 的 bug →
+改读扁平键 `st["cpu.pc"]` 并补 x/y/a 快照；工具性修复，不改任何采集语义。）
+
+---
+
+## 7. H-15 状态更新注（C → A/B，逐值）
+
+> 应同步至 `docs/spec/completeness.md` §7 H-15 行（本次一并更新）。
+
+| 子项 | 原级 | 新级 | 依据 |
+|---|---|---|---|
+| gameplay 值 0 语义（可投放/slot1 空闲） | C | **A** | §3.1 写点 D10E/9187/E18C + 读点 A2BA/D9EE + trace 锚 |
+| gameplay 值 7 语义（投放物在途/slot1 激活，209f 寿命） | C | **A** | §3.1 写点 A2F7 + 读点族 + akey-role/gameplay-stage1 锚 + `D86B[7]=7` |
+| slot1=对象网格成员（$0400 网格、slot0=玩家） | 未证 | **A**（结构）/B（字段全图） | §2.1 分发器/释放/投放坐标三点互证 |
+| 110/124 语义（scene CHR 影子，非枚举非位组合） | C | **A**（写点+值流）/**B**（CHR 命名与 1K/2K 单位） | §4 五条证据链 |
+| shop 光标 0..5/0..3 | A（N-0003） | A | §3.2 复核无改 |
+| 完整状态码域枚举（$D86B 表长、越界行为） | 未证 | **C（残项）** | 取证路径：数据表考证 + 越界槽场景 |
+
+**H-15 结案判定**：值域语义（0/7/110/124）已全部 A/B 级落位，H-15 从假设区移除；
+残项另立（状态码域枚举 = C；CHR 单位语义 = B）。
+
+---
+
+## 8. 台账增补（data/naming/ledger.jsonl，N-0204..N-0206，date 2026-10-14）
+
+见本文档同日追加的三条（kind=ram/ram/note）：
+
+- **N-0204** `game_action_mode/bomb_deploy_state` → `obj_state_slot1`（gameplay 义收口，A/88）
+- **N-0205** `v_401`（scene 义）→ `chr_bank_shadow_r1`（110/124 归属，A/80）
+- **N-0206** note：H-15 收口 + 110/124 裁定（非枚举/非位组合）+ L3 节拍更正
+
+## 9. 遗留假设 / 未证（不入结论）
+
+1. **C**：对象状态码域完整枚举（`$D86B` 表长边界、idx32+ 映射 0x11/0x12 的语义、越界槽行为）。
+2. **B**：CHR 影子值的单位语义（1K 索引 vs 2K 取模）——观测值全偶数与 1K 说相容，未做 CHR 内容级验证。
+3. **C**：`bank00:9788` 面板表记录字段[0]/[1] 的确切用途（CHR 影子说与 A991/AB8B 同构，未逐值实测）。
+4. **工具注**：probe 回调 PC 快照漂移段（§6）——不影响本文任何结论的成立条件。
+5. **C（归 H-16/W3）**：死亡/重生窗内投放例程不被调用的调用方条件（E1/E2 冻结语义）。
+
+## 10. 复现命令汇总
+
+| # | 命令 | 重现内容 |
+|---|---|---|
+| R1 | §1.1 机械扫描脚本（ROM 字节） | 写点/读点全表（CN/JP 换 ROM 路径即可） |
+| R2 | §3.2 值流切换点脚本（frames.jsonl） | 全场景 $0401 值段（CN+JP） |
+| R3 | `python3 tools/scenario_run.py run gam401-probe` | 写读点 PC/值流插桩（约 1 分钟） |
+| R4 | R1 脚本换 `reference/jp/gunnac_jp.nes` | JP 站点族对照 |
+| R5 | `python3 gates/cli.py check` | 总闸（naming-ledger 含新条目校验） |
+
+---
+
+## 11. 验收对照（①-⑤，2026-10-14 结案快照）
+
+| # | 验收项 | 结果 | 位置 |
+|---|---|---|---|
+| ① | 写点全表（bank:addr+上下文+复现命令） | ✅ 绝对写点 9 处 + 变址/RMW 8 组 + 数据区剔除注；复现 R1 | §1 |
+| ② | 值域语义表（每值：写点/读点/时序锚/级别） | ✅ 0/7/110/124 全 A（命名 B 项标注）+ 3/4/5/$0D 写点存在性；复现 R2 | §3 |
+| ③ | 110/124 裁定 | ✅ 明确：同址多用途的 scene CHR bank 影子值——**非枚举、非位组合**（五条证据链） | §4 |
+| ④ | H-15 状态更新注（C→A/B 逐值） | ✅ findings §7 + `docs/spec/completeness.md` H-15 行/§7.1 索引 + `docs/spec/player-movement.md` R-fire-2/待证清单 | §7 |
+| ⑤ | `python3 gates/cli.py check` 全绿 | ✅ SUMMARY: PASS=12 FAIL=0 SKIP=0 TOLERATED=0；naming-ledger 206 条全过；ratchet 全 OK（naming_ledger_entries 203→206、knowledge_entries 17→18 已 `baseline update --reason` 留痕） | gates |
+
+台账增补：`data/naming/ledger.jsonl` N-0204（`obj_state_slot1`，A/88）、N-0205（`chr_bank_shadow_r1`，A/80）、
+N-0206（H-15 收口 note，A/90），date 均 2026-10-14，evidence 带 bank:addr + trace 帧锚。
