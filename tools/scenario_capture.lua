@@ -111,7 +111,7 @@ if PLAN.probe_mem and #PLAN.probe_mem > 0 then
   local probeF = io.open(probePath, "w")
   local probeN = 0
   local function probeLog(addr, val)
-    if probeN > 200000 then return end
+    if probeN > 3000000 then return end
     probeN = probeN + 1
     local ok, st = pcall(emu.getState)
     local pc = (ok and st and st.cpu) and string.format("%04X", st.cpu.pc or 0) or "????"

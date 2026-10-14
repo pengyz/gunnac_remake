@@ -28,3 +28,15 @@ tools/mesen2.zip
 # 编辑器/系统杂项
 .DS_Store
 *.swp
+
+# 双轨 JP 运行产物（可再生工作区，2026-10-14）
+analysis_jp/
+shots_jp/
+
+# 渲染实验临时产物（O1 漂移源，2026-10-14 清账）
+oracle/screens/actual/b8_*
+oracle/screens/actual/b9_*
+oracle/screens/actual/b10_*
+oracle/screens/actual/ph_*
+oracle/screens/actual/t124*
+oracle/screens/actual/t126*
