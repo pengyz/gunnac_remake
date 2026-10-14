@@ -7,6 +7,9 @@
   python3 tools/wave_timeline.py sched [N]        # 各关敌波调度流（sub_86AE 流）解码
   python3 tools/wave_timeline.py spawns [run]     # trace 网格 slot 激活事件（默认 gameplay-stage1）
 
+截断口径（复核 #76 F1/F5）：script 解码至流尾（op>11/跳转收尾）；触及 maxrec 安全上限
+一律显式打 [截断] 提示，禁止以截断视界下范围结论。sched 的 +N 为 tick 累计值（1 tick=8 帧稳态）。
+
 证据口径：bank00:8000 装载器 / 8185 脚本解释器 / 82FD 事件机 / 83E7 生成器 /
 844A 行为 VM / 86AE 敌波调度器 / 8972 波次记录机（详见 enemy-timeline.md §1）。
 """
@@ -61,7 +64,9 @@ def stage_entry(d, n):
                 bank=e[5], lut=e[6] | e[7] << 8)
 
 
-def decode_script(d, n, maxrec=8):
+def decode_script(d, n, maxrec=256):
+    """脚本流解码到流尾（op>11/跳转收尾）。maxrec 仅为安全上限——触及时显式打截断提示
+    （复核 #76 F1 根因：旧 maxrec=8 静默截断曾漏计 op5 波次流）。"""
     st = stage_entry(d, n)
     off = fb(st["bank"], st["script"])
     print(f"== STG-{n:02d} 脚本流 ${st['script']:04X} (bank{st['bank']}) "
@@ -69,14 +74,19 @@ def decode_script(d, n, maxrec=8):
     t0 = d[off] | d[off + 1] << 8
     print(f"  头 2B 初始 tick T0=${t0:04X}（$84/$85:=T0-1, $86/$87:=T0）")
     p = off + 2
+    rec = 0
+    waves = []   # (记录序, 波次流指针, 记录尾 thr tick)
+    ended = False
     for _ in range(maxrec):
         op = d[p]
         if op > 11:
             print(f"  @{p - off:+3d}: opcode ${op:02X} > 11 —— 停")
+            ended = True
             break
         ln = SCRIPT_OPS[op]
         args = d[p + 1:p + 1 + ln]
         thr = d[p + 1 + ln] | d[p + 2 + ln] << 8
+        rec += 1
         extra = ""
         if op == 1:
             extra = f" evt=${args[0] | args[1] << 8:04X} spawner=${args[2] | args[3] << 8:04X}"
@@ -89,13 +99,21 @@ def decode_script(d, n, maxrec=8):
                      f" s4=${args[6] | args[7] << 8:04X}")
         elif op == 5:
             extra = f" wave=${args[0] | args[1] << 8:04X}"
+            waves.append((rec, args[0] | args[1] << 8, thr))
         elif op in (3, 7):
             extra = f" target=${args[0] | args[1] << 8:04X}"
-        print(f"  @{p - off:+3d}: op{op:<2d} {SCRIPT_NAME[op]:42s} "
+        print(f"  @{p - off:+3d} rec{rec:<3d}: op{op:<2d} {SCRIPT_NAME[op]:42s} "
               f"args={args.hex(' ')} thr=${thr:04X}{extra}")
         p += 1 + ln + 2
         if op in (3, 7):
+            ended = True
             break
+    if not ended:
+        print(f"  [截断] 已达 maxrec={maxrec} 且流未以 op>11/跳转收尾——以上为不完整视界，"
+              f"勿据此下范围结论（复核 #76 F1 根因）")
+    print(f"  op5 波次流 {len(waves)} 条: "
+          + ("、".join(f"${w:04X}@thr${t:04X}(rec{r})" for r, w, t in waves) if waves else "无")
+          + "（@thr=记录尾 thr 字段，即 $86/$87 下一记录触发 tick）")
 
 
 def decode_sched(d, n, maxrec=40):
@@ -103,6 +121,8 @@ def decode_sched(d, n, maxrec=40):
     记录 = [delay@0][项…][ctrl]；项 = (type≥$10, param) 对 或 ctrl：
       0=记录分隔 1/11=定型$2E/$2C+4参 2/12=定型$2F/$2D+($3E)参+4参
       3..9=流跳转(2B) 10=流定型+2参 13/14=寄存器写(2参)
+    单位：+N 为 delay **tick** 累计值（1 tick = 8 帧稳态；关首快进环另计——复核 #76 §1）。
+    maxrec 截断时显式打提示（复核 #76 F5）。
     """
     st = stage_entry(d, n)
     off = fb(st["bank"], st["script"])
@@ -123,7 +143,7 @@ def decode_sched(d, n, maxrec=40):
     print(f"== STG-{n:02d} 敌波调度流 ${sched:04X} (bank{st['bank']}, sub_86AE) ==")
     base = fb(st["bank"], sched)
     frames = d[base] + 1
-    print(f"  初始 gap = {frames}f（$51:=(@0)+1）")
+    print(f"  初始 gap = {frames}t（tick：$51:=(@0)+1；1 tick=8 帧稳态）")
     recno = 0
     rb = 0
     seen = set()
@@ -168,7 +188,7 @@ def decode_sched(d, n, maxrec=40):
                     rec.append(f"[{ctrl}]?")
                     nxt = y
                     break
-        print(f"  @{sched + rb:04X} +{frames:6d}f : {' '.join(rec)}")
+        print(f"  @{sched + rb:04X} +{frames:6d}t : {' '.join(rec)}")
         recno += 1
         if jump is not None:
             off2 = fb(st["bank"], jump)
@@ -182,12 +202,17 @@ def decode_sched(d, n, maxrec=40):
             rb = nxt
         else:
             break
+    else:
+        print(f"  [截断] 已达 maxrec={maxrec}——以上为不完整视界，勿据此下范围结论"
+              f"（复核 #76 F5：截断须显式提示）")
 
 
 def trace_spawns(run="gameplay-stage1"):
     path = TRACE.format(run=run)
     print(f"== trace 网格 slot 激活事件（{path}）==")
     print("判定式：iram $0400+n 由 0→非0（字段基址+槽号，enemy-dataface §2.1 正寻址）")
+    print("口径注：槽复用写入（旧值非 0→新值）不可见——计数为判定式口径，非出敌总数"
+          "（复核 #76 A1：B2 输入生成按此口径会漏槽复用事件）")
     prev = [None] * 28
     cnt = 0
     with open(path) as f:
