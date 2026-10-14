@@ -95,6 +95,7 @@
 | 改参考投影/轨道后 | 投影回归 | `python3 gates/cli.py seed` | seed sha 不变；src 轨道 trace 不变 |
 | 改 game-data/game-core 后 | 差分（L1–L3） | `python3 gates/cli.py trace` | 任何回退 ⇒ 停止，先定位层（§4） |
 | 改渲染后 | 视觉（L4） | `python3 gates/cli.py visual` | 白名单外像素必须一致 |
+| 改 `reference/jp/` 或坐标桥后 | 坐标桥一致性 | `python3 gates/cli.py check` | 映射失效 ⇒ 停止，`gen_addr_bridge.py gen` 重生成后重验 |
 | 里程碑收尾 | 全量 | `python3 gates/cli.py all` | 对照管线文档阶段 Gate |
 
 > 【2026-10-12 更正】敏感路径增补 `data/status/`：t11 F1 攻击链暴露"降基线提交可机器无痕入库"，

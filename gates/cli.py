@@ -544,6 +544,46 @@ def gate_rom_integrity() -> tuple[str, str]:
                   f"；baseline.json 纳入 sha 锚点管理）")
 
 
+def gate_addr_bridge() -> tuple[str, str]:
+    """坐标桥一致性（对抗复核 #49 条件 C）：桥 meta sha 双锚定 + relocated 抽样逐字节复验。"""
+    bridge = ROOT / "data" / "reference" / "addr-bridge-jp-cn.json"
+    jp_p = ROOT / "reference" / "jp" / "gunnac_jp.nes"
+    cn_p = ROOT / "rom" / "gunnac_cn.nes"
+    if not bridge.is_file() or not jp_p.is_file() or not cn_p.is_file():
+        return missing_precondition(load_baseline(), "addr-bridge", SKIP,
+                                    "坐标桥或双 ROM 缺失（条件 C：JP 参照锚到位后启用）")
+    try:
+        data = json.loads(bridge.read_text())
+    except ValueError as exc:
+        return FAIL, f"addr-bridge JSON 解析失败：{exc}"
+    problems = []
+    if data.get("meta", {}).get("jp_sha256") != sha256_file(jp_p):
+        problems.append("桥 meta jp_sha256 与 reference/jp/gunnac_jp.nes 不符（桥已过期，重生成）")
+    if data.get("meta", {}).get("cn_sha256") != sha256_file(cn_p):
+        problems.append("桥 meta cn_sha256 与 rom/gunnac_cn.nes 不符【rom/ 任何字节改动=严重违规】")
+    items = [(bi, e) for bi, v in data.get("banks", {}).items() for e in v
+             if e.get("kind") in ("relocated", "relocated-cross-bank")]
+    if not items:
+        problems.append("桥内无 relocated 条目（结构异常）")
+    else:
+        jp = jp_p.read_bytes()
+        cn = cn_p.read_bytes()
+        step = max(1, len(items) // 8)
+        for bank, e in items[::step][:8]:
+            bi = int(bank[4:])
+            st, en = (int(x, 16) for x in e["cn"].split("-"))
+            jst = int(e["jp"].split("-")[0], 16)
+            jb = int(e.get("jp_bank", bi))
+            seg_c = cn[16 + bi * 0x2000 + st : 16 + bi * 0x2000 + en]
+            seg_j = jp[16 + jb * 0x2000 + jst : 16 + jb * 0x2000 + jst + (en - st)]
+            if seg_c != seg_j:
+                problems.append(f"{bank}:{e['cn']}→{e.get('jp')} 字节不符（映射失效）")
+    if problems:
+        return FAIL, "; ".join(problems[:5])
+    return PASS, (f"坐标桥一致（relocated {len(items)} 条抽样 8 条逐字节全等；"
+                  f"meta sha 双锚定；禁手工换算）")
+
+
 def gate_seed_integrity() -> tuple[str, str]:
     seed_dir = ROOT / "reference" / "seed"
     if not seed_dir.is_dir():
@@ -770,6 +810,7 @@ GATES: list[tuple[str, str, str, str, object]] = [
     ("trace-diff", "S6 启用", "trace", "L3：帧级状态向量逐 tick 比对（oracle vs Rust）", gate_trace_diff),
     ("visual-diff", "S6 启用", "visual", "L4：截图逐像素（白名单外）", gate_visual_diff),
     ("completeness-ratchet", "矩阵建立后启用", "all", "完备性矩阵覆盖只增不降", gate_completeness_ratchet),
+    ("addr-bridge", "启用", "check", "九班↔JP 坐标桥 meta sha + relocated 抽样复验", gate_addr_bridge),
 ]
 
 
