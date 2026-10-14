@@ -1,0 +1,68 @@
+# 场景：G-S5-6 关 1 关末→商店→关 2 开始【触发注入回放】（Run B）
+# 战役文档：docs/findings/gs5-6-dynamic-replay.md §1.1 Run B
+#
+# ★触发来源 = 注入（trigger=injected），非自然可达——严格标注，不冒充自然通关：
+#   Run A（gs5-stg01-full，自然盲开环）实测 4 次死亡（f1787/2046/4933/5181）→ f5182 $26 bit3
+#   → f5309 起 GAME OVER/CONTINUE 菜单卡死（f5400 截图「游戏结束」/f6600「CONTINUE|GAME OVER」），
+#   自然关末未到达（$CA/$26 bit4 全程 0）。
+#   本场景 = 同源输入前缀 + f2400 注入 $CA bit0=1（= 流末记录近端上游，bank00:8CFC A 级读点
+#   → 8D02 `ORA #$10/STA $26`），ROM 自然执行 E2F3 关末块 → E396→E16B→$9BC3 商店 init → 关 2。
+#   产出锚全部 trigger=injected；自然触发条件（流末记录何时置 $CA bit0）仍为 G-S5-2/B 级。
+#
+# 输入口径：
+#   - f1..f2350 与 gameplay-stage1/gs5-stg01-full 同源（确定性前缀，Run A 已 0 差异对账）；
+#   - f2400..2500 poke_every 1 $CA:=$01（防流记录装载覆盖；注入窗=证据链一部分）；
+#   - 尾段不按 A（避免商店误购买）；B 点按链 = 出店试探（R-shop-7 双 B 出店），
+#     迭代口径：先宽松排程观察真实到店帧，终版收紧（见战役文档 §2.2）。
+name gs5-stg01-clear-inject
+frames 6000
+press_len 4
+
+# ===== 输入前缀（gameplay-stage1 同源；勿改）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+press_every 12 1250-2350 a
+hold 1300-1450 right
+hold 1470-1620 left
+hold 1650-1800 right
+hold 1830-1950 down
+hold 1980-2100 up
+hold 2130-2280 right
+press 1500 b
+
+# ===== 触发注入（G-S5-6；trigger=injected）=====
+poke_every 1 2400-2500 00ca 01
+
+# ===== 出店试探（观察到店帧后终版收紧）=====
+press_every 60 3400-5990 b
+
+# ===== 采集面 =====
+capture_every 300 probe
+
+# 关键 RAM（关末/商店/关 2 判定面）
+watch 0180 stage_no
+watch 0026 flags26
+watch 0027 flags27
+watch 002b phase2b
+watch 002f countdown2f
+watch 00ca trig_ca
+watch 0300 gate300
+watch 0400 player_state
+watch 018d lives
+watch 018e money_disp_copy
+watch 0188 intro_ctr
+watch 0189 w0189
+watch 0190 w0190
+watch 041c vec41c
+watch 0438 vec438
+watch 06a0 invuln_6a0
+watch 0018 controller_held
+watch 0401 slot1_state
