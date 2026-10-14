@@ -139,3 +139,52 @@ pub struct BombDropResult {
 
 /// 移动 tick 的 L2 对拍面（S5 模块本体在 `player`，此处再导出以保持 l2ports=统一差分接口）。
 pub use crate::player::{movement_tick, PlayerState, VelocityPair};
+
+// ===== A1 商店购买消费侧（docs/findings/shop-purchase-flow.md）=====
+// 商店金钱 = `$018E`（单字节 0..255），与 `$E0-$E6` BCD 计数器（money_add_event 侧）分立；
+// 扣减三同构点价格 10/6/4（bank00:$9DE8/$9ECD/$9FAB），不足统一跳 `bank01:$A05B` 且不写。
+
+/// 连射购买扣款（bank00:9ECD-9ED9，A1-DED-2）：`LDA $18E/CMP #$06/BCS/SBC #$06/STA $18E`。
+///
+/// 语义：money ≥ 6 ⇒ 写回 money−6 并返回 (money−6, true)；不足 ⇒ 不写返回 (money, false)。
+pub fn shop_spend_rapid(money: u8) -> (u8, bool) {
+    if money >= 6 {
+        (money - 6, true)
+    } else {
+        (money, false)
+    }
+}
+
+/// 发货购买扣款（bank00:9FAB-9FB7，A1-DED-3）：价格 4，同构 `shop_spend_rapid`。
+pub fn shop_spend_ship(money: u8) -> (u8, bool) {
+    if money >= 4 {
+        (money - 4, true)
+    } else {
+        (money, false)
+    }
+}
+
+/// 发货槽数量递增封顶（bank00:9FC0-9FCE，A1-CAP-1）：
+/// `LDA $178,Y/AND #$3F/CLC/ADC #$01/CMP #$40/BCC/LDA #$3F/STA $04`。
+///
+/// 语义：新数量 = min((slot & $3F) + 1, $3F)；打包高 2 位（弹种）不入本片段（另行 ORA）。
+pub fn shop_ship_qty_next(slot: u8) -> u8 {
+    let qty = (slot & 0x3F) + 1;
+    if qty >= 0x40 {
+        0x3F
+    } else {
+        qty
+    }
+}
+
+/// 商店金钱入账（bank02:8FA9-8FB5，A1-CAP-2）：`LDA $18E/CLC/ADC #$03/BCS→LDA #$FF/STA $18E`。
+///
+/// 语义：money+3，**进位即封顶 $FF**（不是 256 截断）。
+pub fn shop_money_earn(money: u8) -> u8 {
+    let (v, carry) = money.overflowing_add(3);
+    if carry {
+        0xFF
+    } else {
+        v
+    }
+}
