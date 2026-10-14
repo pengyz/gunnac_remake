@@ -37,7 +37,7 @@ python3 tools/scenario_run.py run-all         # 全部顺序跑
 
 按钮集：`a b start select up down left right`（Mesen2 `emu.setInput` 键名）。
 
-> **写注入纪律（poke/poke_every，2026-01-15 G-S5-6 增补）**：`poke` 是**外部事件注入**
+> **写注入纪律（poke/poke_every，~~2026-01-15~~ 2026-10-15 G-S5-6 增补【2026-10-15 更正（复核 #74）】F5：日期笔误 2026-01-15→2026-10-15）**：`poke` 是**外部事件注入**
 > （与 l5-all-clear `gate_300` 外部事件同族口径），用于驱动 ROM 走自然代码链的触发取证
 > （如 `$CA bit0`=流末记录近端上游）；**产出锚必须标注 `trigger=injected`**，不得冒充
 > 自然可达（自然触发条件另册取证）。禁用于"让考题变简单"的作弊式改状态。
