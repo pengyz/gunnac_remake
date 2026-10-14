@@ -5,6 +5,10 @@
 //! （字段名后括注 ROM 地址）。测试只断言行为终态，不断言实现内部结构。
 //!
 //! 未证不发明：消息**文案内容**未证 ⇒ 只断言 `ShopPrompt` 状态枚举；声音/文本渲染不在断言域。
+//!
+//! TDD 留痕（AD65-2，review-65 §6-4）：本轮 AR65-1/AR65-2 新增用例先行落盘再改实现，
+//! RED 输出留档 `analysis/tdd-red-dev1-ar65-20261014.log`（RED-1 E0599 编译面 + RED-2 行为面
+//! 复现审方分歧态 `stage=8,pad2=0 ⇒ $32 bit5 0x00 vs 0x20` / `Exited vs Message`）。
 
 use game_core::ui::*;
 use game_core::weapons::{PickupContext, WeaponState};
@@ -156,7 +160,7 @@ fn rapid_buy_and_level_cap() {
     // ack 回主环（cursor 复位 0）；再入连射 ⇒ 满级消息、不扣钱
     shop_purchase_step(&mut s, BTN_ACK);
     assert_eq!(s.phase, ShopPurchasePhase::MainRing);
-    assert_eq!(s.cursor, 0, "回主环复位 $0400=0（bank00:$9CEC）");
+    assert_eq!(s.cursor, 0, "回主环复位 $0400=0（序列入口 bank00:$9CEC；`LDA #0/STA $400` 在 $9CF7/$9CF9——AD65-1）");
     shop_purchase_step(&mut s, BTN_DOWN);
     shop_purchase_step(&mut s, BTN_SELECT);
     assert_eq!(s.prompt, Some(ShopPrompt::RapidMax), "$3C≥4 入口即消息（bank00:$9E94）");
@@ -270,9 +274,10 @@ fn wing_validation_branches() {
     assert_eq!(s.weapon.level, 2);
 }
 
-/// ⑥退出分支（bank01:$A023）：主环光标 3 + 选中（Start∈`$16&$D0`）⇒ phase=Exited、零购买写入；
-/// 隐藏选项门（bank01:$A023-$A03B）：`($18&$33)==$11` ⇒ `$32` bit5 置位（登记不解释）。
-/// 期望 RAM 终态：phase=Exited、$018E 不变；门满足时 $32 |= $20。
+/// ⑥退出分支（bank01:$A023）：主环光标 3 + 选中（Start∈`$16&$D0`）⇒ 零购买写入；
+/// 隐藏选项门（bank01:$A023-$A03B，两触发源见 ⑥' 用例）：`($18&$33)==$11` ⇒ `$32` bit5 置位
+/// 并停消息相位（AR65-2：ack 后才转场，断言见 `exit_hidden_gate_*` 用例）；门不满足 ⇒ phase=Exited。
+/// 期望 RAM 终态：门不满足 phase=Exited、$018E 不变；门满足时 $32 |= $20。
 #[test]
 fn exit_entry_and_hidden_gate() {
     let mut s = st();
@@ -298,6 +303,69 @@ fn exit_entry_and_hidden_gate() {
     s.cursor = 3;
     shop_purchase_step(&mut s, BTN_START);
     assert_eq!(s.pickup.flags, 0x00);
+}
+
+/// ⑥'退出隐藏门触发源(b)（AR65-1，review-65 §1.2）：`$0180==8` 单独成立（`$18` 组合不成立）也置
+/// `$32` bit5（bank01:$A02B `ad 80 01 c9 08 d0 16`——不触发才跳 $A048）；触发后停消息相位
+/// （AR65-2：文本 `$A65C` + bank01:$A045 `JSR $A09F`，ack 门 bank01:$A0CF `AND #$C0`），
+/// ack 前不转场、ack 后才合流 `$A048` 转场（`text $A31F/$E6D9/LDA #$03/JSR $EE03/JMP $EEFB`，交 flow）。
+/// 期望 RAM 终态：$32|=0x20、prompt=ExitHidden、ack 前 phase=Message、ack 后 phase=Exited。
+#[test]
+fn exit_hidden_gate_stage8_triggers_with_message_ack() {
+    let mut s = st();
+    s.money = 7;
+    s.stage = 8; // $0180
+    s.pad2 = 0x00; // $18：触发源(a) ($18&$33)==$11 不成立
+    s.cursor = 3;
+    let fx = shop_purchase_step(&mut s, BTN_START);
+    assert_eq!(s.pickup.flags, 0x20, "期望 $32 bit5（stage==8 触发源(b)，bank01:$A02B-$A03B）");
+    assert_eq!(s.phase, ShopPurchasePhase::Message, "ack 前不转场（bank01:$A045 JSR $A09F）");
+    assert_eq!(s.prompt, Some(ShopPrompt::ExitHidden), "第 7 变体：文本 $A65C 登记不解释");
+    assert_eq!(fx, ShopFx::None);
+    assert_eq!(s.money, 7, "退出链零购买写入 $018E");
+    // 非 ack 输入不放行（ack 门 `$16&$C0`，bank01:$A0CF）
+    shop_purchase_step(&mut s, BTN_UP);
+    assert_eq!(s.phase, ShopPurchasePhase::Message, "ack 门未开不放行");
+    // ack（A/B 任一）后合流转场
+    shop_purchase_step(&mut s, BTN_B);
+    assert_eq!(s.phase, ShopPurchasePhase::Exited, "ack 后合流 $A048 转场（交 flow）");
+    assert_eq!(s.prompt, None);
+}
+
+/// ⑥'退出隐藏门双触发源同时成立（`$0180==8` + `($18&$33)==$11`，review-65 §6-1）：`$32` bit5
+/// `ORA #$20` 幂等不双写（终态 0x20 非 0x40），仍停消息相位、ack 后转场。
+/// 期望 RAM 终态：$32==0x20、prompt=ExitHidden、ack 后 phase=Exited。
+#[test]
+fn exit_hidden_gate_dual_trigger_sets_bit5_once() {
+    let mut s = st();
+    s.money = 7;
+    s.stage = 8;
+    s.pad2 = 0x11; // 两触发源同时成立
+    s.cursor = 3;
+    shop_purchase_step(&mut s, BTN_START);
+    assert_eq!(s.pickup.flags, 0x20, "双触发不双写：$32 终态 bit5 单置（bank01:$A039 ORA #$20）");
+    assert_eq!(s.phase, ShopPurchasePhase::Message);
+    assert_eq!(s.prompt, Some(ShopPrompt::ExitHidden));
+    shop_purchase_step(&mut s, BTN_A);
+    assert_eq!(s.phase, ShopPurchasePhase::Exited, "ack 后合流 $A048 转场");
+}
+
+/// ⑥'退出隐藏门触发源(b) 边界（AR65-1 负向哨兵）：ROM `CMP #$08/BNE` 是**精确 ==8**（非 ≥8）——
+/// stage=7 / stage=9 且组合键不成立时不得置位、不得停消息相位（直接合流 $A048 转场）。
+/// 期望 RAM 终态：$32 不动、prompt=None、phase=Exited。
+#[test]
+fn exit_hidden_gate_stage_boundary_is_exact_8() {
+    for stage in [7u8, 9u8] {
+        let mut s = st();
+        s.money = 7;
+        s.stage = stage;
+        s.pad2 = 0x00;
+        s.cursor = 3;
+        shop_purchase_step(&mut s, BTN_START);
+        assert_eq!(s.pickup.flags, 0x00, "stage={stage}：$0180==8 不成立，$32 不得置位");
+        assert_eq!(s.prompt, None, "stage={stage}：无 $A65C 消息（直接合流 $A048）");
+        assert_eq!(s.phase, ShopPurchasePhase::Exited, "stage={stage}：直接转场");
+    }
 }
 
 /// 翼购买生效（bank00:$9E0E-$9E12）：money−10 + `$32` bit7 置位；
