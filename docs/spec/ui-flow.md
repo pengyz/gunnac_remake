@@ -100,7 +100,9 @@
       **设置面板内容与返回路径未证**
 - [ ] **未闭环**｜「开始」「设置」与 `OPTION`/`DEMO` 串的映射及各自功能（输入序列已留证，串映射未隔离）
 - [ ] **未闭环**｜DEMO（演示）模式行为与触发条件
-- [ ] **未闭环**｜`GAME OVER` → `CONTINUE` 流程（gameplay-stage1 f2349 为运行中止于战斗态，**未观测到 GAME OVER**）
+- [x] **部分闭环**｜`GAME OVER` → `CONTINUE` 流程：~~行为未观测~~【2026-10-14 更新（A2+DEV-2）】静态链已定谳并接线
+      （[game-over-continue.md](game-over-continue.md) R-gameover-* / R-death-* / R-continue-*，
+      证据=findings game-over-continue.md §1-§4）；**动态仍未观测**（§2.6 负结果：trace 未达 GAME OVER 屏）
 - [x] **部分闭环**｜开场文本 / 结局文本显示条件：开机路径**未出现**开场文本（R-ui-7 负证据）；其余路径与结局未证（H-06）
 - [ ] **未闭环**｜HI SCORE 的计算与持久化行为
 

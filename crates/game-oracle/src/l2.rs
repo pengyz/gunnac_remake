@@ -730,6 +730,19 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
             exit_at = 0x8FB6;
             (nv, x_in, y_in) // 退出 A=写回值（ADC 结果 / 封顶 LDA #$FF）
         }
+        // ===== DEV-2 死亡结算算术（A2 findings game-over-continue.md §1.3/F5）=====
+        "death_money_halve" => {
+            // bank03:A39F `LSR $18E`（死亡结算金钱减半）——A/X/Y 不动（内存型 LSR）
+            let nv = l2ports::death_money_halve(ram(0x018E));
+            writes.insert(0x018E, nv);
+            (a_in, x_in, y_in)
+        }
+        "bcd_sub_ammo" => {
+            // bank15:ED03-ED26 直接对拍（sub_ED03 = BCD 借位扣减，N-0017；
+            // `$018D` 命数扣减（bank03:$A392 `LDY #1/JSR sub_ED03`）同例程）
+            let (nv, y) = l2ports::bcd_sub_ammo(a_in, y_in);
+            (nv, x_in, y)
+        }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),
     };
     Ok(Out { a, x, y, writes, exit: exit_at })
