@@ -1,0 +1,79 @@
+# 场景：G-S5-6 关 1 全程动态回放（战斗段续 → 关末段 → 商店段 → 关 2 开始段）
+# 战役文档：docs/findings/gs5-6-dynamic-replay.md（回放方案 (c) 渐进式）
+#
+# 设计口径：
+#   - f1..f2350 输入前缀与 gameplay-stage1 **逐指令同源**（press_len 4 + 同帧号表）——
+#     确定性对账：f1080/1200/1260/1500 四锚（R-ui-6/R-shop-7 trace 锚）应在本 run 复现；
+#   - f2400 起 = 被动尾段：自动射击（press_every 6）+ 慢速左右摆动 + 定时炸弹——
+#     盲开环输入（C4 条件输入未建）；目标 = 自然走到关末（$26 bit4 置位 → INC $180）；
+#   - watch 面 = 长跑轻量面（14 单字节；重 watch 面 4.9fps 不适合 15k 帧长跑）；
+#   - 帧锚判定式见 docs/findings/gs5-6-dynamic-replay.md §3（机器可从 frames.jsonl 重导）。
+name gs5-stg01-full
+frames 15000
+press_len 4
+
+# ===== 输入前缀（gameplay-stage1 同源；勿改——改则确定性对账失效）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+
+# 商店退出（B 级实测路径：两连 B）
+press 1100 b
+press 1160 b
+
+# 实机：自动射击（每 12 帧点按 A）+ 自动移动（分段持方向）
+press_every 12 1250-2350 a
+hold 1300-1450 right
+hold 1470-1620 left
+hold 1650-1800 right
+hold 1830-1950 down
+hold 1980-2100 up
+hold 2130-2280 right
+press 1500 b
+
+# ===== 被动尾段（f2400+）：盲开环通关尝试 =====
+press_every 6 2400-14990 a
+hold 2500-3100 left
+hold 3300-3900 right
+hold 4100-4700 left
+hold 4900-5500 right
+hold 5700-6300 left
+hold 6500-7100 right
+hold 7300-7900 left
+hold 8100-8700 right
+hold 8900-9500 left
+hold 9700-10300 right
+hold 10500-11100 left
+hold 11300-11900 right
+hold 12100-12700 left
+hold 12900-13500 right
+hold 13700-14300 left
+hold 14500-14950 right
+press 3600 b
+press 7200 b
+press 10800 b
+press 14400 b
+
+# ===== 采集面（长跑轻量）=====
+capture_every 600 probe
+
+# 关键 RAM（长跑判定面；判定式=战役文档 §3）
+watch 0180 stage_no
+watch 0026 flags26
+watch 002b phase2b
+watch 002f countdown2f
+watch 00ca trig_ca
+watch 0300 gate300
+watch 0400 player_state
+watch 018d lives
+watch 018e money_disp_copy
+watch 0188 intro_ctr
+watch 041c vec41c
+watch 0438 vec438
+watch 0018 controller_held
+watch 0401 slot1_state

@@ -1,0 +1,70 @@
+# 场景：G-S5-6 关 1 关末→商店→关 2 开始【触发注入回放 · 有效门位】（Run C1，观测轮）
+# 战役文档：docs/findings/gs5-6-dynamic-replay.md §2.2
+#
+# ★触发来源 = 注入（trigger=injected）：
+#   Run B（gs5-stg01-clear-inject）实测负结果：$CA bit0 单点注入 **不触发** $26 bit4——
+#   8CFC `$CA&1 → $26|=$10` 的消费点在**波次记录边界处理**（bank00:8Cxx 记录引擎），
+#   非逐帧；$CA 注入值悬置（ca=1 持续至 run 末）无人消费。G-S5-2 口径就此收窄：
+#   "$26 bit4 置位只发生在流末记录被记录引擎消费的记录边界"。
+#   本场景改注 **$26 bit4 本身**（bank15:E2F3 `LDA $26/AND #$10/BNE E2FC` A 级门位，
+#   逐帧消费）→ ROM 自然执行 E2FC 关末块全链（一次性入场/倒数环/飞离向量/$0300 推进闸/
+#   INC $180/E396→E16B→$9BC3 商店 init/出店/关 2 开始）。
+#   产出锚 trigger=injected（门位注入）；链路动态 = A 级真机执行；自然可达性 = 负结果（Run A）。
+#
+# 输入口径：
+#   - f1..f2350 与 gameplay-stage1/gs5-stg01-full 同源（确定性前缀）；
+#   - f2400 poke $26:=$10（当时 $26=0x00，= OR bit4；readback 入 lua.log）；
+#   - 尾段不按 A（防商店误购买）；B 点按链 3200+（关末倒数后）= 出店试探（R-shop-7 双 B）。
+name gs5-stg01-clear-c1
+frames 6000
+press_len 4
+
+# ===== 输入前缀（gameplay-stage1 同源；勿改）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+press_every 12 1250-2350 a
+hold 1300-1450 right
+hold 1470-1620 left
+hold 1650-1800 right
+hold 1830-1950 down
+hold 1980-2100 up
+hold 2130-2280 right
+press 1500 b
+
+# ===== 触发注入（G-S5-6；trigger=injected）=====
+poke 2400 0026 10
+
+# ===== 出店试探（观测到店帧后终版 C2 收紧 + 精确 capture）=====
+press_every 60 3200-3700 b
+press_every 120 3700-4600 b
+
+# ===== 采集面 =====
+capture_every 300 probe
+
+# 关键 RAM（关末/商店/关 2 判定面）
+watch 0180 stage_no
+watch 0026 flags26
+watch 0027 flags27
+watch 002b phase2b
+watch 002f countdown2f
+watch 00ca trig_ca
+watch 0300 gate300
+watch 0400 player_state
+watch 018d lives
+watch 018e money_disp_copy
+watch 0188 intro_ctr
+watch 0189 w0189
+watch 0190 w0190
+watch 041c vec41c
+watch 0438 vec438
+watch 06a0 invuln_6a0
+watch 0018 controller_held
+watch 0401 slot1_state

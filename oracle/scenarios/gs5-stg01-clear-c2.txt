@@ -1,0 +1,76 @@
+# 场景：G-S5-6 关 1 关末→商店→关 2 开始【触发注入回放 · 终版锚 run】（Run C2）
+# 战役文档：docs/findings/gs5-6-dynamic-replay.md §2.3 —— **真帧锚证据源 run**
+#
+# ★触发来源 = 注入（trigger=injected，门位 $26 bit4；自然可达性=Run A 负结果）：
+#   C1（gs5-stg01-clear-c1）实测全链走通：f2400 门位 → f2401 一次性入场($27 bit7)/倒数初始化
+#   ($2F:=50/$0188:=126/$06A0:=2) → 倒数环(8f/减) → f2794 飞离向量($041C:=$A4/$0438:=$0D)
+#   → f3066 $0300≠0 闸开+bit4 清(E36E) → f3096 INC $180($180=2) → f3116 商店 init($0400:=0)
+#   → 商店主菜单（f3300 截图：「1.武器 2.连射 3.炸弹 4.退」=$9D56 四入口）。
+#   C1 出店未达成（B 点按=面板转换非出店；R-shop-7「双 B 出店」只适用于**信息页入口态**
+#   （首店 f1080「A键，B键 转换」信息页），主菜单态出店 = **光标选「4.退」+A**）。
+#
+# 本 run（C2）与 C1 的差异仅在 f3116 之后的输入（出店导航）+ 采集加密：
+#   f2400-3116 关末链帧与 C1 同源（同前缀+同 poke+尾段无移动 ⇒ 确定性复现，C2 trace 自证）。
+name gs5-stg01-clear-c2
+frames 5000
+press_len 4
+
+# ===== 输入前缀（gameplay-stage1 同源；勿改）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+press_every 12 1250-2350 a
+hold 1300-1450 right
+hold 1470-1620 left
+hold 1650-1800 right
+hold 1830-1950 down
+hold 1980-2100 up
+hold 2130-2280 right
+press 1500 b
+
+# ===== 触发注入（G-S5-6；trigger=injected）=====
+poke 2400 0026 10
+
+# ===== 商店出店导航（主菜单：光标 1.武器 → 3×down → 4.退 + A）=====
+press 3250 down
+press 3290 down
+press 3330 down
+press 3370 a
+
+# ===== 采集面（加密：锚点截图 + 150 帧巡检）=====
+capture_every 150 probe
+capture 2400 gate-inject
+capture 2401 clear-entry
+capture 2794 flyout-vector
+capture 3066 clear-dispatch
+capture 3096 stage-advance
+capture 3116 shop-init
+capture 3300 shop-menu
+capture 3380 shop-exit-select
+
+# 关键 RAM（关末/商店/关 2 判定面）
+watch 0180 stage_no
+watch 0026 flags26
+watch 0027 flags27
+watch 002b phase2b
+watch 002f countdown2f
+watch 00ca trig_ca
+watch 0300 gate300
+watch 0400 player_state
+watch 018d lives
+watch 018e money_disp_copy
+watch 0188 intro_ctr
+watch 0189 w0189
+watch 0190 w0190
+watch 041c vec41c
+watch 0438 vec438
+watch 06a0 invuln_6a0
+watch 0018 controller_held
+watch 0401 slot1_state
