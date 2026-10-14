@@ -36,6 +36,12 @@
 
 5 字节 `{参数×3, 行为脚本指针}`；脚本流（如 $B2B4）含嵌套指针 + FE/FC 终止（t32 §1.1）。
 
+> 【2026-10-15 更正（B1 enemy-timeline）】§1 bank 归属与 §2.3「目录」两处收口：
+> ① 关卡目录实为 **bank8:$A000 8B/条**（bank00:8000 装载器，Y=$180*8）——bank8=STG-01+**STG-02**、
+> bank9=STG-03/04/05、bank10=STG-06/07/08（原文「bank9=STG-02 候选」作废）；
+> ② $ACEF 区 `44 AD D0 AD` = STG-02 脚本流 $ACEA 的 cmd1 记录操作数（evt=$AD44/spawner=$ADD0），
+> 非独立目录。八关脚本流/敌波调度流/生成器流指针表见 docs/findings/enemy-timeline.md §4.1。
+
 ### 2.3 目录（bank8 $ACEF 区）
 
 `44 AD D0 AD` 字样 = 范围对（$AD44-$ADD0 = 波次链块边界）——块范围目录（B 级；
