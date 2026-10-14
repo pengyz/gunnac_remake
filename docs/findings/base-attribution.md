@@ -277,7 +277,7 @@ name jpearly / frames 600 / press_len 4 / press 240 start / press 270 start / ca
   **已执行** `docs/spec/ui-flow.md` dated 更正（本轮）。
 - 【2026-10-14 增补（AR54-7 跨文档勘误登记）】`adversarial-review-52.md` §1.1 补注"位移是尾区局部
   （仅 $EF8x–$F27x 成立）"系 2 采样点**过度概括**——已按 AR54-7 在该文 §1.1 另立 dated 勘误
-  （根因模型 = JP 独有 10B 块 + 效应段 $E092–$F6C0；历史主张不删）。
+  （根因模型 = JP 独有 10B 块 + 效应段 ~~$E092~~【2026-10-14 更正（#62 AD62-1）】下界 $E054（AR61-1 口径）–$F6C0；历史主张不删）。
 
 ---
 
