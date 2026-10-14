@@ -94,3 +94,5 @@ capture 1492 w78_p12b
 watch 018e money_disp_copy
 watch_range 0178-017e deliv_slots
 watch 0188 intro_ctr
+watch 0400 player_state
+watch 018d lives

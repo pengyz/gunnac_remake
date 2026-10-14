@@ -45,3 +45,5 @@ watch 04e0 player_x
 watch 04fc player_y
 watch_range 0300-07ff iram
 watch_range 6000-7fff wram
+watch 0400 player_state
+watch 018d lives
