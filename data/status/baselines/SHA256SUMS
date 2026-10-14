@@ -1,3 +1,4 @@
 4d76901c1b2455f2bdae8e8ac99b1779441f9f2155614dab222c229ae06c77ae  rom/gunnac_cn.nes
 9383b226ea91c579d5e6641d9e84358387c136977ab93a3f751e49d4733cfd98  data/status/baselines/baseline.json
 ea096295296495b0855148cbe993d7445c81bbac6048fb9129db0846d9abdb07  data/status/baselines/baseline_history.jsonl
+e0217ee4db892f8b71c67522d0d9cfb4934e5aab4d39a7f1757bbfe7f4f419cf  data/reference/addr-bridge-jp-cn.json
