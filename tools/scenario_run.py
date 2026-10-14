@@ -44,7 +44,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MESEN = ROOT / "tools" / "mesen2" / "Mesen"
-ROM = ROOT / "rom" / "gunnac_cn.nes"
+import os
+def _abs(env: str, default: str) -> Path:
+    v = os.environ.get(env)
+    q = Path(v) if v else Path(default)
+    return q if q.is_absolute() else (ROOT / q)
+ROM = _abs("GUNNAC_ROM", "rom/gunnac_cn.nes")
+TRACES_DIR = _abs("GUNNAC_TRACES", "analysis/traces")
+SHOTS_DIR = _abs("GUNNAC_SHOTS", "shots")
 HARNESS = ROOT / "tools" / "scenario_capture.lua"
 SCENARIO_DIR = ROOT / "oracle" / "scenarios"
 GEN_DIR = ROOT / "analysis" / "_gen"
@@ -239,8 +246,8 @@ def to_lua(v) -> str:
 def generate_lua(plan: dict, scenario_path: Path) -> tuple[str, str]:
     """返回 (lua 源码, lua sha256)。PLAN 前置 + 执行器整拼（无 dofile 依赖）。"""
     plan_lua = dict(plan)
-    plan_lua["out_dir"] = str((ROOT / "analysis" / "traces").resolve())
-    plan_lua["shots_dir"] = str((ROOT / "shots").resolve())
+    plan_lua["out_dir"] = str((TRACES_DIR).resolve())
+    plan_lua["shots_dir"] = str((SHOTS_DIR).resolve())
     harness = HARNESS.read_text(encoding="utf-8")
     src = (
         f"-- 生成文件：勿手改。来源 {relp(scenario_path)}"
@@ -266,20 +273,20 @@ def scenario_path_of(name_or_path: str) -> Path:
 def archive_existing(name: str) -> str | None:
     """产物已存在 ⇒ 按时间戳归档（t24 事故：重跑踩踏他人在用的 trace；归档=run 隔离）。"""
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    dst = ROOT / "analysis" / "traces" / ".archive" / f"{name}-{stamp}"
+    dst = TRACES_DIR / ".archive" / f"{name}-{stamp}"
     moved = False
     for pat in (f"{name}.frames.jsonl", f"{name}.captures.jsonl", f"{name}.done",
                 f"{name}.run.json", f"{name}.lua.log", f"{name}.mesen.log"):
-        src = ROOT / "analysis" / "traces" / pat
+        src = TRACES_DIR / pat
         if src.exists():
             dst.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src), str(dst / pat))
             moved = True
-    for src in (ROOT / "analysis" / "traces").glob(f"{name}_f*.ram.hex"):
+    for src in (TRACES_DIR).glob(f"{name}_f*.ram.hex"):
         dst.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst / src.name))
         moved = True
-    for src in (ROOT / "shots").glob(f"{name}_f*.png"):
+    for src in (SHOTS_DIR).glob(f"{name}_f*.png"):
         shots_dst = dst / "shots"
         shots_dst.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(shots_dst / src.name))
@@ -292,7 +299,7 @@ def historical_first_sample_s(name: str, first_sample_frame: int) -> list[float]
     """历史 run 的『启动→首采样帧』秒数样本：新字段 first_sample_s 直读；旧 run 以
     wall_s × 首采样帧/总帧 估算（同一驱动/机器，比例模型足够做 3 倍告警基线）。"""
     samples: list[float] = []
-    for d in sorted((ROOT / "analysis" / "traces" / ".archive").glob(f"{name}-*")):
+    for d in sorted((TRACES_DIR / ".archive").glob(f"{name}-*")):
         mp = d / f"{name}.run.json"
         if not mp.is_file():
             continue
@@ -305,6 +312,21 @@ def historical_first_sample_s(name: str, first_sample_frame: int) -> list[float]
         elif m.get("wall_s") and m.get("frames"):
             samples.append(float(m["wall_s"]) * first_sample_frame / max(1, int(m["frames"])))
     return samples
+
+
+def normalize_paths_in_outputs(name: str) -> None:
+    """产物 JSON 禁绝对路径（可移植性）：把 ROOT 前缀归一为仓库相对路径。
+
+    Lua 落盘需要绝对目录（PLAN.shots_dir），但 captures.jsonl/run.json 对外
+    暴露的路径必须相对——2026-10-14 用户裁定。
+    """
+    prefix = str(ROOT) + "/"
+    for f in [TRACES_DIR / f"{name}.captures.jsonl", TRACES_DIR / f"{name}.run.json"]:
+        if not f.is_file():
+            continue
+        txt = f.read_text(encoding="utf-8")
+        if prefix in txt:
+            f.write_text(txt.replace(prefix, ""), encoding="utf-8")
 
 
 def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = True) -> dict:
@@ -328,8 +350,8 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
                 pass
         print(f"  [清场] 清除孤儿 Mesen {len(stale)} 个（驱动侧锁覆盖不到的残留）")
     archived = archive_existing(name)
-    (ROOT / "analysis" / "traces").mkdir(parents=True, exist_ok=True)
-    (ROOT / "shots").mkdir(parents=True, exist_ok=True)
+    (TRACES_DIR).mkdir(parents=True, exist_ok=True)
+    (SHOTS_DIR).mkdir(parents=True, exist_ok=True)
     GEN_DIR.mkdir(parents=True, exist_ok=True)
     lua_src, lua_sha = generate_lua(plan, spath)
     lua_path = GEN_DIR / f"{name}.lua"
@@ -348,17 +370,17 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     first_sample_s: float | None = None
     next_progress = 60.0
     probe_globs = [
-        ROOT / "analysis" / "traces" / f"{name}_f*.ram.hex",
-        ROOT / "shots" / f"{name}_f*.png",
+        TRACES_DIR / f"{name}_f*.ram.hex",
+        SHOTS_DIR / f"{name}_f*.png",
     ]
 
-    done_path = ROOT / "analysis" / "traces" / f"{name}.done"
-    trace_path = ROOT / "analysis" / "traces" / f"{name}.frames.jsonl"
+    done_path = TRACES_DIR / f"{name}.done"
+    trace_path = TRACES_DIR / f"{name}.frames.jsonl"
     if done_path.exists():
         done_path.unlink()
 
     t0 = time.time()
-    mesen_log = open(ROOT / "analysis" / "traces" / f"{name}.mesen.log", "w", encoding="utf-8")
+    mesen_log = open(TRACES_DIR / f"{name}.mesen.log", "w", encoding="utf-8")
     # 自管 Xvfb（t24 实测：xvfb-run 包装层偶发提前退出 → Xvfb 随之死 → Mesen 冻在中途帧、
     # DONE 不落）。直接拉 Xvfb + DISPLAY 注入，Mesen 为直接子进程；进程组清理见 finally。
     # 场景仍必须**串行**运行（run-all 已是串行；勿并行多个 Mesen）。
@@ -432,8 +454,8 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     if trace_path.exists():
         with open(trace_path, encoding="utf-8") as f:
             n_lines = sum(1 for _ in f)
-    shots = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "shots").glob(f"{name}_f*.png"))
-    rams = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "analysis" / "traces").glob(f"{name}_f*.ram.hex"))
+    shots = sorted(str(p.relative_to(ROOT)) for p in (SHOTS_DIR).glob(f"{name}_f*.png"))
+    rams = sorted(str(p.relative_to(ROOT)) for p in (TRACES_DIR).glob(f"{name}_f*.ram.hex"))
 
     manifest = {
         "scenario": relp(spath),
@@ -458,7 +480,7 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
             "ram_dumps": rams,
         },
     }
-    mpath = ROOT / "analysis" / "traces" / f"{name}.run.json"
+    mpath = TRACES_DIR / f"{name}.run.json"
     mpath.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     fcntl.flock(lock_f, fcntl.LOCK_UN)
@@ -468,6 +490,7 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     ok = done_info is not None and not timed_out and n_lines > 0
     print(f"== scenario run: {name} ==")
     print(f"  DSL: {manifest['scenario']} sha256={manifest['scenario_sha256'][:16]}…")
+    normalize_paths_in_outputs(name)
     print(f"  frames: {plan['frames']} trace_lines: {n_lines} captures: {len(rams)} shots: {len(shots)} wall: {wall}s")
     if done_info:
         print(f"  DONE: {json.dumps(done_info, ensure_ascii=False)}")
