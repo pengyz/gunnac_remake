@@ -115,6 +115,10 @@ pub struct Case {
     pub out_writes: Vec<(u16, u8)>,
     /// 可选分支落点断言（决策类片段）
     pub out_exit: Option<u16>,
+    /// ROM 侧 exit 坐标归一量（跨版本双跑用：JP↔CN 搬家差的**坐标桥**——
+    /// exit=canonical 站点标签（CN 坐标），JP ROM 执行捕获的 PC 须 +delta 归一后比对。
+    /// 显式坐标映射，非阈值放宽（对抗复核 #56 AR56 坐标桥原则）。
+    pub rom_exit_delta: u16,
     /// 被调用者内部暂存单元（如 ED03 的 $04-$06）：case 显式声明后从两侧写集剔除
     /// （可见的比对面裁剪，不是全局白名单；栈页固定剔除见 `is_stack`）。
     pub scratch: Vec<u16>,
@@ -338,6 +342,11 @@ pub fn parse_cases(jsonl: &str) -> Result<Vec<Case>, String> {
             Some((_, other)) => return Err(format!("exit 须为 bankNN:AAAA：{other:?}")),
             None => None,
         };
+        let rom_exit_delta = match obj.iter().find(|(k, _)| k == "rom_exit_delta") {
+            Some((_, Json::Num(n))) => as_usize(&Json::Num(*n))? as u16,
+            Some((_, other)) => return Err(format!("rom_exit_delta 须为数字：{other:?}")),
+            None => 0,
+        };
         let scratch = match obj.iter().find(|(k, _)| k == "scratch") {
             Some((_, Json::Arr(items))) => items.iter().map(|it| match it {
                 Json::Str(s) => parse_hex_key(s),
@@ -346,7 +355,7 @@ pub fn parse_cases(jsonl: &str) -> Result<Vec<Case>, String> {
             Some((_, other)) => return Err(format!("scratch 非数组：{other:?}")),
             None => Vec::new(),
         };
-        out.push(Case { id, subroutine, entry, stops, r6, r7, in_regs, in_ram, out_regs, out_writes, out_exit, scratch });
+        out.push(Case { id, subroutine, entry, stops, r6, r7, in_regs, in_ram, out_regs, out_writes, out_exit, rom_exit_delta, scratch });
     }
     Ok(out)
 }
@@ -728,7 +737,11 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
 
 /// 单用例三方裁定。返回 (rom 侧出参, rust 侧出参, 问题列表)。
 pub fn diff_case(rom: &[u8], case: &Case) -> Result<(Out, Out, Vec<String>), String> {
-    let out_rom = run_rom_case(rom, case)?;
+    let mut out_rom = run_rom_case(rom, case)?;
+    if case.rom_exit_delta != 0 {
+        // 坐标桥归一（JP ROM 捕获 PC→canonical 站点标签）——见 Case.rom_exit_delta 注
+        out_rom.exit = out_rom.exit.wrapping_add(case.rom_exit_delta);
+    }
     let out_rust = run_rust_case(case)?;
     let drop_scratch = |mut o: Out| {
         o.writes.retain(|a, _| !case.scratch.contains(a));
