@@ -55,6 +55,10 @@
 ### R-ui-5: 文本库含开场文本与结局文本；本版是否实际显示、显示条件均未证
 - 证据: 开场 `rom:12036` 等（E-R09：`INVESTIGATE THE EIGHT AREAS`、`SEVEN PLANETS`）；结局 `rom:12278`/`12299` 等（E-R10）
 - 可判定性: 机器可判定（字节复现）；显示条件待 S2（美版删改差异属 H-06，**不得入结论**）
+- 【2026-10-14 更正（AR54/复核 #54）】**引文归属勘误**："是否显示未证"引文出自**本条 R-ui-5**
+  （曾被 base-attribution.md 附带清单引作 completeness E-R09/R10——错引；completeness E-R09/R10
+  只有字节证据行）。附带升级注：开场文本**显示**已获像素证据（f240，sha 36dde3a1，见
+  base-attribution.md E-B03）——"是否实际显示"可就开场页部分升级，结局页显示与显示条件仍未证（H-06）。
 - 关联: B-SYS-UI、H-06
 
 > 【2026-10-12 S2 回填】以下 R-ui-6..8 由 t12 场景证据提炼（B 级，绑 scenario/trace）。
@@ -64,8 +68,15 @@
 - 可判定性: 机器可判定（trace 帧序列 + 截图 diff）；序列中各输入的**独立作用**未逐一隔离（H-13）
 - 关联: B-SYS-UI、B-SYS-SHOP、R-shop-7
 
-### R-ui-7: 开机序列：黑场（f180）→ 标题（f360）→ 菜单态（f540–f900）；开机路径未出现开场文本（负证据）
-- 证据: `scenario:analysis/traces/title-menu`（trace f180 boot-black〔sha `788d6984…`〕→ f360 title → f540/720/900 menu → f1079 menu-end；frames.jsonl 1080 行）
+### R-ui-7: 开机序列：黑场（f180）→ 标题（f360）→ ~~菜单态（f540–f900）~~；开机路径未出现开场文本（负证据）
+- 证据: `scenario:analysis/traces/title-menu`（trace f180 boot-black〔sha `788d6984…`〕→ f360 title → ~~f540/720/900 menu~~ → f1079 menu-end；frames.jsonl 1080 行）
+- 【2026-10-14 更正（AR54/复核 #54）】**第二处冲突更正**："菜单态（f540–f900）"失准——f540 像素
+  （`shots/gameplay-stage1_f00540_probe.png` 族，sha 4e8021cd）实为**无菜单标题态**（字标上色动画），
+  菜单 **f630 后**才在（f607–609 菜单行缓冲写入、f660 起可见 `◆开始/设置`；证据行"f540/720/900 menu"
+  中 f540 的 menu 标签同错，f720/900 的 menu ✓）。正确窗口：标题态 f360–~f600，菜单态 f660–900。
+  复现：probe.jsonl $0130–$014F 写点聚集 f607–609（0xac→$0133 @f609）。
+  （本条"开机路径未出现开场文本（负证据）"与像素的**第一处冲突**另行处理：f240 即开场文本页、
+  `menunoinput` f960 自动进第 2 开场页——负证据双重推翻，登记于 base-attribution.md 附带清单，待 spec 勘误裁定）
 - 可判定性: 机器可判定（trace 帧序列）；开场文本在其它路径（DEMO？）是否出现**未证**（H-06）
 - 关联: B-SYS-UI、R-ui-3、R-ui-5、H-06
 
