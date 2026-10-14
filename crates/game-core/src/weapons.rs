@@ -73,7 +73,9 @@ pub struct PickupContext {
     pub threshold: u8,
     /// $018A 同型连收计数（N-0048）。
     pub consecutive: u8,
-    /// $32 位标志（bit7=kernel 门；bit2=侧调用守卫）。
+    /// $32 位标志（bit7=kernel 门〔本模块读者：bank02:$922B dispatch〕；bit2=侧调用守卫）。
+    /// AD65-3 互注：bit7 另一真读者=商店「翼已购」置位（`ui.rs` ShopPurchaseState，
+    /// bank00:$9E0E `ORA #$80`）——同一 RAM 位两处真读者，改语义须双向对账，防语义漂移。
     pub flags: u8,
     /// JSR $DBA9 奖励事件钩子（bank14 计数/奖励例程族）——只接事件不实现数值（money 链未证）。
     pub reward_pending: bool,

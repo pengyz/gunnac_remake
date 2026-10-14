@@ -205,16 +205,24 @@ pub enum ShopPrompt {
     WingRequired,
     /// 发货阶段门未过（`$0180`∉[2,7]，bank00:$9F03-$9F16，文本指针 $A62A）。
     ShipStageBlocked,
+    /// 退出隐藏门触发消息（AR65-2，review-65 §1.3）：bank01:$A03D `text $A65C` + `JSR $A09F`
+    /// （ack 门 bank01:$A0CF `AND #$C0`，同 R-shop-purchase-8 六类消息同一路等待语义）；
+    /// **文本 `$A65C` 内容未证 ⇒ 登记不解释**，只落状态枚举；ack 后才合流 bank01:$A048 转场。
+    ExitHidden,
 }
 
-/// 消息 ack 后的返回面板（bank00:$9D5E 重入武器面板 / bank00:$9CEC 回主环）。
+/// 消息 ack 后的返回面板（bank00:$9D5E 重入武器面板 / bank00:$9CEC 回主环 / bank01:$A048 退出转场）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ShopMsgReturn {
-    /// 回主面板环（`$0400` 复位 0，bank00:$9CEC `STA $400`）。
+    /// 回主面板环（`$0400` 复位 0；序列入口 bank00:$9CEC 文本→渲染→复位，
+    /// `LDA #0`/`STA $400` 实际在 bank00:$9CF7/$9CF9——AD65-1 指针更正）。
     #[default]
     MainRing,
     /// 重入武器面板（`$0401` 复位 := `$34`，bank00:$9D6C）。
     WeaponMenu,
+    /// 退出转场（AR65-2：ack 后合流 bank01:$A048 `text $A31F/$E6D9/LDA #$03/JSR $EE03/JMP $EEFB`
+    /// ⇒ phase=Exited 交 flow，本线不发明转场语义）。
+    Exit,
 }
 
 /// 购买链相位。
@@ -282,16 +290,21 @@ pub struct ShopPurchaseState {
     pub delivery: [u8; 8],
     /// `$33`/`$34`/`$018F`（`weapons::WeaponState`）。
     pub weapon: crate::weapons::WeaponState,
-    /// `$018C`/`$018A`/`$32`（`weapons::PickupContext`；`flags`= `$32`，bit7=翼已购）。
+    /// `$018C`/`$018A`/`$32`（`weapons::PickupContext`；`flags`= `$32`，bit7=翼已购〔本线置位点
+    /// bank00:$9E0E `ORA #$80`〕）。AD65-3 互注：bit7 另一真读者=kernel 门
+    /// （`weapons.rs` bank02:$922B dispatch）——同一 RAM 位两处真读者，改语义须双向对账；
+    /// bit5=退出隐藏门写（bank01:$A039，登记不解释）。
     pub pickup: crate::weapons::PickupContext,
     /// `$3C` 连射级（0..4）。
     pub rapid_level: u8,
-    /// `$18` 手柄2 状态（退出隐藏选项门 `($18&$33)==$11`，bank01:$A023）。
+    /// `$18` 手柄2 状态（退出隐藏选项门触发源(a) `($18&$33)==$11`，bank01:$A023-$A029；
+    /// 触发源(b) `$0180==8` 见 step_main_ring 退出入口注）。
     pub pad2: u8,
 }
 
 fn to_main_ring(st: &mut ShopPurchaseState) -> ShopFx {
-    // bank00:$9CE9 `JSR $A06C`（清行，渲染线）→ $9CEC 文本 + `LDA #0/STA $400` → 主环。
+    // bank00:$9CE9 `JSR $A06C`（清行，渲染线）→ $9CEC 序列入口（文本→渲染→复位，
+    // `LDA #0`/`STA $400` 在 bank00:$9CF7/$9CF9——AD65-1）→ 主环。
     st.phase = ShopPurchasePhase::MainRing;
     st.cursor = 0;
     st.prompt = None;
@@ -307,6 +320,12 @@ fn prompt_to_main(st: &mut ShopPurchaseState, p: ShopPrompt) {
 fn prompt_to_weapon(st: &mut ShopPurchaseState, p: ShopPrompt) {
     st.prompt = Some(p);
     st.msg_back = ShopMsgReturn::WeaponMenu;
+    st.phase = ShopPurchasePhase::Message;
+}
+
+fn prompt_to_exit(st: &mut ShopPurchaseState, p: ShopPrompt) {
+    st.prompt = Some(p);
+    st.msg_back = ShopMsgReturn::Exit;
     st.phase = ShopPurchasePhase::Message;
 }
 
@@ -370,12 +389,20 @@ fn step_main_ring(st: &mut ShopPurchaseState, buttons: u8) -> ShopFx {
             ShopFx::None
         }
         3 => {
-            // 退出入口 bank01:$A023：隐藏选项门 `($18&$33)==$11` ⇒ `$32` bit5（登记不解释）；
-            // 转场（$EE03/$EEFB）交 flow，本线不发明。
-            if st.pad2 & 0x33 == 0x11 {
+            // 退出入口 bank01:$A023：隐藏选项门**两触发源 OR**（AR65-1，review-65 §1.2）——
+            // (a) `($18&$33)==$11`（bank01:$A023-$A029 `c9 11 f0 07`→$A032 置位块）；
+            // (b) `$0180==8`（bank01:$A02B-$A030 `ad 80 01 c9 08 d0 16`——不等于 8 才跳 $A048）。
+            // 任一触发 ⇒ `$32` bit5 置位（bank01:$A037-$A03B `ORA #$20/STA $32`，登记不解释）
+            // + 文本 `$A65C` 消息 + ack 等待（bank01:$A03D-$A045 `JSR $A09F`，ack 门 $A0CF `AND #$C0`），
+            // ack 后才合流 bank01:$A048；不触发 ⇒ 直接合流 $A048。
+            // 转场（`text $A31F/$E6D9/LDA #$03/JSR $EE03/JMP $EEFB`）交 flow，本线不发明。
+            if st.pad2 & 0x33 == 0x11 || st.stage == 8 {
                 st.pickup.flags |= 0x20;
+                // AR65-2：消息 ack 等待相位（第 7 变体 `ExitHidden`，文案未证只落枚举）。
+                prompt_to_exit(st, ShopPrompt::ExitHidden);
+            } else {
+                st.phase = ShopPurchasePhase::Exited;
             }
-            st.phase = ShopPurchasePhase::Exited;
             ShopFx::None
         }
         // `$0400` 已证值域 0..3（N-0002）；越界 fail-closed 不动作。
@@ -550,6 +577,10 @@ fn step_message(st: &mut ShopPurchaseState, buttons: u8) -> ShopFx {
         ShopMsgReturn::WeaponMenu => {
             st.phase = ShopPurchasePhase::WeaponMenu;
             st.item_cursor = st.weapon.slot;
+        }
+        ShopMsgReturn::Exit => {
+            // AR65-2：ack 后合流 bank01:$A048 转场（交 flow，本线不发明）。
+            st.phase = ShopPurchasePhase::Exited;
         }
     }
     ShopFx::None

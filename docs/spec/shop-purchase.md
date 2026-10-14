@@ -1,11 +1,12 @@
 # spec: 商店购买链接线（shop-purchase）→ docs/spec/shop-purchase.md
 
-> 状态：2026-10-14 v1（任务 DEV-1，porter）。证据基准 = [../findings/shop-purchase-flow.md](../findings/shop-purchase-flow.md)
+> 状态：2026-10-14 v1（任务 DEV-1，porter）；**2026-10-14 v1.1 AR65 修复批**（review-65 AR65-1/2 + AD65-1，
+> 更正注见 R-shop-purchase-3/7/8）。证据基准 = [../findings/shop-purchase-flow.md](../findings/shop-purchase-flow.md)
 > （A1 定谳，§1-§4 四环 A 级）+ 本轮对 `reference/seed/gunnac.asm` 冻结投影的逐字节复核（增补证据见各规则）。
 > 纪律（AGENTS.md §3）：**只收录 A/B 级证据支撑的可观察行为**；消息**文案内容**未证 ⇒ 只落状态枚举；
 > 未证不发明（W-NEW* 留 findings §7 假设区，不入本文件结论）。
 > 实现锚：`crates/game-core/src/ui.rs::shop_purchase_step`（纯逻辑、确定性、无 I/O）；
-> 测试锚：`crates/game-core/tests/shop_purchase.rs`（14 用例，每用例注记期望 RAM 终态）。
+> 测试锚：`crates/game-core/tests/shop_purchase.rs`（17 用例〔14 + AR65 批 3〕，每用例注记期望 RAM 终态）。
 > 与 [shop-economy.md](shop-economy.md) R-shop-5..8（信息页状态机 `ShopState`）**分立**：
 > 两流的门控关系（首店/有款判定，findings W-NEW1）未证，禁止混接。
 
@@ -22,7 +23,7 @@
 | `$3C` | rapid_level | 连射级 0..4 | findings §3/§4；bank00:$9EDF |
 | `$32` | flags | bit7=翼已购；bit5=退出隐藏门写（登记不解释） | findings §3/§4；bank01:$A037 |
 | `$0180` | 关卡号 | 发货阶段门 2..7 | bank00:$9F03-$9F0E；W-NEW5 |
-| `$18` | 手柄2 状态 | 退出隐藏选项门 `($18&$33)==$11` | bank01:$A023-$A029 |
+| `$18` | 手柄2 状态 | 退出隐藏选项门触发源(a) `($18&$33)==$11`（触发源(b) `$0180==8`，见 R-7） | bank01:$A023-$A029 |
 
 **按键位（A 级，bank00:$9D02-$9D3E / sub_9E40 / bank01:$A0CF）**：bit7=A、bit6=B、bit4=Start、
 bit3=Up、bit2|bit5=Down 组（`AND #$24`）、bit1=左、bit0|bit5=右组（`AND #$21`）；
@@ -55,7 +56,8 @@ PY
 - 关联: R-shop-purchase-1/5、N-0003、findings §1「子光标」
 
 ### R-shop-purchase-3: 扣减同构三价 10/6/4（`$018E`），不足共享出口 `bank01:$A05B` ⇒ 提示状态 + 回主环（`$0400` 复位 0），零写入
-- 证据: findings §2 三扣减点字节序列（`bank00:$9DE8/9ECD/9FAB`，`CMP #价/BCS/JMP $A05B/SBC/STA`）+ §3 类 1（`$A05B` → 清行 → 文本 `$A13D` → `$A09F` → `JMP $9CEC`）；回主环复位 `bank00:$9CEC` `LDA #0/STA $400`（本轮 seed 复核）；价 10 片段 = `l2ports::digit_conversion`（findings §5：digit-1..5 同片段）
+- 证据: findings §2 三扣减点字节序列（`bank00:$9DE8/9ECD/9FAB`，`CMP #价/BCS/JMP $A05B/SBC/STA`）+ §3 类 1（`$A05B` → 清行 → 文本 `$A13D` → `$A09F` → `JMP $9CEC`）；回主环复位 ~~`bank00:$9CEC` `LDA #0/STA $400`~~ `LDA #0/STA $400` 实在 `bank00:$9CF7/$9CF9`（$9CEC 为回主环序列入口：文本 $A2AB→渲染→复位；本轮 seed 复核）；价 10 片段 = `l2ports::digit_conversion`（findings §5：digit-1..5 同片段）
+  > 【2026-10-14 更正】原记「回主环复位 `bank00:$9CEC` `LDA #0/STA $400`」**指针偏 ~0x0B**：`LDA #0`/`STA $400` 实际在 `$9CF7`/`$9CF9`，`$9CEC` 是回主环**序列入口**（文本→渲染→复位）；**行为主张不变**（回主环 `$0400` 复位 0 成立，测试注释 `bank00:$9CF7 STA $400` 原本即对）。据 [../findings/adversarial-review-65.md](../findings/adversarial-review-65.md) AD65-1。
 - 可判定性: 机器可判定（`insufficient_funds_never_writes` 三价分支；l2-diff sp-r3-poor5/sp-s2-poor3/digit-*）
 - 关联: R-shop-purchase-8、A1-DED-1/2/3、W-NEW4（旧名 digit_conversion 伪语义遗留）
 
@@ -74,15 +76,17 @@ PY
 - 可判定性: 机器可判定（`ship_buy_packs_delivery_slot`/`ship_qty_caps_at_63`）
 - 关联: R-shop-purchase-4/5、W-NEW5（`$0177+Y` 兑现 vs `$0178+Y` 购买索引基差=1 未对账——**索引 ≥8 时实现 fail-closed 不动作**，未证不发明）
 
-### R-shop-purchase-7: 退出入口 `bank01:$A023`：隐藏选项门 `($18&$33)==$11` ⇒ `$32` bit5 置位（登记不解释）；转场（`JSR $EE03` A=3 / `JMP $EEFB`）交 flow，本线不发明
-- 证据: 本轮 seed 复核 `bank01:$A023-$A058`（`LDA $18/AND #$33/CMP #$11/BEQ` → `$32 |= $20` + 文本 `$A65C`；`$A31F` + `LDA #$03/JSR $EE03/JMP $EEFB`）；findings §1 退出入口（表项 `$A022` +1）
-- 可判定性: 机器可判定（`exit_entry_and_hidden_gate`）
-- 关联: R-ui-7（flow 侧 ExitTransition→StageStart）、R-shop-purchase-1
+### R-shop-purchase-7: 退出入口 `bank01:$A023`：隐藏选项门**两触发源 OR**——`($18&$33)==$11` **或** `$0180==8` ⇒ `$32` bit5 置位（登记不解释）+ 文本 `$A65C` 消息 + ack 等待（`$A09F/$A0CF`）**后**才合流转场；门不触发 ⇒ 直接合流转场（`JSR $EE03` A=3 / `JMP $EEFB`）交 flow，本线不发明
+- 证据: 本轮 seed 复核 + review-65 §1.2 逐指令重导 `bank01:$A023-$A058`（**控制流改写版**）：`A023 LDA $18/AND #$33/CMP #$11/BEQ A032`（`f0 07`，触发源(a)）；`A02B LDA $0180/CMP #$08/BNE A048`（`ad 80 01 c9 08 d0 16`，触发源(b)：**stage==8 亦落 `$A032`**，不触发才跳 `$A048`）；`A032 LDA #$33/JSR $ED3B`（音效 $33，渲染线不落）→ `A037 LDA $32/ORA #$20/STA $32`（`$32` bit5）→ `A03D text $A65C/JSR $A09F`（消息 + ack 等待，ack 门 `$A0CF AND #$C0`）→ `A048 text $A31F/JSR $E6D9/LDA #$03/JSR $EE03/JMP $EEFB`（两路合流转场）。`f0 07` 目标=`$A032`、`d0 16` 目标=`$A048`，编码无歧义 ⇒ **OR 语义**；findings §1 退出入口（表项 `$A022` +1）
+  > 【2026-10-14 更正】原规则只记触发源(a) `($18&$33)==$11`；且原证据句「本轮 seed 复核 `bank01:$A023-$A058`」声称的复核范围**完整覆盖 `A02B-A031` 七字节却漏记 (b) `$0180==8`**（证据指针支持方向、不支持完整性）——另原句把消息 `$A65C` + ack 等待（`$A09F/$A0CF`）与转场混记一处，实现直接 Exited，**ack 等待相位漏建模**。据 [../findings/adversarial-review-65.md](../findings/adversarial-review-65.md) §1.2/§1.3（AR65-1/AR65-2）按上文控制流改写；改前分歧态 = `stage=8,pad2=0` ⇒ ROM 置 `$32` bit5、实现不置。消息文案 `$A65C` 内容**仍未证** ⇒ 落 `ShopPrompt` 第 7 变体 `ExitHidden`（登记不解释），ack 后 ⇒ `ShopMsgReturn::Exit` 合流转场
+- 可判定性: 机器可判定（`exit_entry_and_hidden_gate`/`exit_hidden_gate_stage8_triggers_with_message_ack`/`exit_hidden_gate_dual_trigger_sets_bit5_once`/`exit_hidden_gate_stage_boundary_is_exact_8`；边界哨兵锁 `CMP #$08` 精确 ==8 非 ≥8）
+- 关联: R-ui-7（flow 侧 ExitTransition→StageStart）、R-shop-purchase-1/8（消息 ack 同路 `$A09F/$A0CF`）
 
 ### R-shop-purchase-8: 提示消息只落状态枚举（文案内容未证）：6 类 = InsufficientFunds(`$A13D`)/WeaponMax(`$A408`)/RapidMax(`$A4D4`)/WingAlreadyOwned(`$A436`)/WingRequired(`$A3B0`)/ShipStageBlocked(`$A62A`)；ack（`$16&$C0`）后：不足/阶段门/连射满级→主环（cursor 复位 0），翼两分支/武器满级→重入武器面板（`$0401` 复位 := `$34`）
 - 证据: findings §3（消息文本指针 + JP↔社区 state() 对照 0x1FC4/0x21A0/0x21C3/0x21E0）+ 本轮 seed 复核返回目标：`bank00:$9DAA/$9DC9/$9DE0` `JMP $9D5E`（重入武器面板，`$9D6C` init）、`bank01:$A069` `JMP $9CEC` 与 `bank00:$9EA5/$9F19` `JMP $9CEC`（回主环）、ack 门 `bank01:$A0CF AND #$C0`
 - 可判定性: 机器可判定（`weapon_level_cap_branch`/`rapid_buy_and_level_cap`/`insufficient_funds_never_writes` 的 phase/prompt/ack 断言）；**文案字形仅人工核对**（未入断言）
 - 关联: R-shop-purchase-3/4、findings §3
+  > 【2026-10-14 更正（AR65-2）】退出隐藏门触发消息 = **第 7 个 `ShopPrompt` 变体 `ExitHidden`**（文本指针 `$A65C`，登记不解释；ack 同门 `bank01:$A0CF`；ack 后 `ShopMsgReturn::Exit` 合流转场）——见 R-shop-purchase-7；本条「6 类」为**购买分支**提示口径不变。
 
 ### R-shop-purchase-9（缺口，显式挂起）: 翼购买的 far-call `bank02:$92C5`（翼收尾例程）**未移植**——实现以 `ShopFx::WingBoughtFarCallPending` 显式挂起，禁止发明其写集
 - 证据: findings §4（`bank00:$9E14` + 内联 `02 03 C5 92`）；`bank02:$92C5` 起始片段（`STA $3A/$39`、`$32` `AND #$F7/ORA #$01`、`LDA $968F,Y/STA $01A5` 等）本轮只登记不移植（docs/findings/upgrade-branch-h02.md 收尾族语义未定谳）
