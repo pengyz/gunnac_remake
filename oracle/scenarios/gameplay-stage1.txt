@@ -86,3 +86,11 @@ probe_mem 002f 0030
 # ② CPU trace 双轨（t127）：PPU I/O 写点回调测试（W36 I/O 盲区验证）
 probe_mem 2006 2007
 probe_mem 0020 0021
+probe_mem 8000 8001
+probe_mem 001a 001a
+capture 925 w78_p02
+capture 1490 w78_p12
+capture 1492 w78_p12b
+watch 018e money_disp_copy
+watch_range 0178-017e deliv_slots
+watch 0188 intro_ctr
