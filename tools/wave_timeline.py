@@ -116,51 +116,55 @@ def decode_script(d, n, maxrec=256):
           + "（@thr=记录尾 thr 字段，即 $86/$87 下一记录触发 tick）")
 
 
-def decode_sched(d, n, maxrec=40):
-    """sub_86AE 敌波调度流解码（bank00:86CE 记录机）。
-    记录 = [delay@0][项…][ctrl]；项 = (type≥$10, param) 对 或 ctrl：
-      0=记录分隔 1/11=定型$2E/$2C+4参 2/12=定型$2F/$2D+($3E)参+4参
-      3..9=流跳转(2B) 10=流定型+2参 13/14=寄存器写(2参)
-    单位：+N 为 delay **tick** 累计值（1 tick = 8 帧稳态；关首快进环另计——复核 #76 §1）。
-    maxrec 截断时显式打提示（复核 #76 F5）。
-    """
+def sched_stream_ptr(d, n):
+    """STG-N 脚本流首个 op2 记录的调度流指针（$4F/$50）；找不到返回 None。"""
     st = stage_entry(d, n)
     off = fb(st["bank"], st["script"])
     p = off + 2
-    sched = None
     for _ in range(12):
         op = d[p]
         if op > 11:
             break
         ln = SCRIPT_OPS[op]
         if op == 2:
-            sched = d[p + 1] | d[p + 2] << 8
-            break
+            return d[p + 1] | d[p + 2] << 8
         p += 1 + ln + 2
+    return None
+
+
+def iter_sched_records(d, n, maxrec=40):
+    """敌波调度流记录迭代器（bank00:86CE 记录机字节语义，与 decode_sched 同源唯一实现）。
+
+    产出 dict：{'addr','tick','items','next_tick','jump','truncated','loop'}
+      items: ('pair', type, param) | ('ctrl', ctrl, type, args4) | ('jump', ctrl, target)
+             | ('set', ctrl, a, b) | ('unk', ctrl)
+      tick = 该记录触发的累计 delay tick（+N 口径，见 decode_sched 注）。
+    复杂度/口径同 decode_sched（复核 #76 §8.1：sched maxrec=40 默认；B2 传 maxrec≥200）。
+    """
+    st = stage_entry(d, n)
+    sched = sched_stream_ptr(d, n)
     if sched is None:
-        print("未找到 op2 调度流指针")
         return
-    print(f"== STG-{n:02d} 敌波调度流 ${sched:04X} (bank{st['bank']}, sub_86AE) ==")
     base = fb(st["bank"], sched)
-    frames = d[base] + 1
-    print(f"  初始 gap = {frames}t（tick：$51:=(@0)+1；1 tick=8 帧稳态）")
-    recno = 0
+    ticks = d[base] + 1
     rb = 0
     seen = set()
+    recno = 0
     while recno < maxrec:
         key = (st["bank"], sched + rb)
         if key in seen:
-            print(f"  [循环回 ${sched + rb:04X}] —— 停")
-            break
+            yield {"addr": sched + rb, "tick": ticks, "items": [], "loop": True,
+                   "truncated": False}
+            return
         seen.add(key)
         y = rb + 1
-        rec = []
+        items = []
         nxt = None
         jump = None
         while True:
             v = d[base + y]
             if v >= 0x10:
-                rec.append(f"(${v:02X},${d[base + y + 1]:02X})")
+                items.append(("pair", v, d[base + y + 1]))
                 y += 2
             else:
                 ctrl = v
@@ -170,41 +174,80 @@ def decode_sched(d, n, maxrec=40):
                     break
                 if ctrl in (1, 11, 2, 12):
                     t = {1: 0x2E, 11: 0x2C, 2: 0x2F, 12: 0x2D}[ctrl]
-                    a = d[base + y:base + y + 4]
-                    rec.append(f"[{ctrl}]T=${t:02X}({a[0]:02X},{a[1]:02X},{a[2]:02X},{a[3]:02X})")
+                    a = tuple(d[base + y:base + y + 4])
+                    items.append(("ctrl", ctrl, t, a))
                     y += 4
                 elif 3 <= ctrl <= 9:
                     tgt = d[base + y] | d[base + y + 1] << 8
-                    rec.append(f"[{ctrl}]JMP ${tgt:04X}")
+                    items.append(("jump", ctrl, tgt))
                     jump = tgt
                     break
                 elif ctrl == 10:
-                    rec.append(f"[10]T=${d[base + y]:02X}(p=${d[base + y + 1]:02X})")
+                    items.append(("set", 10, d[base + y], d[base + y + 1]))
                     y += 2
                 elif ctrl in (13, 14):
-                    rec.append(f"[{ctrl}]reg({d[base + y]:02X},{d[base + y + 1]:02X})")
+                    items.append(("set", ctrl, d[base + y], d[base + y + 1]))
                     y += 2
                 else:
-                    rec.append(f"[{ctrl}]?")
+                    items.append(("unk", ctrl))
                     nxt = y
                     break
-        print(f"  @{sched + rb:04X} +{frames:6d}t : {' '.join(rec)}")
+        yield {"addr": sched + rb, "tick": ticks, "items": items, "loop": False,
+               "truncated": False}
         recno += 1
         if jump is not None:
             off2 = fb(st["bank"], jump)
-            frames += d[off2]
-            rb = off2 - base
+            ticks += d[off2]
             sched = jump
             base = off2
             rb = 0
         elif nxt is not None:
-            frames += d[base + nxt]
+            ticks += d[base + nxt]
             rb = nxt
         else:
+            return
+    yield {"addr": None, "tick": ticks, "items": [], "loop": False, "truncated": True}
+
+
+def decode_sched(d, n, maxrec=40):
+    """sub_86AE 敌波调度流解码（bank00:86CE 记录机）。
+    记录 = [delay@0][项…][ctrl]；项 = (type≥$10, param) 对 或 ctrl：
+      0=记录分隔 1/11=定型$2E/$2C+4参 2/12=定型$2F/$2D+($3E)参+4参
+      3..9=流跳转(2B) 10=流定型+2参 13/14=寄存器写(2参)
+    单位：+N 为 delay **tick** 累计值（1 tick = 8 帧稳态；关首快进环另计——复核 #76 §1）。
+    maxrec 截断时显式打提示（复核 #76 F5）。字节语义唯一实现 = iter_sched_records（本函数只打印）。
+    """
+    sched = sched_stream_ptr(d, n)
+    if sched is None:
+        print("未找到 op2 调度流指针")
+        return
+    st = stage_entry(d, n)
+    base = fb(st["bank"], sched)
+    print(f"== STG-{n:02d} 敌波调度流 ${sched:04X} (bank{st['bank']}, sub_86AE) ==")
+    print(f"  初始 gap = {d[base] + 1}t（tick：$51:=(@0)+1；1 tick=8 帧稳态）")
+    for r in iter_sched_records(d, n, maxrec=maxrec):
+        if r["truncated"]:
+            print(f"  [截断] 已达 maxrec={maxrec}——以上为不完整视界，勿据此下范围结论"
+                  f"（复核 #76 F5：截断须显式提示）")
             break
-    else:
-        print(f"  [截断] 已达 maxrec={maxrec}——以上为不完整视界，勿据此下范围结论"
-              f"（复核 #76 F5：截断须显式提示）")
+        if r["loop"]:
+            print(f"  [循环回 ${r['addr']:04X}] —— 停")
+            break
+        rec = []
+        for it in r["items"]:
+            if it[0] == "pair":
+                rec.append(f"(${it[1]:02X},${it[2]:02X})")
+            elif it[0] == "ctrl":
+                ctrl, t, a = it[1], it[2], it[3]
+                rec.append(f"[{ctrl}]T=${t:02X}({a[0]:02X},{a[1]:02X},{a[2]:02X},{a[3]:02X})")
+            elif it[0] == "jump":
+                rec.append(f"[{it[1]}]JMP ${it[2]:04X}")
+            elif it[0] == "set":
+                rec.append(f"[{it[1]}]reg({it[2]:02X},{it[3]:02X})" if it[1] in (13, 14)
+                           else f"[10]T=${it[2]:02X}(p=${it[3]:02X})")
+            else:
+                rec.append(f"[{it[1]}]?")
+        print(f"  @{r['addr']:04X} +{r['tick']:6d}t : {' '.join(rec)}")
 
 
 def trace_spawns(run="gameplay-stage1"):
