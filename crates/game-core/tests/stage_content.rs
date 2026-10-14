@@ -177,7 +177,7 @@ fn attr_mask_selection_tail_ruled() {
 
 #[test]
 fn stg_02_08_skeleton_registry() {
-    use game_core::stage::{stage_skeleton, StageSkeleton};
+    use game_core::stage::{stage_skeleton};
     // t87 §1 三级骨架总表（A/B 级）逐关核对
     let s2 = stage_skeleton(2).expect("STG-2");
     assert_eq!((s2.root, s2.tail), (0xA048, 0xA3C4));
