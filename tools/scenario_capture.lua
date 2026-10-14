@@ -64,6 +64,18 @@ for _, e in ipairs(PLAN.captures) do capAt[e.frame] = e.tag end
 local everyN = PLAN.capture_every and PLAN.capture_every.n or 0
 local everyTag = PLAN.capture_every and PLAN.capture_every.tag or "auto"
 
+-- RAM 写注入计划（poke/poke_every 解析期展开；G-S5-6 触发注入取证）：
+-- 帧 f inputPolled 时写 CPU 总线（memType=8）——与按键注入同一时序口径（schedule(N) 语义）。
+-- 纪律注：注入=外部事件输入（同 gate_300 外部事件先例）；产出锚必须标注 trigger=injected。
+local pokeAt = {}
+local nPoke = 0
+for _, e in ipairs(PLAN.pokes or {}) do
+  local t = pokeAt[e.frame]
+  if not t then t = {} pokeAt[e.frame] = t end
+  t[#t + 1] = {tonumber(e.addr, 16), e.val}
+  nPoke = nPoke + 1
+end
+
 -- ---------------- 内存读取
 local function readByte(addr)
   local ok, v = pcall(emu.read, addr, MEMTYPE)
@@ -145,6 +157,15 @@ emu.addEventCallback(function()
   frame = frame + 1
   local btn = schedule[frame] or {}
   pcall(emu.setInput, btn, 0)
+  local pk = pokeAt[frame]
+  if pk then
+    for _, p in ipairs(pk) do
+      local ok = pcall(emu.write, p[1], p[2], MEMTYPE)
+      local back = readByte(p[1])
+      log(string.format("poke f%d $%04X:=%02X ok=%s readback=%02X",
+        frame, p[1], p[2], tostring(ok), back))
+    end
+  end
 end, "inputPolled")
 
 emu.addEventCallback(function()
@@ -194,5 +215,5 @@ emu.addEventCallback(function()
   end
 end, "endFrame")
 
-log(string.format("scenario %s started: frames=%d press_len=%d watch=%d ranges=%d ramframe=%s",
-  name, frames, pressLen, #PLAN.watch, #PLAN.watch_ranges, tostring(PLAN.ramframe)))
+log(string.format("scenario %s started: frames=%d press_len=%d watch=%d ranges=%d ramframe=%s pokes=%d",
+  name, frames, pressLen, #PLAN.watch, #PLAN.watch_ranges, tostring(PLAN.ramframe), nPoke))
