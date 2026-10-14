@@ -109,6 +109,7 @@ def parse_scenario(path: Path) -> dict:
         "watch_ranges": [],
         "ramframe": False,
         "probe_mem": [],
+        "pokes": [],
     }
     for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         line = raw.split("#", 1)[0].strip()
@@ -153,6 +154,33 @@ def parse_scenario(path: Path) -> dict:
                     raise err(f"未知按钮 {b!r}（可选: {sorted(BUTTONS)}）")
             for f in range(int(a_s), int(b_s) + 1, int(args[0])):
                 plan["presses"].append({"frame": f, "buttons": btns})
+        elif op in ("poke", "poke_every"):
+            # poke <帧> <hex地址> <hex值>：帧 f inputPolled 时写 CPU 总线（memType=8）一字节。
+            # poke_every <N> <起>-<止> <hex地址> <hex值>：每 N 帧写一次（解析期展开为 pokes）。
+            # 用途（G-S5-6 触发注入取证）：**外部事件注入**（如 $CA bit0=流末记录近端上游）；
+            # 注入是证据链一部分，产出锚必须标注 trigger=injected（不得冒充自然可达）。
+            def _poke_check(addr_s: str, val_s: str):
+                addr = addr_s.lower()
+                if len(addr) != 4 or any(c not in "0123456789abcdef" for c in addr):
+                    raise err(f"poke 地址须为 4 位 hex，实际 {addr_s!r}")
+                val = val_s.lower()
+                if len(val) != 2 or any(c not in "0123456789abcdef" for c in val):
+                    raise err(f"poke 值须为 2 位 hex，实际 {val_s!r}")
+                return addr, int(val, 16)
+            if op == "poke":
+                if len(args) != 3 or not args[0].isdigit():
+                    raise err("poke 用法: poke <帧号> <hex地址> <hex值>")
+                addr, val = _poke_check(args[1], args[2])
+                plan["pokes"].append({"frame": int(args[0]), "addr": addr, "val": val})
+            else:
+                if len(args) != 4 or not args[0].isdigit() or "-" not in args[1]:
+                    raise err("poke_every 用法: poke_every <N> <起>-<止> <hex地址> <hex值>")
+                a_s, b_s = args[1].split("-", 1)
+                if not (a_s.isdigit() and b_s.isdigit()) or int(a_s) > int(b_s):
+                    raise err("poke_every 区间必须是 起<=止 的非负整数")
+                addr, val = _poke_check(args[2], args[3])
+                for f in range(int(a_s), int(b_s) + 1, int(args[0])):
+                    plan["pokes"].append({"frame": f, "addr": addr, "val": val})
         elif op == "hold":
             if len(args) < 2 or "-" not in args[0]:
                 raise err("hold 用法: hold <起>-<止> <按钮...>")
@@ -219,6 +247,9 @@ def parse_scenario(path: Path) -> dict:
     for e in plan["captures"]:
         if not 1 <= e["frame"] <= frames:
             raise ScenarioError(f"{path}: capture 帧 {e['frame']} 超出 1..{frames}")
+    for e in plan["pokes"]:
+        if not 1 <= e["frame"] <= frames:
+            raise ScenarioError(f"{path}: poke 帧 {e['frame']} 超出 1..{frames}")
     return plan
 
 

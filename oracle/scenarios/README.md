@@ -24,14 +24,23 @@ python3 tools/scenario_run.py run-all         # 全部顺序跑
 | `frames <N>` | 总帧数（必填；帧号 1..N） |
 | `press_len <N>` | `press` 按住帧数（缺省 2） |
 | `press <帧> <按钮...>` | 帧 f..f+press_len-1 按住，之后释放（点按） |
+| `press_every <N> <起>-<止> <按钮...>` | 每 N 帧点按一次（解析期展开为 `press`，无新执行语义） |
 | `hold <起>-<止> <按钮...>` | 帧 起..止（含）按住，帧 止+1 释放 |
+| `poke <帧> <hex地址> <hex值>` | **写注入**：帧 f inputPolled 时写 CPU 总线（memType=8）一字节（G-S5-6 触发注入取证） |
+| `poke_every <N> <起>-<止> <hex地址> <hex值>` | 每 N 帧写一次（解析期展开为 `poke`） |
 | `capture <帧> <tag>` | 该帧末截图 + 全量 2KB RAM dump + cpu 寄存器 |
 | `capture_every <N> <tag>` | 每 N 帧做一次 capture |
 | `watch <hex地址> [标签]` | 每帧导出该字节（标签缺省=地址；语义命名需台账证据） |
 | `watch_range <hex起>-<hex止> [标签]` | 每帧导出该区间 hex |
+| `probe_mem <lo> <hi>` | NMI 级写点插桩（观察性，不改行为；导出 `<名>.probe.jsonl`） |
 | `ramframe on\|off` | 每帧导出全量 2KB RAM hex（缺省 off；短窗口用） |
 
 按钮集：`a b start select up down left right`（Mesen2 `emu.setInput` 键名）。
+
+> **写注入纪律（poke/poke_every，2026-01-15 G-S5-6 增补）**：`poke` 是**外部事件注入**
+> （与 l5-all-clear `gate_300` 外部事件同族口径），用于驱动 ROM 走自然代码链的触发取证
+> （如 `$CA bit0`=流末记录近端上游）；**产出锚必须标注 `trigger=injected`**，不得冒充
+> 自然可达（自然触发条件另册取证）。禁用于"让考题变简单"的作弊式改状态。
 
 ## 帧计数与时序约定（差分复现靠它锁死）
 
