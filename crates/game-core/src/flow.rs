@@ -486,7 +486,7 @@ fn step_game_over_menu(st: &mut DeathChainState, buttons: u8) -> DeathFx {
 /// **仅 `$180` 保留**（续当前关），`$017A-$017F` 减半值带入（§3.2）。
 /// 注 1（已裁定，复核 #69）：bank15:$E1BB-E1BF `$26:=$26&$80` 与 E0F4 瞬态写构成两写点序——
 /// 净效应 `$26&=$80`（bit4 终态=0），已按终态镜像；原缺口记录如下（历史）
-/// spec-writer）——已裁定（#69）并接线（终态镜像见下）。
+/// 已裁定（#69）并接线（终态镜像见下）。
 /// 注 2：`$16/$18` 清（E1C5-E1C7）= 输入锁存写；本链按步传参无锁存 ⇒ 不镜像。
 fn apply_continue_reset(st: &mut DeathChainState) {
     st.lives = 2; // E0EF
