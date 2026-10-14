@@ -1,0 +1,16 @@
+# B2 TAS 输入生成计划 v3 —— 关 1（含中 boss 竞技场相位切换，C4 生成期条件）
+# 相位依据（docs/findings/b2-tas-input.md §4.1 死因取证）：
+#   中 boss（type $4A，slot27）f10020 起降至 y≈150-190 带徘徊（x 70-194）——与 v2 横扫带重叠 ⇒ 接触死亡；
+#   v3 於时间线预测点（波次记录1 tick 816 ≈ f9689，实测锚）前切入底带 y 208-223：
+#   纵向脱离接触包络（|dy|≤12 候选）+ 自机弹自下向上贯穿 boss 带（R-shot-gen-3 出生=玩家坐标）。
+stage 1
+frames 13000
+prefix gameplay-stage1
+fire 1250-12999
+bomb budget 20
+# 主战斗段走廊（避出敌带 y≤30 + 缘道 x=240/29）
+band 0 x 40-200 y 150-215
+# 竞技场走廊（f9550 起 = 波次记录1 装载前 139f；底带）——生成期条件展开
+band 9550 x 40-200 y 208-223
+sweep period 114
+capture_every 30 arena
