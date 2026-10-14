@@ -1,0 +1,50 @@
+# 场景：$0401 写点插桩取证（A5 game_action_mode 值域语义定谳）
+# 目的：对 $0400-$0401 逐写点抓 PC（probe_mem），为 H-15 值域语义提供 A 级动态写点证据。
+# 输入计划与 gameplay-stage1 完全一致（保证与 analysis/traces/gameplay-stage1.frames.jsonl
+# 的 $0401 切换点逐帧可对齐：CN 切换点 203/206/913/1251/1460/1467/1676/1683/1892/1923/2132/2175）。
+name gam401-probe
+frames 2400
+press_len 4
+
+# 输入前缀：标题/菜单 → 商店（与 gameplay-stage1 一致）
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+
+# 商店退出（两连 B）
+press 1100 b
+press 1160 b
+
+# 实机：自动射击（每 12 帧点按 A）+ 自动移动（分段持方向）
+press_every 12 1250-2350 a
+hold 1300-1450 right
+hold 1470-1620 left
+hold 1650-1800 right
+hold 1830-1950 down
+hold 1980-2100 up
+hold 2130-2280 right
+press 1500 b
+
+capture 1260 stage-start
+capture 1500 mid-combat
+capture 2349 end
+capture_every 300 probe
+
+# 写点插桩：$0400-$0401（每写记录 {f,pc,a,v}）
+probe_mem 0400 0401
+
+# 对齐用最小 watch 集（未证语义不发明标签：0400/0402/04e1/04fd 用地址原名）
+watch 0400
+watch 0401 game_action_mode
+watch 0402
+watch 04e1
+watch 04fd
+watch 018f bomb_ammo
+watch 0016 controller_pressed
+watch 0018 controller_held
+watch_range 0300-07ff iram
