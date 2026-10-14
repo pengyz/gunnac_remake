@@ -545,7 +545,9 @@ def gate_rom_integrity() -> tuple[str, str]:
 
 
 def gate_addr_bridge() -> tuple[str, str]:
-    """坐标桥一致性（对抗复核 #49 条件 C）：桥 meta sha 双锚定 + relocated 抽样逐字节复验。"""
+    """坐标桥一致性 v2（对抗复核 #56 AR56-1 加固）：
+    meta sha 双锚定 + 条目数锚定（≡diff runs）+ 字段校验（bytes/delta）+ relocated **全量**逐字节复验。
+    v1 抽样 8/54 可被'改未抽样条目/删条目/改 delta'穿透（#56 攻击实测 5 攻 4 过）——v2 逐项封死。"""
     bridge = ROOT / "data" / "reference" / "addr-bridge-jp-cn.json"
     jp_p = ROOT / "reference" / "jp" / "gunnac_jp.nes"
     cn_p = ROOT / "rom" / "gunnac_cn.nes"
@@ -557,31 +559,66 @@ def gate_addr_bridge() -> tuple[str, str]:
     except ValueError as exc:
         return FAIL, f"addr-bridge JSON 解析失败：{exc}"
     problems = []
+    jp = jp_p.read_bytes()
+    cn = cn_p.read_bytes()
     if data.get("meta", {}).get("jp_sha256") != sha256_file(jp_p):
         problems.append("桥 meta jp_sha256 与 reference/jp/gunnac_jp.nes 不符（桥已过期，重生成）")
     if data.get("meta", {}).get("cn_sha256") != sha256_file(cn_p):
         problems.append("桥 meta cn_sha256 与 rom/gunnac_cn.nes 不符【rom/ 任何字节改动=严重违规】")
-    items = [(bi, e) for bi, v in data.get("banks", {}).items() for e in v
-             if e.get("kind") in ("relocated", "relocated-cross-bank")]
-    if not items:
-        problems.append("桥内无 relocated 条目（结构异常）")
-    else:
-        jp = jp_p.read_bytes()
-        cn = cn_p.read_bytes()
-        step = max(1, len(items) // 8)
-        for bank, e in items[::step][:8]:
-            bi = int(bank[4:])
-            st, en = (int(x, 16) for x in e["cn"].split("-"))
-            jst = int(e["jp"].split("-")[0], 16)
-            jb = int(e.get("jp_bank", bi))
-            seg_c = cn[16 + bi * 0x2000 + st : 16 + bi * 0x2000 + en]
-            seg_j = jp[16 + jb * 0x2000 + jst : 16 + jb * 0x2000 + jst + (en - st)]
-            if seg_c != seg_j:
-                problems.append(f"{bank}:{e['cn']}→{e.get('jp')} 字节不符（映射失效）")
+    n_relocated = 0
+    for bi in range(16):
+        base = 16 + bi * 0x2000
+        # 重算 diff runs（与 gen_addr_bridge 同口径）
+        runs, in_run = [], False
+        for k in range(0x2000):
+            d = jp[base + k] != cn[base + k]
+            if d and not in_run:
+                st = k
+                in_run = True
+            elif not d and in_run:
+                runs.append((st, k))
+                in_run = False
+        if in_run:
+            runs.append((st, 0x2000))
+        entries = data.get("banks", {}).get(f"bank{bi:02d}", [])
+        if len(runs) != len(entries):
+            problems.append(f"bank{bi:02d}: 条目数 {len(entries)} ≠ diff runs {len(runs)}（条目被删/改）")
+            continue
+        for (st, e), ent in zip(runs, entries):
+            # 字段校验：cn 区间与字节数
+            try:
+                cst, cen = (int(x, 16) for x in ent["cn"].split("-"))
+            except (KeyError, ValueError):
+                problems.append(f"bank{bi:02d}:{ent} cn 字段不可解析")
+                continue
+            if (cst, cen) != (st, e):
+                problems.append(f"bank{bi:02d}: cn 区间 {ent['cn']} ≠ 实测 {st:04X}-{e:04X}")
+            if ent.get("bytes") != (e - st):
+                problems.append(f"bank{bi:02d}:{ent['cn']} bytes 字段 {ent.get('bytes')} ≠ {e - st}")
+            kind = ent.get("kind")
+            if kind in ("relocated", "relocated-cross-bank"):
+                n_relocated += 1
+                try:
+                    jst = int(ent["jp"].split("-")[0], 16)
+                except (KeyError, ValueError):
+                    problems.append(f"bank{bi:02d}:{ent['cn']} jp 字段不可解析")
+                    continue
+                jb = int(ent.get("jp_bank", bi))
+                if kind == "relocated" and ent.get("delta") != jst - cst:
+                    problems.append(f"bank{bi:02d}:{ent['cn']} delta {ent.get('delta')} ≠ {jst - cst}")
+                seg_c = cn[base + cst : base + cen]
+                seg_j = jp[16 + jb * 0x2000 + jst : 16 + jb * 0x2000 + jst + (e - st)]
+                if seg_c != seg_j:
+                    problems.append(f"bank{bi:02d}:{ent['cn']}→{ent.get('jp')} 字节不符（映射失效/被改）")
+            elif kind == "same-site":
+                if ent.get("delta") != 0:
+                    problems.append(f"bank{bi:02d}:{ent['cn']} same-site delta ≠ 0")
+            elif kind != "unmapped":
+                problems.append(f"bank{bi:02d}:{ent['cn']} kind 异常 {kind}")
     if problems:
         return FAIL, "; ".join(problems[:5])
-    return PASS, (f"坐标桥一致（relocated {len(items)} 条抽样 8 条逐字节全等；"
-                  f"meta sha 双锚定；禁手工换算）")
+    return PASS, (f"坐标桥 v2 一致（relocated {n_relocated} 全量逐字节复验；16 bank 条目数锚定；"
+                  f"bytes/delta 字段校验；meta sha 双锚定；禁手工换算）")
 
 
 def gate_seed_integrity() -> tuple[str, str]:
@@ -873,7 +910,7 @@ EVIDENCE_RE = re.compile(r"^(?:Evidence|证据)\s*[:：]", re.I | re.M)
 CONFIDENCE_RE = re.compile(r"^(?:Confidence|置信度)\s*[:：]", re.I | re.M)
 # 敏感路径（触及即要求 Evidence/Confidence）。data/status/ 纳入 = t14 F1 攻击链"降基线无痕
 # 提交"封口：baseline 更新本就有 --reason 证据，提交摩擦可接受（captain 裁定 + t15 复审共同确认）。
-SENSITIVE_PREFIXES = ("data/naming/", "data/status/", "reference/", "rom/")
+SENSITIVE_PREFIXES = ("data/naming/", "data/status/", "data/reference/", "reference/", "rom/")
 SENSITIVE_TEXT = "、".join(SENSITIVE_PREFIXES)  # 由集合派生，无第二份文案（t10 R3）
 
 
