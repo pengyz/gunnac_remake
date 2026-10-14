@@ -114,9 +114,15 @@ if PLAN.probe_mem and #PLAN.probe_mem > 0 then
     if probeN > 3000000 then return end
     probeN = probeN + 1
     local ok, st = pcall(emu.getState)
-    local pc = (ok and st and st.cpu) and string.format("%04X", st.cpu.pc or 0) or "????"
+    -- 2026-10-14 修复：Mesen2 getState 为扁平键（st["cpu.pc"]），旧代码读 st.cpu.pc 恒得 "????"；
+    -- 同时补 x/y/a 寄存器（识别 STA $400,X / $401,Y 等变址写点的实际索引）。
+    local cpu = (ok and st) and st or {}
+    local pc = cpu["cpu.pc"] and string.format("%04X", cpu["cpu.pc"]) or "????"
+    local xr = cpu["cpu.x"] or -1
+    local yr = cpu["cpu.y"] or -1
+    local ar = cpu["cpu.a"] or -1
     local fc = (ok and st) and (st.frameCount or 0) or 0
-    probeF:write(string.format('{"f":%d,"pc":"%s","a":"%04X","v":%d}\n', fc, pc, addr, val))
+    probeF:write(string.format('{"f":%d,"pc":"%s","a":"%04X","v":%d,"x":%d,"y":%d,"ar":%d}\n', fc, pc, addr, val, xr, yr, ar))
     if probeN % 512 == 0 then probeF:flush() end
   end
   for _, r in ipairs(PLAN.probe_mem) do
