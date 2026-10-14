@@ -104,7 +104,7 @@ fn s5_legality_gate_rejects_invented_joints() {
     let last = bad2.len() - 1;
     bad2[last].mode = "GameOverMenu".into();
     assert!(
-        l5_legality(&bad2).iter().any(|p| p.contains("fail-closed")),
+        l5_legality(&bad2).iter().any(|p| p.contains("未证模式")),
         "未证模式必 fail-closed"
     );
     // 负向③：帧序倒退（占位段也不许）

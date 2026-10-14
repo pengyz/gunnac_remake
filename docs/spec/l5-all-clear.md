@@ -184,7 +184,7 @@ cargo test -p game-core --test stage_clear
 | # | 要求 | 结论 | 状态 |
 |---|---|---|---|
 | ① | 八关段级链架构说明（每段机制来源指针） | §1 段表+关节表（逐段 bank:addr/spec 指针） | ✅ |
-| ② | L5 golden 扩八关 + S5-ALL-CLEAR 链可跑通 | `oracle/traces/s5-all-clear.l5.jsonl`（八关全程 4 检查点/关）+ `s5_chain_run` 端到端跑通（R-l5-8） | ✅ |
+| ② | L5 golden 扩八关 + S5-ALL-CLEAR 链可跑通（**状态机层**——G-S5-6 未跑动态回放，8 关真机可通关口径见复核 #72 达成度分层） | `oracle/traces/s5-all-clear.l5.jsonl`（八关全程 4 检查点/关）+ `s5_chain_run` 端到端跑通（R-l5-8） | ✅ |
 | ③ | 测试 ≥6 全绿 | **9 新增全绿**：game-core `tests/stage_clear.rs` 5 + game-oracle `tests/l5_s5.rs` 4 | ✅ |
 | ④ | 三件复跑不降 | cargo test **144/144**（135+9）/ l2-diff **121/121** / gates **12/12**（§6 实跑留痕） | ✅ |
 | ⑤ | spec 回填（R-l5-* 或补规则） | 本文件 R-l5-1..8 + 缺口登记 G-S5-1..7 | ✅ |
