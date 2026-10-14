@@ -18,6 +18,7 @@
 | 5 | **结局段粗粒度**：`$95F9` 入口 `bank00:95F9 $26:=$80` 已镜像；staff roll（流 `$9955` 43 记录）→ 结局卡（`$97D3[$4C]`）内部 = **挂起枚举 `EndingFx`**（不发明渲染/文本流写集） | A（入口）/挂起（内部） |
 | 6 | **L5 golden 口径**：段=场景；帧锚分级——trace 锚（STG-01 前缀 f1080/1200/1260/1500）vs **f=0 占位**（未取证段，fail-closed 不发明帧号）；每关 4 检查点（商店段/关始段/战斗段/关末段） | A（口径） |
 | 7 | 缺口清单 G-S5-1..7（§3）：`$26 bit7` 直回标题支（与 A2 §3.4 同支同裁定，不接线）/ `$0300` 置位上游（B 级）/ 第 4 关特判语义（字节忠实、语义 todo_）/ staff roll 细节 / 8 关 oracle 动态 trace 未跑（l5-plan C1-C3）/ 死亡-关末并发窗 / 关始段细粒度时序 | — |
+| 8 | 【2026-10-15 G-S5-6 战役】**关 1 段动态链真机走通**（关末 f2401→飞离 f2794→派发 f3066→INC $180 f3096→商店 f3116→关 2 f3450；trigger=门位注入，自然可达性=负结果）；golden 回填 **12 真锚/32 占位**（anchors 台账 1:1 诚实锁）；关 2+ 输入脚本不可预写=B1/B2 需求清单（findings gs5-6 §5） | A（动态）/负结果（自然通关） |
 
 ---
 
@@ -139,6 +140,16 @@ STG-02..08 内容面 = `stage_skeleton(n)`（t193/t87 三级骨架，ROM root/ta
 口径注：**3 场景（s5-title/s5-stg01/s5-chain）/ 44 事件 / 36 命名检查点**。
 帧锚分级：**trace 锚**（STG-01 前缀 f1080/1200/1260/1500，gameplay-stage1 实测）vs
 **f=0 占位**（未取证段，fail-closed 不发明帧号，t193 先例）；占位段自成场景（帧序单调校验不被占位污染）。
+> 【2026-10-15 G-S5-6 动态回填】帧锚分级扩三级：**trace 锚（natural）**（7 条：标题 3 + STG-01 前缀 4）+
+> **触发注入链锚（injected）**（5 条：stg01-clear f2401 / stg02-shop f3116 / stg02-exit f3400 /
+> stg02-start f3450 / stg02-combat f3900，`gs5-stg01-clear-anchor` 真机 trace）+ **f=0 占位**（32 条）。
+> 逐锚判定式/证据指针/触发来源 = `oracle/traces/s5-all-clear.anchors.jsonl`（50 条；golden 1:1
+> 诚实锁测试并入 l5_s5.rs ①）；injected 锚触发 = poke f2400 `$26 bit4` 门位（自然可达性 =
+> 负结果，锚**不冒充**自然通关，见 `docs/findings/gs5-6-dynamic-replay.md`）。
+> 真锚段并入 `s5-stg01` 场景（同输入谱系 run 族，帧序单调不受占位污染）；
+> 【更正·场景边界关节】回填后边界集 = `Menu→Shop`（s5-title→s5-stg01）与
+> `Combat(stg02)→StageClear(stg02)`（s5-stg01→s5-chain）；原注
+> `Combat(stg01)→StageClear(stg01)` 边界随回填移入场景内（真闸照过）。
 **场景边界关节**（真闸不跨场景，逐个独立取证）：`Menu→Shop`（R-ui-6 capture 锚）与
 `Combat(stg01)→StageClear(stg01)`（A3 §1.1；帧锚边界所致）；链场景 `s5-chain` 内含全部
 关末/通关/结局关节（StageClear→Shop ×7、Combat→StageClear ×7、StageClear→Ending）——**真闸逐对过**。
@@ -154,10 +165,12 @@ STG-02..08 内容面 = `stage_skeleton(n)`（t193/t87 三级骨架，ROM root/ta
 |---|---|---|---|---|
 | G-S5-1 | `$26 bit7` 直回标题支（关末块 E30B-E30F / 死亡链 A2 §3.4 同支） | 语义 C 级；**不接线不入行为断言**（与 A2 裁定一致） | C | 模式位语义（hidden-option/调试直跳族） |
 | G-S5-2 | `$0300` 置位上游（bank11:$82C1/$833F 飞离/关末动画对象族） | 写点 A 级、调用图 B 级未逐指令展开；驱动侧按外部事件输入 `gate_300`（不发明时序） | B | bank11 动画域 |
+| G-S5-2′ | 【2026-10-15 G-S5-6 动态收窄】`$26 bit4` 置位只在**流末记录被记录引擎消费的记录边界**（bank00:8Cxx）；`$CA bit0` 单点注入**不触发**（Run B 负结果：悬置无人消费） | 动态实测；`$0300` 推进闸动态时点=**f3066**（`gate300==0x10` 同帧 E36E 清 bit4，anchor run）；流末记录字节语义/记录边界帧定位待取证 | B→动态时点 A | 波次记录引擎域 |
 | G-S5-3 | 第 4 关特判 `$82/$83→$64` 语义 | 计算字节忠实镜像；`todo_82/todo_83/todo_64` 登记不解释 | — | 滚动参数域 |
 | G-S5-4 | staff roll/结局卡内部（BGM/滚屏流/页序列 `$A925` 记录格式/结局卡 scene 链渲染） | `EndingFx` 挂起枚举（A3 R-E2/R-E3/R-E4 同族） | A（框架）/—（内部） | 渲染/文本线 |
 | G-S5-5 | 死亡窗（`$0400=0x0F`）与关末门（`$26 bit4`）并发时序 | 未取证；主链=无伤跑不触达，负向留 fail-closed（仅 Combat→StageClear 边） | — | oracle 场景组 |
 | G-S5-6 | 8 关全程 oracle 动态 trace（帧号真值） | 未跑（l5-plan C1-C3 DSL 扩展前置：RNG 冻结/快照接力/分段 checkpoint）；golden f=0 占位 | — | oracle 场景组 |
+| G-S5-6′ | 【2026-10-15 G-S5-6 战役收窄】**关 1 段动态链已跑通**（关末/商店/关 2 开始，trigger=injected，12 真锚回填）；**自然可通关性 = 负结果**（Run A 盲开环 15000f 4 死→GAME OVER；关 2+ 输入脚本不可预写） | 关 2..8 动态 trace 未跑（B1 敌群时间线 + B2 条件输入/save-state 接力需求清单见 findings §5） | A（关 1 链动态）/—（关 2..8） | oracle 场景组 |
 | G-S5-7 | 关始段细粒度时序（E178-E21C 开 stage 链逐写点/「地区-N」引入时长） | 粗粒度（R-shop-7 双 B→过渡→关始 capture 锚）；细粒度未接线 | B | 开 stage 链 |
 
 ## 4. 复现命令（独立重导）
