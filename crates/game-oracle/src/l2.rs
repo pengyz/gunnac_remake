@@ -684,6 +684,43 @@ pub fn run_rust_case(case: &Case) -> Result<Out, String> {
             let y_out = a_in.wrapping_mul(6).wrapping_sub(6); // 6 次 DEY 后 Y=type*6-6
             (money.digits[0], x_in, y_out)
         }
+        // ===== A1 商店购买消费侧（docs/findings/shop-purchase-flow.md）=====
+        "shop_spend_rapid" => {
+            // bank00:9ECD-9ED9 价格 6；不足 → bank01:$A05B（消息分支，不写）
+            let (nv, ok) = l2ports::shop_spend_rapid(ram(0x018E));
+            if ok {
+                writes.insert(0x018E, nv);
+                exit_at = 0x9EDC; // STA 后的 JSR $A091（重绘金钱行）
+            } else {
+                exit_at = 0xA05B;
+            }
+            (nv, x_in, y_in) // 不足路径 A=LDA 值=nv；成功路径 A=SBC 结果=nv
+        }
+        "shop_spend_ship" => {
+            // bank00:9FAB-9FB7 价格 4；不足 → bank01:$A05B
+            let (nv, ok) = l2ports::shop_spend_ship(ram(0x018E));
+            if ok {
+                writes.insert(0x018E, nv);
+                exit_at = 0x9FBA;
+            } else {
+                exit_at = 0xA05B;
+            }
+            (nv, x_in, y_in)
+        }
+        "shop_ship_qty_next" => {
+            // bank00:9FC0-9FCE：qty=min((slot&$3F)+1,$3F) → STA $04（暂存，保留在写集）
+            let qty = l2ports::shop_ship_qty_next(ram(0x0178 + y_in as u16));
+            writes.insert(0x0004, qty);
+            exit_at = 0x9FD0;
+            (qty, x_in, y_in) // 退出 A=数量结果，X/Y 不动
+        }
+        "shop_money_earn" => {
+            // bank02:8FA9-8FB5：money+3，进位封顶 $FF
+            let nv = l2ports::shop_money_earn(ram(0x018E));
+            writes.insert(0x018E, nv);
+            exit_at = 0x8FB6;
+            (nv, x_in, y_in) // 退出 A=写回值（ADC 结果 / 封顶 LDA #$FF）
+        }
         other => return Err(format!("未知 subroutine {other}（game-core 同名函数缺失）")),
     };
     Ok(Out { a, x, y, writes, exit: exit_at })
