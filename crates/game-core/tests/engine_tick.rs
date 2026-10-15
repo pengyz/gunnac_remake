@@ -801,6 +801,10 @@ fn emit_probe5() {
             (9504, "Transition", None),                 // stg05 §7：出店转场尾完成帧（+34f 四证）
             (9600, "StageStart", Some("stg05-start")),  // 关始采样 +96f 模式（stg03/04 同型 B 级）
             (10500, "Combat", Some("stg05-combat")), // 裁定②选样：f10500（$B674 真战斗窗；stg05-clear 须 >10500）
+            (10601, "StageClear", Some("stg05-clear")), // stg06 §7：poke#5 块入场（poke+1 五同型）
+            (11316, "Shop", Some("stg06-shop")),        // stg06 §7：入店锚
+            (11604, "Transition", None),                // stg06 §7：出店转场尾完成帧（+34f 五证）
+            (11700, "StageStart", Some("stg06-start")), // stg06 §7：+96f 四证同型
         ];
         let mut out = String::new();
         for (f, mode, cp) in rows {

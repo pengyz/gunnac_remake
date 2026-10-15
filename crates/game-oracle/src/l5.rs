@@ -368,6 +368,10 @@ pub fn s5_chain_run_for(stages: u8) -> S5Run {
                 // 【裁定② dated】f9000 跨 run 选样域混作废——重锚 f8100（双 run probe+trace
                 // 双证，<8500 分叉点两 run 同态；probe=300 整数倍帧）
                 (4, "clear") => ("s5-chain", 8501),   // poke#4 块入场（poke+1 四次同型）
+                (5, "clear") => ("s5-chain", 10601),  // poke#5 块入场（poke+1 五次同型）
+                (6, "shop") => ("s5-chain", 11316),    // stg06 §7 入店锚
+                (6, "exit") => ("s5-chain", 11604),    // 出店转场尾完成帧（+34f 五证）
+                (6, "start") => ("s5-chain", 11700),   // 关始采样（+96f 四证同型）
                 (5, "shop") => ("s5-chain", 9214),     // stg05 §7 入店锚
                 (5, "exit") => ("s5-chain", 9504),     // 出店转场尾完成帧（+34f 四证）
                 (5, "start") => ("s5-chain", 9600),    // 关始采样（+96f 三证同型）
