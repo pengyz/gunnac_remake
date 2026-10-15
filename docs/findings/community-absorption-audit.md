@@ -308,3 +308,77 @@ $F340/$F400 空白区、$D7B9 校正表、$FFF9/$FFF8 双标志再证、boot 改
 
 **未证不发明声明**：本文所有"B/C 级"条目未写入 `data/naming/`、未入 `docs/spec/`；
 A 级字节数值均可由 §0.2 脚本独立重导；未对任何社区语义直接采信为结论。
+> 【2026-10-15 补注（§12 增补轮）】声明微调：§12 的 **A 级字节事实**按任务口径 dated 注记进
+> `docs/spec/completeness.md`（E-R03/E-R05/E-R08 三行）；B/C 级仍不入 spec/台账。
+
+---
+
+## 12. 增补（2026-10-15，decomp-analyst 字节深化轮；只读，与 §1-11 并行不冲突）
+
+本轮独立补做**九班侧**（`rom/gunnac_cn.nes`）字节深化：将 §3.3/§4 中三项"B 级可销"升 **A 级定谳**，
+并新发现**第二解锁条件 $F2**。复现锚：
+
+```bash
+python3 -c "print(open('rom/gunnac_cn.nes','rb').read()[0x1470:0x14D1].hex(' '))"  # $9460-$94C1 支路
+python3 -c "print(open('rom/gunnac_cn.nes','rb').read()[0x1529:0x1545]))"          # $9519 记录
+python3 -c "print(open('rom/gunnac_cn.nes','rb').read()[0x1605:0x1609]))"          # $95F5 表
+python3 -c "print(open('rom/gunnac_cn.nes','rb').read()[0x22D0:0x2330].hex(' '))"  # E-R05 区
+```
+
+### 12.1 隐藏行值格/记录字节定谳（A 级；销 H-04）
+
+| bank00 指令 | 字节事实 | 升级 |
+|---|---|---|
+| `$9480 AD F9 FF / 05 F2 / D0 01 / 60` | 隐藏行文本支路门=**$FFF9≠0 或 $F2≠0** | **新发现：第二解锁条件 $F2** |
+| `$949C AD F9 FF / D0 01 / 60` | 值格写支路门=**仅 $FFF9**（与文本门不对称） | §3.3 门语义细化 |
+| `$948C AD BE 01 / F0 04` → 记录 `$9597`（$01BE==0）或 `$95AB`（≠0），`JSR $E6D9` 写 PPU $2266/$2286 | **DEATH/NON DEATH 行=$01BE 二选一文本记录**（行落点 row19/20，两行制） | D2 第 3 行身份 A 级 |
+| `$94A2-$94B0`：`$15/$14:=$22CD`；`LDA $01B6 / CLC / ADC #$31 / JSR $E94F` | **$01B6=WEAPON 号，`'1'+值` 写 $22CD**（=行 22 "WEAPON-0" 尾位格） | **H-04 销案（A 级）** |
+| `$94B3-$94C1`：`$15/$14:=$230D`；`LDY $01B7 / LDA $95F5,Y / JMP $E94F`；**$95F5=file 0x1605=`46 42 54 57`="F B T W"** | **$01B7=BOMBER 型索引**，表值 F/B/T/W 写 $230D（行 24 尾位格） | E-R08 语义 A 级（炸弹字母表实锤） |
+| `$9460-$947E`：`LDA $F1 / F0 04` → 记录 `$95BF/$95D1` 二选一（`JSR $E6C7`） | $00F1=priority 行两值文本选择器 | §3.3 priority 行 A 级 |
+| `$9519` 记录=恰 2 行：`WEAPON-0`@PPU $22C6(row22,col6)、`BOMBER-0`@PPU $2306(row24,col6) | 隐藏行标签落点复核（与 §3.3 咬合） | A 级 |
+
+**D2 综合（升级 §3.3）**：隐藏 3 行 = WEAPON-#（$01B6，'1'+值）/ BOMBER-#（$01B7，$95F5[值]）/
+DEATH·NON DEATH（$01BE 二记录）；文本门=$FFF9|$F2、值格门=$FFF9。R-D2-1 动态面（现形/可编辑/光标上限）
+仍按 §9 待授权实验；**"隐藏选项是什么"至此 A/B 双源定谳**。
+
+### 12.2 E-R05 区字节结构（A 级形态；证伪"截断"说）
+
+file 0x22D2-0x2330 逐记录（含 4 组编号品名 + 价行）：
+
+```
+$2285: "1." + <BD BE BF>     $2294: "1 <D8> $10"    ← 1 号（品名 3 tile）
+$22C5: "2." + <93 94 95>     $22D4: "1 <D8> $6"     ← 2 号
+$2305: "3." + <F9 FA FB>     $2314: "1 <D8> $4"     ← 3 号
+$2345: "4." + <DB DC>        （无价目行）→ FF        ← 4 号（品名 2 tile）
+```
+
+- **"4 号价目缺失=数据截断"（completeness E-R05 原注/data-tables C 级）证伪**：4 号记录结构完整
+  （编号+名+FF），无价目行=**退出项无价**（JP text.csv 行 41-44 `4. 나가기`=EXIT；B 级语义）。
+- 品名 tile ID 固定为考证靶点：`BD BE BF`/`93 94 95`/`F9 FA FB`/`DB DC`（S1 CHR 直读路线）；
+  `<D8>`=数量/单位 tile 候补（graphics.csv money_unit 族，C 级）。
+
+### 12.3 H7/JIUBAN 水印逐行归属对照面（补 §4 E-R12"不覆盖"）
+
+text.csv credits 43 行（jp_record_offset+x 位）↔ 我方 CN 流 43 条**逐行对齐**即可归属
+"JP 原行/US 改行/九班插行"三类（对齐键=行序+x 位，可半自动）。例证（B 级）：
+JP `0x18D8 C++ 없인 못 사는 TAKA` ↔ CN `SIIPU.RA.SU. TAKA`；JP `0x1917 TONKIN HOUSE STAFF`
+↔ CN `TOKYO SHOSEKI STAFF`；JP 尾部 logo 行（`로고 유지`）↔ CN `@2011 JIUBAN` 水印插行。
+→ H7/E-R12 收窄为"尾部 logo 行替换 + 署名行 US 改写"两类；**水印面复证对照面成立**。
+
+### 12.4 对 §9/§11 的增量与门禁
+
+- §9-3 "E-R03/H-04 闭合候选（B 级）"→ **A 级定谳**（12.1）；E-R08 同步 A 级。
+- §9 新增两项：**$F2 第二解锁条件**（新开放项）；**E-R05"截断"说证伪**（12.2）。
+- §11② 表现面补 H7 归属对照面（12.3）。
+- **门禁（本轮实跑）**：`python3 gates/cli.py status` → **PASS=12 FAIL=0 SKIP=0 TOLERATED=0**，
+  基线 7 项（rom_files/seed/ledger/assets/knowledge/rust_tests/completeness_cells）全部 OK 不降。
+- A 级字节事实按任务口径 dated 注记进 `docs/spec/completeness.md`（E-R03/E-R05/E-R08 三行）；
+  N 系吸收记录见 [community-research-gun-nac-ko.md](community-research-gun-nac-ko.md) §7（N-0207/N-0208）。
+
+### 12.5 假设区增补（并入 §10 纪律）
+
+| ID | 假设 | 闭合条件 |
+|---|---|---|
+| H-D2-2 | $F2=通关/成就解锁标志（"通关一次→隐藏选项永久解锁"） | $F2 全 ROM 写点扫描 + 通关 trace |
+| H-D2-3 | $F1/$F2 为相邻 flag 对（priority=$F1、解锁=$F2） | 同上 |
+| H-D2-4 | `<D8>`=单位 tile（"엔/個"） | E-R05 品名 CHR 直读同批 |
