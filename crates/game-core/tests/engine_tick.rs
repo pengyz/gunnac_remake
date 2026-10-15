@@ -641,3 +641,56 @@ fn wave_phase_dual_mode_adjudication() {
     // delay=0 等价 ArmAtLoad（口径收敛性质）
     assert_eq!(run(WavePhaseTiming::ArmAtRecordComplete, 0), Some(0x04D0));
 }
+
+// ===== probe5 数据面发射器（#[ignore] 按需运行——cargo test -p game-core --test
+// engine_tick -- --ignored emit_probe5）=====
+//
+// W-PHASE 判据注（test-runner 拟合判读口径）：
+// - ArmAtLoad：关末门臂 tick == 波次流装载 tick（STG-01：$A3E4 装载@$04D0 ⇒ 臂@$04D0）。
+// - ArmAtRecordComplete：臂 tick == 装载 tick + record_complete_delay（d≥1）。
+// - delay=0 收敛于 ArmAtLoad（⑱ 性质）。
+// - 真机拟合：实测臂 tick = 装载 tick + d ⇒ d=0 确认 ArmAtLoad；d>0 确认
+//   ArmAtRecordComplete(delay=d)；无法表达为装载+d ⇒ 第三假设挂账（W-PHASE-3）。
+// - 判别装载 tick：probe 行 waves 字段 0→1/1→2 跃变帧即装载帧（$A3CD@$0330/
+//   $A3E4@$04D0）。
+
+#[test]
+#[ignore = "probe5 数据面按需发射（产物写 analysis/traces/）"]
+fn emit_probe5() {
+    use game_core::engine::{
+        stage_probe, WAVE_FLAGS, STG01_SCRIPT, STG02_SCRIPT, STG03_SCRIPT, STG04_SCRIPT,
+        STG05_SCRIPT, STG06_SCRIPT, STG07_SCRIPT, STG08_SCRIPT,
+    };
+    type Row = (u16, u8, Option<u16>, Option<u16>);
+    let stages: [(u8, &'static [Row]); 8] = [
+        (1, &STG01_SCRIPT),
+        (2, &STG02_SCRIPT),
+        (3, &STG03_SCRIPT),
+        (4, &STG04_SCRIPT),
+        (5, &STG05_SCRIPT),
+        (6, &STG06_SCRIPT),
+        (7, &STG07_SCRIPT),
+        (8, &STG08_SCRIPT),
+    ];
+    for (n, rows_ref) in stages {
+        let mut st = StageState {
+            script: ScriptCursor::from_records(rows_ref),
+            ..Default::default()
+        };
+        let ns = format!("{:02}", n);
+        let mut rows = String::new();
+        // 每关自然跑至关末门+64 帧余量
+        for f in 0..0x0800u32 {
+            stage_tick(&mut st, &TickInputs { scroll_delta: 16 });
+            let p = stage_probe(&st);
+            rows.push_str(&format!(
+                "{{\"scene\": \"stg{}\", \"f\": {}, \"tick\": {}, \"scroll\": {}, \"flags_26\": {}, \"waves\": {}, \"script_recs\": {}, \"sched_recs\": {}, \"slot_types\": {:?}, \"live_shots\": {}}}\n", ns,
+                p.f, p.tick, p.scroll, p.flags_26, p.waves, p.script_recs, p.sched_recs,
+                p.slot_types, p.live_shots
+            ));
+        }
+        let path = format!("../../analysis/traces/stg{}.probe5.jsonl", ns);
+        std::fs::write(&path, &rows).expect("写 probe5");
+        let _ = WAVE_FLAGS; // 17 流登记面（对拍参考）
+    }
+}
