@@ -393,3 +393,43 @@ pub const TERMINATE_RECYCLE_EXIT: u16 = 0xD10C;
 pub fn chain_rewrite(next_handler: u16) -> (u8, u8) {
     ((next_handler & 0xFF) as u8, (next_handler >> 8) as u8)
 }
+
+// ===== 批次4g-2：调用环（bank02:827D-82CD，A 级逐指令）=====
+
+/// 调用环槽序表（bank02 `$82D0` 40B，字节精确）：前 20=槽 8..27 **升序**（基 Y=0）、
+/// 后 20=槽 27..8 **降序**（基 Y=$14）——分组判据 `($54&$2B&2)!=0` 选基址。
+pub const CALL_LOOP_SLOT_TABLE: [u8; 40] = [
+    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
+    0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1B, 0x1A, 0x19, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12,
+    0x11, 0x10, 0x0F, 0x0E, 0x0D, 0x0C, 0x0B, 0x0A, 0x09, 0x08,
+];
+
+/// 首轮：槽 0..7 全槽轮（`827D-828C`：`LDY $400,X` type≠0 ⇒ `JSR $82F8` 分发）。
+pub fn call_loop_round1() -> [u8; 8] {
+    core::array::from_fn(|i| i as u8)
+}
+
+/// 次轮槽序（`829E-82CB` 20 次：`LDX $82D0,Y`）：
+/// `group_flag`=`($54&$2B&2)!=0` —— true ⇒ 基 Y=$14 降序 27..8；false ⇒ 升序 8..27。
+/// 双序=帧组交替公平性（D4 保真面：同负载槽遍历次序可分歧）。
+pub fn call_loop_slots(group_flag: bool) -> [u8; 20] {
+    let base = if group_flag { 20 } else { 0 };
+    core::array::from_fn(|i| CALL_LOOP_SLOT_TABLE[base + i])
+}
+
+/// MMC3 按型切 bank（`82AA-82C0`）：type≥`$30` ⇒ 查 `$816E+type` 表取 R7 bank 值，
+/// **与 zp `$01` 缓存同值则跳过**（`CMP $01/BEQ` 防重写）；否则 `$8000:=7`（bank select）
+/// + `$8001:=值`（bank data）。返回 Some(新 bank 值)=需切换；None=type<$30 或同值。
+/// 表区 `$816E+type`（type $30..$FF ⇒ $819E..$826D）——语义=per-type R7 窗映射
+/// （CHR/代码 bank 配置，N-0151 域；**表值语义未证**仅登记）。
+pub fn type_bank_switch(type_: u8, current_bank: u8, bank_table: &[u8]) -> Option<u8> {
+    if type_ < 0x30 {
+        return None;
+    }
+    let v = *bank_table.get(type_ as usize)?;
+    if v == current_bank {
+        None
+    } else {
+        Some(v)
+    }
+}
