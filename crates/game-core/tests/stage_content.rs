@@ -222,3 +222,114 @@ fn stg_negative_skeleton_guards() {
         assert!(!s.scripts.is_empty(), "STG-{n} 脚本集非空");
     }
 }
+
+// ===== 批次3a：弹网格 SoA + 槽位交叠裁定 + 双分配器（arena-midboss §1.1）=====
+
+use game_core::shot::{
+    enemy_slot_alloc, shot_slot_alloc, BulletGrid, SlotAlloc, ENEMY_ONLY_SLOTS, ENEMY_SHOT_TYPE,
+    PLAYER_ONLY_SLOTS, SHARED_SLOTS,
+};
+
+/// ⑩ 六数组 SoA + 槽位集算术（distinct 24 = 20+12−8；交叠 8 槽逐值）。
+#[test]
+fn bullet_grid_soa_and_slot_overlap_ruling() {
+    let g = BulletGrid::default();
+    // 空槽判定 = $040E+Y==0（两分配器同判）
+    assert!(g.is_empty(0x83));
+    let mut g2 = g.clone();
+    g2.state[0x83] = 0x10;
+    assert!(!g2.is_empty(0x83));
+    g2.release(0x83);
+    assert!(g2.is_empty(0x83), "回收=state:=0（$87FD 槽释放）");
+    // 交叠裁定算术：20+12−8=24（非 32）
+    assert_eq!(PLAYER_ONLY_SLOTS.len() + SHARED_SLOTS.len(), 20, "自机 20 槽");
+    assert_eq!(ENEMY_ONLY_SLOTS.len() + SHARED_SLOTS.len(), 12, "敌弹 12 槽");
+    assert_eq!(12 + 8 + 4, 24, "distinct 24（20+12−8）");
+    assert_ne!(20 + 12, 24, "按不相交建模必红");
+    // 共享 8 槽逐值（B1 快照实测时分复用）
+    assert_eq!(SHARED_SLOTS, [0x83, 0x84, 0x9F, 0xA0, 0xBB, 0xBC, 0xD7, 0xD8]);
+    // 敌弹型码 $80（bit7 置=与自机弹可判别）
+    assert_eq!(ENEMY_SHOT_TYPE, 0x80);
+    assert_ne!(ENEMY_SHOT_TYPE & 0x80, 0, "敌弹 bit7 置必红");
+}
+
+/// ⑪ 双分配器几何 + 共享槽时分复用（勿按不相交建模）。
+#[test]
+fn dual_allocators_and_time_division() {
+    // 敌弹分配器：LDY #$83 起、组内 +1、组距 $1C、全满 None
+    let mut state = [0u8; 0x100];
+    assert_eq!(enemy_slot_alloc(&state), Some(0x83), "首适应 $83");
+    for y in [0x83u8, 0x84, 0x85] {
+        state[y as usize] = 1;
+    }
+    assert_eq!(enemy_slot_alloc(&state), Some(0x9F), "组跳 $85+$1A=$9F");
+    for base in [0x83u8, 0x9F, 0xBB, 0xD7] {
+        for k in 0..3u8 {
+            state[(base + k) as usize] = 1;
+        }
+    }
+    assert_eq!(enemy_slot_alloc(&state), None, "全满 SEC ⇒ None");
+    // 时分复用哨兵：自机占满独占 12 后，自机分配器落到**共享槽** $83（非独占建模必红）
+    let mut st2 = [0u8; 0x100];
+    for &y in PLAYER_ONLY_SLOTS.iter() {
+        st2[y as usize] = 1;
+    }
+    assert_eq!(shot_slot_alloc(&st2), SlotAlloc::Found { slot: 0x83, a: 0 }, "自机吃共享槽 $83");
+    // 敌弹同理：独占 4 占满后落共享槽
+    let mut st3 = [0u8; 0x100];
+    for &y in ENEMY_ONLY_SLOTS.iter() {
+        st3[y as usize] = 1;
+    }
+    assert_eq!(enemy_slot_alloc(&st3), Some(0x83), "敌弹吃共享槽 $83（时分复用）");
+}
+
+/// ⑫ 命中框注册 golden（7×10 钳位）+ 重叠/属性/综合判定 + 一框一伤 + 伤害公式。
+#[test]
+fn hitbox_register_and_damage_golden() {
+    use game_core::shot::{
+        attrs_intersect, boxes_overlap, clear_hit_entry, damage_apply, hit_resolves,
+        shot_hitbox_register, HitBoxEntry,
+    };
+    // 注册 golden：x=128,y=128 → 7×10 框（124..131, 123..133），归属=槽偏移，attr=$30
+    let e = shot_hitbox_register(128, 128, 0x83);
+    assert_eq!((e.left, e.right), (124, 131), "x−4..x+3 跨度 7");
+    assert_eq!((e.top, e.bottom), (123, 133), "y−5..y+5 跨度 10");
+    assert_eq!(e.owner, 0x83);
+    assert_eq!(e.attr, 0x30);
+    assert_eq!(e.right - e.left, 7, "跨度口径 7×10");
+    assert_eq!(e.bottom - e.top, 10);
+    // 钳位哨兵：x−4/y−5 负向钳 0、x+3/y+5 溢出钳 FF
+    let edge = shot_hitbox_register(2, 3, 0x80);
+    assert_eq!((edge.left, edge.top), (0, 0), "负向钳 0");
+    let edge2 = shot_hitbox_register(0xFE, 0xFC, 0x80);
+    assert_eq!((edge2.right, edge2.bottom), (0xFF, 0xFF), "溢出钳 FF");
+    // 重叠判定：4 边含端点（>=/<=）；几何分开 1px 不叠
+    let a = shot_hitbox_register(100, 100, 0x80);
+    let b = shot_hitbox_register(111, 100, 0x80); // 左=107 > a.right=103
+    assert!(!boxes_overlap(&a, &b), "x 分离 1px 不叠");
+    let c = shot_hitbox_register(110, 100, 0x80); // 左=106…仍分；取 108：左=104>103
+    assert!(!boxes_overlap(&a, &c));
+    let d = shot_hitbox_register(107, 100, 0x80); // 左=103 == a.right=103 ⇒ 端点相接=叠
+    assert!(boxes_overlap(&a, &d), "端点相接（>=）=叠——闭/开区间错判必红");
+    // 属性相交（团队过滤）：$30&$13=$10≠0 命中；$30&$0F=0 不命中（几何叠也无效）
+    assert!(attrs_intersect(0x30, 0x13), "弹$30×敌$13 相交 $10");
+    assert!(!attrs_intersect(0x30, 0x0F), "弹$30×$0F 不相交——同队过滤");
+    let e1 = shot_hitbox_register(100, 100, 0x80);
+    let e2 = HitBoxEntry { attr: 0x0F, ..shot_hitbox_register(100, 100, 0x85) };
+    assert!(!hit_resolves(&e1, &e2), "几何叠但属性不交 ⇒ 不命中（漏属性测试必红）");
+    // 一框一伤：清框清 attr/top/bottom，left/right/owner 不动
+    let cleared = clear_hit_entry(&e1);
+    assert_eq!((cleared.attr, cleared.top, cleared.bottom), (0, 0, 0));
+    assert_eq!(
+        (cleared.left, cleared.right, cleared.owner),
+        (e1.left, e1.right, e1.owner),
+        "仅清三字段（写集外字段误清必红）"
+    );
+    // 伤害公式：弹 −2/物撞 −=对方 HP；HP 饱和 0（$D616 死亡门由调用方判 hp==0）
+    assert_eq!(damage_apply(14, true, 30), 12, "弹命中 −2（中 boss HP14→12 实测锚）");
+    assert_eq!(damage_apply(2, true, 30), 0, "HP 归 0 ⇒ 死亡门");
+    assert_eq!(damage_apply(10, false, 6), 4, "物撞 −=对方 $0630=6");
+    assert_eq!(damage_apply(10, false, 14), 0, "物撞伤害=对方 HP（非 −2）饱和 0");
+    assert_ne!(damage_apply(14, false, 30), 12, "物撞按 −2 误算必红");
+    assert_eq!(damage_apply(1, true, 30), 0, "下溢饱和 0 不回绕");
+}

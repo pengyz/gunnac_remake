@@ -192,3 +192,166 @@ pub fn shot_slot_alloc(state: &[u8]) -> SlotAlloc {
     }
     SlotAlloc::Full
 }
+
+// ===== 批次3：弹网格 SoA + 敌弹槽分配 + 槽位交叠裁定（arena-midboss §1.1 A 级）=====
+
+/// 弹网格六数组 SoA 镜像（同槽偏移 Y 索引六字段，arena-midboss §1.1）：
+/// `$040E+Y` 寿命/动作倒数（**空槽判定==0**）、`$047E+Y` 动作流指针、`$04EE+Y` x、
+/// `$055E+Y` y、`$05CE+Y` 运动指令码、`$063E+Y` 型码。
+/// 自机弹与**敌弹同一弹网格**（非独立表、非 28 槽对象网格）；槽位集交叠裁定见
+/// `PLAYER_ONLY_SLOTS`/`SHARED_SLOTS`/`ENEMY_ONLY_SLOTS`。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BulletGrid {
+    /// `$040E+Y` 寿命/动作倒数（空槽判定 == 0）。
+    pub state: [u8; 0x100],
+    /// `$047E+Y` 动作流指针。
+    pub action_ptr: [u8; 0x100],
+    /// `$04EE+Y` x。
+    pub x: [u8; 0x100],
+    /// `$055E+Y` y。
+    pub y: [u8; 0x100],
+    /// `$05CE+Y` 运动指令码。
+    pub motion: [u8; 0x100],
+    /// `$063E+Y` 型码：敌弹恒 `$80`（bit7 置）；自机弹=生成器 X=0..5（bit7 清）+杂值 7。
+    pub type_code: [u8; 0x100],
+}
+
+impl Default for BulletGrid {
+    fn default() -> Self {
+        BulletGrid {
+            state: [0; 0x100],
+            action_ptr: [0; 0x100],
+            x: [0; 0x100],
+            y: [0; 0x100],
+            motion: [0; 0x100],
+            type_code: [0; 0x100],
+        }
+    }
+}
+
+impl BulletGrid {
+    /// 空槽判定（两分配器同判 `$040E+Y==0`）。
+    pub fn is_empty(&self, slot: u8) -> bool {
+        self.state[slot as usize] == 0
+    }
+
+    /// 回收（弹回收路 `bank2:$87FD` 槽释放语义）：state:=0。
+    pub fn release(&mut self, slot: u8) {
+        self.state[slot as usize] = 0;
+    }
+}
+
+/// 敌弹型码（`bank3:$ABFB LDA #$80/STA $063E,Y`；实测独占 4 槽 197/197 恒 `$80`）。
+pub const ENEMY_SHOT_TYPE: u8 = 0x80;
+
+/// 槽位交叠裁定（arena-midboss §1.1，A 级算术 + 快照实测）：**distinct 24 = 20+12−8**。
+/// 禁止按"20+12 不相交"建模——8 槽共享**时分复用**（两分配器同判空槽首适应，
+/// 同一瞬时不会双主，同一槽位两族交替占用；运行时安全由同判 `state==0` 保证，
+/// 不由槽位独占保证）。
+///
+/// 自机独占 12（低偏移 3×4 组）。
+pub const PLAYER_ONLY_SLOTS: [u8; 12] = [
+    0x80, 0x81, 0x82, 0x9C, 0x9D, 0x9E, 0xB8, 0xB9, 0xBA, 0xD4, 0xD5, 0xD6,
+];
+/// 共享 8（时分复用交叠槽）。
+pub const SHARED_SLOTS: [u8; 8] = [0x83, 0x84, 0x9F, 0xA0, 0xBB, 0xBC, 0xD7, 0xD8];
+/// 敌弹独占 4（每组高偏移 1）。
+pub const ENEMY_ONLY_SLOTS: [u8; 4] = [0x85, 0xA1, 0xBD, 0xD9];
+
+/// 敌弹槽分配器（`bank3:$AC42-$AC63`）：4 组×3 槽（`$83-$85/$9F-$A1/$BB-$BD/$D7-$D9`，
+/// `LDY #$83` 起组内连续查 3、`ADC #$1A` 组跳），空槽判定 `state[Y]==0` 首适应；
+/// 全满 SEC ⇒ `None`。与自机分配器共享空槽判定 ⇒ 共享 8 槽时分复用。
+/// `state` 按槽偏移 Y 索引（`$040E+Y` 的镜像）。
+pub fn enemy_slot_alloc(state: &[u8]) -> Option<u8> {
+    const GROUPS: [u8; 4] = [0x83, 0x9F, 0xBB, 0xD7];
+    for base in GROUPS {
+        for k in 0..3u8 {
+            let y = base.wrapping_add(k);
+            if *state.get(y as usize).expect("state 数组须覆盖槽偏移") == 0 {
+                return Some(y);
+            }
+        }
+    }
+    None
+}
+
+// ===== 批次3b：命中框注册 + 重叠判定 + 伤害公式（arena-midboss §2 A 级）=====
+
+/// 命中框表条目（21 条/帧，索引 `$74`；弹/敌/玩家同表注册）。
+///
+/// 弹侧注册（`bank2:$8847-$888A`）：左=x−4（钳 0）/右=x+3（钳 FF）/上=y−5（钳 0）/
+/// 下=y+5（钳 FF）/归属=槽偏移（bit7 置=弹条目）/属性掩码=常量 `$30`。
+/// **弹命中框跨度 7×10px**（x−4..x+3、y−5..y+5；跨度口径 7×10，含端点覆盖 8×11px——
+/// 复核 #80 F8 注）。
+///
+/// ⚠ 模型框≠游戏命中框（W-tas 注）：7×10 是**清弹/注册框**；游戏命中判定走
+/// `bank14:$D78B/$D7ED` 双阅读端 4 边比较 + **属性相交**（`$04C4,X & $07E8,Y ≠ 0`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HitBoxEntry {
+    /// `$0780` 左。
+    pub left: u8,
+    /// `$0795` 右。
+    pub right: u8,
+    /// `$07AA` 上。
+    pub top: u8,
+    /// `$07BF` 下。
+    pub bottom: u8,
+    /// `$07D4` 归属（弹=槽偏移 bit7 置；对象=槽号 0..27 bit7 清）。
+    pub owner: u8,
+    /// `$07E9` 属性掩码（弹侧常量 `$30`；敌侧 `$04C4,X & $F0`）。
+    pub attr: u8,
+}
+
+/// 弹侧命中框注册（`bank2:$8847-$888A`）：7×10 钳位四边 + 归属槽偏移 + 属性 `$30`。
+/// `slot` = 弹槽偏移（`$80` 起，天然 bit7 置=弹归属判别）。
+pub fn shot_hitbox_register(x: u8, y: u8, slot: u8) -> HitBoxEntry {
+    HitBoxEntry {
+        left: x.saturating_sub(4),                 // 8847 x−4 钳 0
+        right: x.saturating_add(3).min(0xFF),      // 885B x+3 钳 FF（u8 自然饱和即 FF）
+        top: y.saturating_sub(5),                  // 8868 y−5 钳 0
+        bottom: y.saturating_add(5).min(0xFF),     // 8875 y+5 钳 FF
+        owner: slot,                               // 8881 TXA
+        attr: 0x30,                                // 8885 LDA #$30
+    }
+}
+
+/// 重叠判定（`bank14:$D78B-$D7EC` / `$D7ED-$D846` 双阅读端 4 边比较）：
+/// `$07BE,Y≥$72` 且 `$73≥$07A9,Y` 且 `$0794,Y≥$70` 且 `$71≥$077F,Y`
+/// = 本函数 `a.bottom>=b.top && b.bottom>=a.top && a.right>=b.left && b.right>=a.left`。
+/// **命中还需要属性相交**（见 `hit_resolves`）——几何重叠≠命中。
+pub fn boxes_overlap(a: &HitBoxEntry, b: &HitBoxEntry) -> bool {
+    a.bottom >= b.top && b.bottom >= a.top && a.right >= b.left && b.right >= a.left
+}
+
+/// 属性相交测试（团队过滤 `LDA $04C4,X / AND $07E8,Y ≠ 0 → 命中`）。
+pub fn attrs_intersect(a_attr: u8, b_attr: u8) -> bool {
+    a_attr & b_attr != 0
+}
+
+/// 综合命中（几何 4 边 + 属性相交；双阅读端同判据）。
+pub fn hit_resolves(a: &HitBoxEntry, b: &HitBoxEntry) -> bool {
+    boxes_overlap(a, b) && attrs_intersect(a.attr, b.attr)
+}
+
+/// 一框一伤（命中收尾 `$D7DA`：AND 结果 bit7 清 → 清被中条目框 `$07E8/$07A9/$07BE:=0`）。
+/// 返回清框后的条目（attr/top/bottom 清 0；left/right/owner 不动）。
+pub fn clear_hit_entry(e: &HitBoxEntry) -> HitBoxEntry {
+    HitBoxEntry {
+        left: e.left,
+        right: e.right,
+        top: 0,
+        bottom: 0,
+        owner: e.owner,
+        attr: 0,
+    }
+}
+
+/// 伤害公式（`bank14:$D674`，X=被击者）：
+/// - `$4C==0`（语义未证域）→ 直接 HP:=0（一击死）——**参数化待证，不入默认路径**；
+/// - 弹命中（归属 bit7 置）：HP −= **2**（`$D684-$D688 SBC #$02`）；
+/// - 物撞（归属 bit7 清）：HP −= **对方 `$0630`**（`$D69C`；撞击伤害=对方 HP 值）。
+/// 返回新 HP（0/下溢饱和 0）；HP 归 0 ⇒ 调用方走 `$D616` 状态转移死亡门。
+pub fn damage_apply(hp: u8, owner_is_shot: bool, opponent_hp: u8) -> u8 {
+    let dmg: u16 = if owner_is_shot { 2 } else { u16::from(opponent_hp) };
+    u16::from(hp).saturating_sub(dmg).min(0xFF) as u8
+}
