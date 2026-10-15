@@ -119,3 +119,26 @@ decode 侧：ctrl0 分隔 ✓（哨兵⑤第 2 条）/ctrl10,13,14,pair,jmp 实�
 复核期间 `crates/game-core/src/shot.rs`（+163 行）与 `tests/stage_content.rs`（+111 行）存在**他人未提交改动**
 （port-engineer 批次 3 在途）——本段全部测试均在 wave 面（`--test wave_sched`），不受影响；
 段 C 的 cargo 全量复跑将注明树态。
+
+---
+
+## 段 B′：红①哨兵咬合粒度独立核验（lead 转 test-runner 疑点裁定）
+
+**疑点**：M1（tick→帧突变）后 `member_schedule_frame_domain_golden` 竟绿 ⇒ 疑红①哨兵漏咬。
+**裁定：套件级"漏咬"不成立；成立的是"咬合粒度按函数分片"（微指控，建议补交叉断言）。**
+
+单点粒度实测（×8 突变分别只施于一处，还原后 9/9 复绿）：
+
+| 突变点 | 红的测试 | 绿的测试 | 结论 |
+|---|---|---|---|
+| M1a 仅 `member_schedule` map ×8 | ⑦ golden | ⑧（不涉 member_schedule） | 咬 ✓ |
+| M1b 仅 `GroupRelease.tick_frame` 重装填 ×8 | ⑧ | **⑦ 绿**（test-runner 所见现象） | 咬 ✓ |
+| M1c 仅 `GroupRelease::load` 初装填 ×8 | ⑧ | **⑦ 绿** | 咬 ✓ |
+
+⇒ **$534 面任一单点 ×8 突变必至少红一测**（3/3）；test-runner 观察到的⑦绿 = 突变落在 GroupRelease 侧时的
+正常分片表现，**不是覆盖缺口**。但反向看：⑦/⑧ 咬合面互不交叉——单看任一测试会误判"哨兵漏咬"。
+**修正建议（低成本）**：新增单一"红①哨兵"测试，同时断言 `member_schedule` 帧序列与 `GroupRelease` 投放帧
+（两函数同测），使任何 $534 换算突变集中咬在一处，避免复核误读。
+**在途风险面**：批次 3 在途 `shot.rs`（+163 行）grep 无 `$534`/interval/`tick_to_frame` 消费点（命中行均为
+hitbox 钳位注释地址）——红①的真正风险面（消费层把帧域间隔乘 8）**尚未出现**；批次 3 落地时应以
+M1a/b/c 三点突变法复验其消费路径（届时我可再打一轮）。
