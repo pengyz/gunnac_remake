@@ -568,3 +568,33 @@ fn type_dispatch_table_wiring() {
     // 全表完整性：非登记型值目标=0（fail-closed 空转面）
     let _ = TypeDispatch { target: 0, bank_switch: None };
 }
+
+/// ㉓ S4b-2 ③ 行为链断言面（六表↔轨迹配对数值）。
+#[test]
+fn phase_chain_assertion_face() {
+    use game_core::enemy::{
+        phase_t832e_value, DRIVER_ASSIGNMENTS, PARAM_TABLE_518, PARAM_TABLE_684, PHASE_T832E,
+        PHASE_T914B, PHASE_T914F,
+    };
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    let r6 = |a: usize| 0x10 + 2 * 0x2000 + (a - 0x8000);
+    // 三表字节精确
+    assert_eq!(&PHASE_T914B[..], &rom[r6(0x914B)..r6(0x914B) + 4], "$914B");
+    assert_eq!(&PHASE_T914F[..], &rom[r6(0x914F)..r6(0x914F) + 8], "$914F");
+    assert_eq!(&PHASE_T832E[..], &rom[r6(0x832E)..r6(0x832E) + 4], "$832E");
+    // $2B 首段取值族（trace ($518,$684,$534)∈{$25,$29}×{$F7,$FB,$FF}×{$02,$42}）
+    assert!(PHASE_T914B.iter().all(|&v| v == 0x25 || v == 0x29));
+    assert!(PHASE_T914F[..4].iter().all(|&v| v == 0xF7 || v == 0xFB || v == 0xFF));
+    // $914F 循环 5 相位（F7→FB→FF→FB→F7）
+    assert_eq!(&PHASE_T914F[..4], &[0xF7, 0xFB, 0xFF, 0xFB], "循环前四+回首 F7");
+    // $832E |2 语义（$00|2=$02、$40|2=$42）
+    assert_eq!(phase_t832e_value(0x00), 0x02);
+    assert_eq!(phase_t832e_value(0x40), 0x42);
+    // $12 迁移段 = $8406/$840B 表逐值（trace $684=$5F→$61→$63→$65→$67 序列）
+    assert_eq!(&PARAM_TABLE_684[..5], &[0x5F, 0x61, 0x63, 0x65, 0x67], "迁移序列=段 B 表");
+    assert!(PARAM_TABLE_518[..3].iter().all(|&v| (0x0A..=0x0C).contains(&v)), "$518=$0A-$0C 族");
+    // 型值↔驱动 8 行指派（内态族分野）
+    let inner: Vec<u8> = DRIVER_ASSIGNMENTS.iter().filter(|d| d.inner_state).map(|d| d.type_code).collect();
+    assert_eq!(inner, vec![0x14, 0x15, 0x17], "$84D1 相位机=内态族");
+    assert!(DRIVER_ASSIGNMENTS.iter().any(|d| d.type_code == 0x2B && d.driver.contains("9120")));
+}

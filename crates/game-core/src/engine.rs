@@ -667,8 +667,10 @@ impl ScriptCursor {
         fired
     }
 
-    /// 波次流记录机效果落地（CA/C9 判定链——处理时相未证 S3-2，**装载即处理**口径
-    /// 挂账 W-PHASE）：arm 关末门/far-call 请求。返回落地流数。
+    /// 波次流记录机效果落地（CA/C9 判定链）——**W-PHASE 二择边界命名**（#94 靶⑤）：
+    /// 现口径=`ArmAtLoad`（装载即处理）；二择=`ArmAtRecordComplete`（记录完成·槽扫描
+    /// 口径）——真机验收裁点自带命名，分歧出现即可指名道姓挂账。
+    /// arm 关末门/far-call 请求。返回落地流数。
     pub fn process_waves(&mut self, state: &mut StageState, fx: &mut StageEffects) -> usize {
         let mut n = 0;
         for w in &mut self.waves {
@@ -706,6 +708,18 @@ pub const STG01_SCRIPT: [(u16, u8, Option<u16>, Option<u16>); 14] = [
     (0x0000, 4, None, None),
     (0x2718, 7, None, Some(0x080F)),
 ];
+
+/// W-PHASE 二择边界（真机验收裁点命名面）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WavePhaseTiming {
+    /// 装载即处理（现实现口径）。
+    ArmAtLoad,
+    /// 记录完成·槽扫描（二择候选）。
+    ArmAtRecordComplete,
+}
+
+/// 现行 W-PHASE 口径声明（真机裁决后改标）。
+pub const WAVE_PHASE_TIMING: WavePhaseTiming = WavePhaseTiming::ArmAtLoad;
 
 /// 波次流 C9/CA 全登记（**17 条 op5 流**八关全谱——`wave_stream_decode` golden）。
 pub const WAVE_FLAGS: [(u16, u8, u8); 17] = [
