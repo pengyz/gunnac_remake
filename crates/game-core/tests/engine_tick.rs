@@ -270,3 +270,68 @@ fn table_dispatch_wiring_live() {
     behavior_frame(&mut st, &mut StageEffects::default());
     assert_eq!(st.grid.slots[slot], before, "$9120 fail-closed");
 }
+
+// ===== 子面⑥：combat_frame 命中组装 =====
+
+use game_core::enemy::shape_stream_addr;
+
+/// ⑫ combat golden：弹×中 boss（形 $27 ±7 框）命中链。
+#[test]
+fn combat_frame_hit_chain() {
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    let r6 = |a: u16| 0x10 + 2 * 0x2000 + (a as usize - 0x8000);
+    let addr = shape_stream_addr(0x27).unwrap();
+    let stream = rom[r6(addr)..r6(addr) + 5].to_vec();
+
+    let mut st = StageState::default();
+    st.shape_data = vec![(addr, stream)];
+    // 中 boss 槽（type $4A/形 $27/HP 14/attr $13）@(128,100)
+    let si = 27usize;
+    st.grid.slots[si] = ObjectSlot {
+        type_: 0x4A,
+        f518: 0x27,
+        f630: 14,
+        f4c4: 0x13,
+        x: 128,
+        y: 100,
+        ..Default::default()
+    };
+    // 弹@(128,100)（框 7×10 中心）——必命中
+    st.bullets.state[0x80] = 1;
+    st.bullets.x[0x80] = 128;
+    st.bullets.y[0x80] = 100;
+    combat_frame(&mut st, &mut StageEffects::default());
+    assert_eq!(st.grid.slots[si].f630, 12, "弹命中 −2（14→12 实测锚）");
+    assert_eq!(st.bullets.state[0x80], 0, "弹回收（$87FD）");
+    // 7 发致死：HP 归 0 ⇒ 槽回收（$D616 死亡门语义）
+    for _ in 0..6 {
+        st.bullets.state[0x80] = 1;
+        st.bullets.x[0x80] = 128;
+        st.bullets.y[0x80] = 100;
+        combat_frame(&mut st, &mut StageEffects::default());
+    }
+    assert_eq!(st.grid.slots[si].type_, 0, "HP 归 0 槽回收");
+    // 远弹不命中
+    let mut st2 = StageState::default();
+    st2.shape_data = vec![(addr, rom[r6(addr)..r6(addr) + 5].to_vec())];
+    st2.grid.slots[si] = ObjectSlot {
+        type_: 0x4A, f518: 0x27, f630: 14, f4c4: 0x13, x: 50, y: 50, ..Default::default()
+    };
+    st2.bullets.state[0x80] = 1;
+    st2.bullets.x[0x80] = 200;
+    st2.bullets.y[0x80] = 200;
+    combat_frame(&mut st2, &mut StageEffects::default());
+    assert_eq!(st2.grid.slots[si].f630, 14, "远弹零伤");
+    // 属性过滤（$30×$0F 不相交 ⇒ 几何叠也无伤）
+    let mut st3 = StageState::default();
+    st3.shape_data = vec![(addr, rom[r6(addr)..r6(addr) + 5].to_vec())];
+    st3.grid.slots[si] = ObjectSlot {
+        type_: 0x4A, f518: 0x27, f630: 14, f4c4: 0x0F, x: 128, y: 100, ..Default::default()
+    };
+    st3.bullets.state[0x80] = 1;
+    st3.bullets.x[0x80] = 128;
+    st3.bullets.y[0x80] = 100;
+    combat_frame(&mut st3, &mut StageEffects::default());
+    assert_eq!(st3.grid.slots[si].f630, 14, "属性不交零伤（团队过滤）");
+    assert_eq!(st3.bullets.state[0x80], 1, "未命中弹不回收");
+}
