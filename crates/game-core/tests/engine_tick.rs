@@ -787,9 +787,14 @@ fn emit_probe5() {
         let rows = [
             (4600, "StageClear", Some("stg02-clear")), // trigger=injected（双 poke 实证）
             (5314, "Shop", Some("stg03-shop")),         // c60be11 商店段锚
-            (5571, "Transition", None),                 // 商店止（+33/34f 尾起点）
+            (5570, "Transition", None),                 // 尾起点=出店 5604−34（统一公式）
             (5604, "StageStart", Some("stg03-start")),  // §7 tick 重置/调度流 $A401 入口
-            (5844, "Combat", Some("stg03-combat")),     // 240f intro（gameplay-stage1 同型 B 级）
+            (5844, "Combat", Some("stg03-combat")),     // 240f intro（B 级——golden 可钉正）
+            (6400, "StageClear", Some("stg03-clear")),  // trigger=injected（注入 #3）
+            (7116, "Shop", Some("stg04-shop")),         // stg04 §7 入店锚
+            (7370, "Transition", None),                 // 尾起点=出店 7404−34
+            (7404, "StageStart", Some("stg04-start")),  // §7 调度流 $ADAD 入口（+34f 三证）
+            (7644, "Combat", Some("stg04-combat")),     // 240f intro（B 级）
         ];
         let mut out = String::new();
         for (f, mode, cp) in rows {
