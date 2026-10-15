@@ -129,3 +129,49 @@ fn fast_forward_and_wave_tick_wiring() {
     assert_eq!(st.sched.next, 2, "停滚 ⇒ 游标冻结（Wt-2）");
     assert!(fx3.spawn_events.len() + fx3.drip_events.len() == 0 || true);
 }
+
+// ===== 子面③：spawn 写链落地 =====
+
+use game_core::engine::{land_leader, land_pair, ObjectGrid};
+
+/// ⑦ pair 直投写集（$400/$470）+ 组长四参写集+签名行为字段。
+#[test]
+fn spawn_write_chain_landing() {
+    let mut g = ObjectGrid::default();
+    // pair：$C304 first-fit 从槽 8 起
+    let slot = land_pair(&mut g, 0x84, 0x30).expect("空网格有槽");
+    assert_eq!(slot, 8);
+    assert_eq!(g.slots[8].type_, 0x84);
+    assert_eq!(g.slots[8].f470, 0x30);
+    assert_eq!(g.slots[8].f518, 0, "pair 不写四参");
+    // 组长 $2F：四参+签名 $89DF+ctrl2 码流参
+    let r = land_leader(&mut g, 0x2F, [0x2B, 6, 0x0A, 0x20], Some(0x77)).expect("有槽");
+    let s = &g.slots[r.slot as usize];
+    assert_eq!((s.type_, s.f518, s.f630, s.f534, s.f470), (0x2F, 0x2B, 6, 0x0A, 0x20));
+    assert_eq!((s.beh_hi, s.beh_lo), (0x89, 0xDF), "$89DF 签名驱动写");
+    assert!(r.beh_registered);
+    assert_eq!(s.f48c, 0x77, "ctrl2 码流参写 $48C");
+    // 未登记型值：fail-closed 空行为字段+标志（不发明）
+    let r2 = land_leader(&mut g, 0x66, [1, 2, 3, 4], None).expect("有槽");
+    assert!(!r2.beh_registered, "未登记型值不发明行为字段");
+    let s2 = &g.slots[r2.slot as usize];
+    assert_eq!((s2.beh_hi, s2.beh_lo), (0, 0), "fail-closed 空字段");
+    assert_eq!(s2.f48c, 0, "ctrl1 无码流参");
+}
+
+/// ⑧ 分配域红线：pair 顺序/组长逆序首级（D4 槽序分歧沿用）+ 满载 fail-closed。
+#[test]
+fn landing_allocator_paths() {
+    let mut g = ObjectGrid::default();
+    let a = land_pair(&mut g, 0x84, 0).unwrap();
+    let b = land_leader(&mut g, 0x2F, [0, 0, 0, 0], None).unwrap();
+    assert_eq!(a, 8, "pair 顺序首适应");
+    assert_ne!(a, b.slot, "组长逆序首级（槽序分歧 D4）");
+    // 满载（8..27 全占）⇒ None
+    let mut g2 = ObjectGrid::default();
+    for s in g2.slots.iter_mut().skip(8) {
+        s.type_ = 0x30;
+    }
+    assert!(land_pair(&mut g2, 0x84, 0).is_none(), "满载 fail-closed");
+    assert!(land_leader(&mut g2, 0x2F, [0; 4], None).is_none());
+}
