@@ -1246,3 +1246,37 @@ impl TailDistribution {
         Some(v)
     }
 }
+
+// ===== S5-2 ② $18 菜单输入门控两层模型（ff561bc 机制闭合）=====
+
+/// `$18` 菜单输入门控（两层叠加=「锁在响应层非锁存层」真身）：
+/// **层 1 按下保持门**（bank00:92AA 按住 START 自旋每轮回 `$E59D` 帧同步+
+/// bank00:9400 按住早退 RTS=本次派发作废——**仅按下边沿派发**）；
+/// **层 2 相位机不派发**（(450,550] 时间锁=标题揭示相位完成前菜单输入处理器
+/// 不到达——相位表计时源未证（S5-2 残余），`phase_unlocked` 参数化）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MenuInputGate {
+    /// 层 2：揭示相位完成（相位边界解锁）。
+    pub phase_unlocked: bool,
+    /// 上轮按下保持状态（层 1 判据）。
+    pub prev_held: bool,
+}
+
+impl MenuInputGate {
+    /// 派发裁决：`Some(buttons)`=按下边沿派发；`None`=作废（层 2 未解锁/层 1 保持中）。
+    pub fn dispatch(&mut self, buttons_18: u8) -> Option<u8> {
+        if !self.phase_unlocked {
+            return None; // 层 2：相位未完不派发——处理器**根本不到达**（保持态不记）
+        }
+        let held = buttons_18 != 0;
+        let result = if held && self.prev_held {
+            None // 层 1：按住保持 ⇒ 早退 RTS（本次派发作废）
+        } else if held {
+            Some(buttons_18) // 按下边沿 ⇒ 派发
+        } else {
+            None
+        };
+        self.prev_held = held;
+        result
+    }
+}
