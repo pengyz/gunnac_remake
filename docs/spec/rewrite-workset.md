@@ -107,7 +107,7 @@ seed 里 **56,636B 被渲染为 data 项**（与 completeness.md “data 56,636B
 
 | 现象 | 证据 | 影响 |
 |---|---|---|
-| bank02:$863B-$9697 连续 byte-data 项（2,995+979+154 行） | `grep -n '^bank02:87BD' reference/seed/gunnac.asm`（无反汇编行）；对照 L2 ss-4..5 **执行** bank2:87BD 为代码 | 该域足迹/分类失真（R-X）；`shot_script_fetch`/`shot_lut_accumulate`/`shot_alloc`/`pickup_handler`/`shot_config_loader`/`level_config_index` 全落 R-X |
+| bank02:$863B-$9697 连续 byte-data 项（2,995+979+154 行） | `grep -n '^bank02:87BD' reference/seed/gunnac.asm`（无反汇编行）；对照 L2 ss-4..5 **执行** bank2:87BD 为代码 | 该域足迹/分类失真（R-X）；`shot_script_fetch`/`shot_lut_accumulate`/`shot_alloc`/`pickup_handler`/`shot_config_loader`/`level_config_index`/`shop_money_earn`（第 7 名，2026-10-15 复核 #85 ② 补）全落 R-X |
 | bank03:$AC42-$BFFF、bank01:$B29B-$BFFF 等 | data 项行主导（4,950/46、3,420/4） | 真数据表区（t_000/t_001），R-X 判定正确 |
 | bank03:A2FA-A342 一带 39 指令行零足迹 | 段表逐行 | 待 S3 边界考证（介于 bomb_drop 与 death_money_halve 之间） |
 
@@ -156,7 +156,7 @@ seed 里 **56,636B 被渲染为 data 项**（与 completeness.md “data 56,636B
 | 档位 | 段数 | 段占比 | 字节 | 字节占比 |
 |---|---|---|---|---|
 | L2-diff | 15 | 3.8% | 6,865 | 5.2% |
-| ≥ core-cited（含 L2） | 49 | 12.4% | 21,560 | 16.5% |
+| ≥ core-cited（含 L2） | 49 | 12.4% | 21,560 | ~~16.5%~~ 16.4%【2026-10-15 更正（复核 #85 ①）：21,560/131,072=16.45%→16.4%】 |
 | ≥ spec-cited（含以上） | 79 | 20.1% | 31,790 | 24.3% |
 | ≥ findings-cited（含以上） | 147 | 37.3% | 74,950 | 57.2% |
 | unexplored | 247 | 62.7% | 56,122 | 42.8% |
