@@ -296,6 +296,15 @@ def attribute_shots(name: str) -> dict:
     hp_deltas = [(e["f"], e.get("delta")) for e in events
                  if e["kind"] == "hp_delta" and (e.get("to") == 0 or abs(e.get("delta", 0)) >= 2)]
     boss_hits = [r for r in rows if r["class"] == "boss_confirmed"]
+    # 复核 #82 F3-2：HP 差分 ≥2 事件（帧级重导）× boss_confirmed 配对 ⇒ 未归因面
+    # （模型框近似/一帧滞后使多数真实命中落 unknown/offscreen——不披露会被读成"仅 N 次命中"）。
+    confirmed_die_frames = {r["die_f"] for r in boss_hits}
+    hp_ge2_frames: list[int] = []
+    for i in range(1, len(frames)):
+        a, b = hp.get(frames[i - 1]), hp.get(frames[i])
+        if a is not None and b is not None and int(a) - int(b) >= 2:
+            hp_ge2_frames.append(frames[i])
+    hp_ge2_unattributed = [f for f in hp_ge2_frames if f not in confirmed_die_frames]
     return {
         "run": name,
         "shots_self_total": len(rows),
@@ -303,6 +312,9 @@ def attribute_shots(name: str) -> dict:
         "boss_hits_confirmed": len(boss_hits),
         "boss_no_damage": counts.get("boss_no_damage", 0),
         "hp_delta_events": len(hp_deltas),
+        "hp_delta_ge2_events": len(hp_ge2_frames),
+        "hp_delta_ge2_unattributed": len(hp_ge2_unattributed),
+        "hp_delta_ge2_unattributed_frames": hp_ge2_unattributed,
         "rows_sample": rows[:ATTRIB_SAMPLE],
         "fourth_candidate_note": (
             "boss_no_damage=0 且 boss 框相交弹逐一对应 HP−2 ⇒ 受击保护/命中冷却（第四候选）排除；"
@@ -376,6 +388,9 @@ def main() -> int:
             print(f"run={rep['run']} 自机弹 {rep['shots_self_total']} 发；分类={rep['class_counts']}")
             print(f"命中确认（HP−2 逐发）: {rep['boss_hits_confirmed']}；"
                   f"boss 框相交 0 差分: {rep['boss_no_damage']}；HP 差分事件 {rep['hp_delta_events']}")
+            print(f"HP 差分 ≥2 事件（帧级）: {rep['hp_delta_ge2_events']}；"
+                  f"未归因（hp_delta_ge2_unattributed）: {rep['hp_delta_ge2_unattributed']} "
+                  f"@ {rep['hp_delta_ge2_unattributed_frames']}")
             for r in rep["rows_sample"]:
                 print(f"  f{r['spawn_f']}→f{r['die_f']} spawn{r['spawn_xy']} die{r['die_xy']} "
                       f"ΔHP={r['boss_hp_delta']} {r['class']}")

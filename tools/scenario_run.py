@@ -342,7 +342,8 @@ def archive_existing(name: str) -> str | None:
     moved = False
     for pat in (f"{name}.frames.jsonl", f"{name}.captures.jsonl", f"{name}.done",
                 f"{name}.run.json", f"{name}.lua.log", f"{name}.mesen.log",
-                f"{name}.inputs.jsonl", f"{name}.events.jsonl"):
+                f"{name}.inputs.jsonl", f"{name}.events.jsonl",
+                f"{name}.gen.lua", f"{name}.probe.jsonl"):
         src = TRACES_DIR / pat
         if src.exists():
             dst.mkdir(parents=True, exist_ok=True)
@@ -422,6 +423,10 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     lua_src, lua_sha = generate_lua(plan, spath)
     lua_path = GEN_DIR / f"{name}.lua"
     lua_path.write_text(lua_src, encoding="utf-8")
+    # 工具态留档（复核 #82 建议 4——旧生成 lua 被覆盖 ⇒ "旧态不可复原"）：生成 lua 同步落
+    # analysis/traces/<name>.gen.lua 持久副本，随 run 产物归档（archive_existing 一并迁移）。
+    gen_archive = TRACES_DIR / f"{name}.gen.lua"
+    gen_archive.write_text(lua_src, encoding="utf-8")
 
     # t54：观测/基线设置全部在 Mesen 启动前完成（此段崩溃不得孤儿化模拟器）
     cap_frames = [int(c["frame"]) for c in plan.get("captures", []) if "frame" in c]
@@ -528,6 +533,7 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
         "scenario_sha256": hashlib.sha256(spath.read_bytes()).hexdigest(),
         "generated_lua": lua_path.relative_to(ROOT).as_posix() if keep_gen else None,
         "generated_lua_sha256": lua_sha,
+        "generated_lua_archive": gen_archive.relative_to(ROOT).as_posix(),
         "frames": plan["frames"],
         "trace_lines": n_lines,
         "done": done_info,
