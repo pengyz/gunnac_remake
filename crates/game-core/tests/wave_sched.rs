@@ -177,3 +177,143 @@ fn sched_negative_sentinels() {
     );
     assert_eq!(s3.records.len(), 2, "ctrl0 记录分隔后续解第 2 条（空项）");
 }
+
+// ===== 批次2：记录处理出参（L2 对拍面）+ 组员帧域节律 =====
+
+/// ⑤ 四参写链 golden：双关签名法（stg02 §3.2 10/10 + B1 §2.2）——
+/// ctrl→leader_type 映射、四参原值、ctrl2/12 码流读、step 判据=type&1。
+#[test]
+fn quad_write_golden_cross_stage() {
+    // STG-01 @A275 [2]T=$2F(2B,06,0A,20)：ctrl2 ⇒ $2F、读码流、step（$2F&1=1）
+    let e = item_effect(
+        &SchedItem::Spawn { ctrl: 2, type_: 0x2F, args: [0x2B, 0x06, 0x0A, 0x20] },
+        0x77,
+    );
+    assert_eq!(
+        e,
+        ItemEffect::QuadWrite {
+            leader_type: 0x2F,
+            args: [0x2B, 0x06, 0x0A, 0x20],
+            write_48c: Some(0x77),
+            code_stream_step: true,
+        }
+    );
+    // STG-02 @AEF1 [1]T=$2E(56,08,1E,00)：ctrl1 ⇒ $2E、不读码流、不 step（$2E&1=0）
+    let e = item_effect(
+        &SchedItem::Spawn { ctrl: 1, type_: 0x2E, args: [0x56, 0x08, 0x1E, 0x00] },
+        0x99,
+    );
+    assert_eq!(
+        e,
+        ItemEffect::QuadWrite {
+            leader_type: 0x2E,
+            args: [0x56, 0x08, 0x1E, 0x00],
+            write_48c: None,
+            code_stream_step: false,
+        },
+        "ctrl1 不读码流（write_48c=None）"
+    );
+    // ctrl11/12 → $2C/$2D（872F/877F LDA #imm）
+    assert_eq!(
+        item_effect(&SchedItem::Spawn { ctrl: 11, type_: 0x2C, args: [1, 2, 3, 4] }, 0),
+        ItemEffect::QuadWrite {
+            leader_type: 0x2C,
+            args: [1, 2, 3, 4],
+            write_48c: None,
+            code_stream_step: false
+        }
+    );
+    assert_eq!(
+        item_effect(&SchedItem::Spawn { ctrl: 12, type_: 0x2D, args: [1, 2, 3, 4] }, 0x42),
+        ItemEffect::QuadWrite {
+            leader_type: 0x2D,
+            args: [1, 2, 3, 4],
+            write_48c: Some(0x42),
+            code_stream_step: true
+        }
+    );
+}
+
+/// ⑥ 其余 ctrl 路径出参（stg02 §6.6 判据：含 ctrl0/10/13/14 路径）。
+#[test]
+fn item_effect_ctrl10_pair_reg_paths() {
+    // ctrl10：type/param 双写 + 码流读 + **无条件** step（87C4-87C8）
+    assert_eq!(
+        item_effect(&SchedItem::SetType { type_: 0x2A, param: 0x00 }, 0x5A),
+        ItemEffect::SetTypeWrite { type_: 0x2A, param: 0x00, write_48c: 0x5A, code_stream_step: true }
+    );
+    // pair：$400+槽/$470+槽 两写
+    assert_eq!(
+        item_effect(&SchedItem::Pair { type_: 0x44, param: 0x00 }, 0),
+        ItemEffect::PairWrite { type_: 0x44, param: 0x00 }
+    );
+    // ctrl13/14 透传；ctrl0/jump 无写集；未证 ctrl fail-closed
+    assert_eq!(
+        item_effect(&SchedItem::Reg { ctrl: 13, a: 0x1C, b: 0x02 }, 0),
+        ItemEffect::RegWrite { ctrl: 13, a: 0x1C, b: 0x02 }
+    );
+    assert_eq!(item_effect(&SchedItem::Jump { ctrl: 9, target: 0xA397 }, 0), ItemEffect::NoWrite);
+    assert_eq!(item_effect(&SchedItem::Unknown { ctrl: 15 }, 0), ItemEffect::Unproven);
+}
+
+/// ⑦ 组员帧域节律 golden（B1 §2.3 + stg02 §3.3）：首员与组长同帧、$534 直接以帧兑现。
+#[test]
+fn member_schedule_frame_domain_golden() {
+    // STG-01 rec@A28A (4E,5,0F,89)：f1725 起 5 员 ×15f（f1770 槽复用不可见——判定式口径）
+    assert_eq!(
+        member_schedule(0x05, 0x0F, 1725),
+        Some(vec![1725, 1740, 1755, 1770, 1785])
+    );
+    // STG-01 rec@A275 (2B,6,0A,20)：f1341 起 6 员 ×10f
+    assert_eq!(
+        member_schedule(0x06, 0x0A, 1341),
+        Some(vec![1341, 1351, 1361, 1371, 1381, 1391])
+    );
+    // STG-02 rec@AEF1 (56,08,1E,00)：间隔 30f=$1E 直接兑现（首员=组长帧 f3776）
+    assert_eq!(
+        member_schedule(0x08, 0x1E, 3776),
+        Some(vec![3776, 3806, 3836, 3866, 3896, 3926, 3956, 3986])
+    );
+}
+
+/// ⑧ `$630` 首现=数−1 + 状态机节律 + 负向哨兵（mutation 可咬）。
+#[test]
+fn group_release_first_seen_and_negatives() {
+    // 首现 = count−1（装载后先递减一次，stg02 §3.4）
+    let (mut g, first) = GroupRelease::load(6, 10).expect("count=6 合法");
+    assert_eq!(first, 5, "$630 首现=数−1");
+    assert_ne!(first, 6, "首现=数 必红（未递减）");
+    assert_eq!(g.remaining, 5);
+    // 节律：同帧投首员（load 即投），其后每 10f 一员，共 6 员
+    let mut frames = vec![0u32]; // 首员=装载帧
+    for f in 1..=50 {
+        if g.tick_frame() {
+            frames.push(f);
+        }
+    }
+    assert_eq!(frames, vec![0, 10, 20, 30, 40, 50], "帧域间隔 10f 直接兑现");
+    assert_eq!(g.remaining, 0, "6 员投尽");
+    assert!(!g.tick_frame(), "余 0 不再投");
+    // 哨兵①：间隔是**帧**不是 tick（×8 换算必红）
+    let (mut g2, _) = GroupRelease::load(2, 15).unwrap();
+    let hit: Vec<u32> = (1..=15).filter(|_| g2.tick_frame()).collect();
+    assert_eq!(hit, vec![15], "15 帧整，非 15×8=120");
+    // 哨兵②：count=0 / interval=0 未观测 ⇒ fail-closed None
+    assert_eq!(GroupRelease::load(0, 10), None);
+    assert_eq!(GroupRelease::load(6, 0), None);
+    assert_eq!(member_schedule(0, 10, 0), None);
+    assert_eq!(member_schedule(6, 0, 0), None);
+}
+
+/// ⑨ tick 对账规则（A 级 10/10，stg02 §3.4）：trace `$84` = 工具累计 `+Nt` − 1。
+#[test]
+fn trace_tick_accounting_rule() {
+    for (plus_n, s84) in [(20u32, 0x13u32), (31, 0x1E), (57, 0x38), (97, 0x60)] {
+        assert_eq!(plus_n - 1, s84, "+Nt={plus_n} ↔ $84={s84:#X}");
+    }
+    // 复用到 STG-01 记录：tick 字段即工具 +Nt，trace 值=tick−1
+    let w = bank8_window();
+    let s = decode_sched(&w, 0xA26D, 64);
+    assert_eq!(s.records[1].tick, 33);
+    assert_eq!(s.records[1].tick - 1, 32, "$84 口径 = tick−1");
+}
