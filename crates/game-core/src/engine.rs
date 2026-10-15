@@ -1028,3 +1028,73 @@ pub const FLOW_TIMELINE_RESPAWN: &[(u32, &str, &str)] = &[
     (1350, "Combat", ""),
     (1400, "DeathRespawn", "respawn-window"),
 ];
+
+// ===== flow 响应时延面（c3398be——s5 33 行解）=====
+
+/// 输入位（`$18` 位图——c3398be A 级）。
+pub mod input_bits {
+    /// A 键。
+    pub const A: u8 = 0x80;
+    /// B 键。
+    pub const B: u8 = 0x40;
+    /// START。
+    pub const START: u8 = 0x10;
+    /// DOWN。
+    pub const DOWN: u8 = 0x04;
+}
+
+/// 输入锁存层（press@N ⇒ **N+1f** 锁存 `$18` 位图、保持 **12f**——A 级）。
+/// 注：输入锁（450,550] 在**响应层**非锁存层（门控=场景状态机消费侧，B 级注）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct InputLatch {
+    /// `$18` 位图。
+    pub bitmap_18: u8,
+    pending: u8,
+    hold: u8,
+}
+
+impl InputLatch {
+    /// 键按下（下一帧入锁存）。
+    pub fn press(&mut self, bit: u8) {
+        self.pending |= bit;
+    }
+
+    /// 帧推进：pending 转锁存（+1f）+ 保持递减（12f 满程）。
+    pub fn tick_frame(&mut self) {
+        if self.pending != 0 {
+            self.bitmap_18 |= self.pending;
+            self.hold = 12;
+            self.pending = 0;
+        } else if self.hold > 0 {
+            self.hold -= 1;
+            if self.hold == 0 {
+                self.bitmap_18 = 0;
+            }
+        }
+    }
+}
+
+/// 转场尾常数（menu→game 33f/shop→game 34f 同量级 ⇒ **统一 ≈33-34f**；
+/// S5-2（33f 帧内分布/门控代码面）挂账不发明）。
+pub const TRANSITION_TAIL_FRAMES: u32 = 33;
+
+/// 段判别字段（`$0300` 场景 id 四值，A 级）。
+pub mod segment_id {
+    /// title。
+    pub const TITLE: u8 = 0x7C;
+    /// menu。
+    pub const MENU: u8 = 0x6C;
+    /// shop。
+    pub const SHOP: u8 = 0x00;
+    /// gameplay。
+    pub const GAMEPLAY: u8 = 0x01;
+}
+
+/// shop 导航响应（+1f 端到端——`$0300` 光标步进，A 级）。
+pub fn shop_nav_tick(cursor_0300: u8, down: bool) -> u8 {
+    if down {
+        cursor_0300.wrapping_add(1)
+    } else {
+        cursor_0300
+    }
+}
