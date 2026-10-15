@@ -49,6 +49,10 @@ pub struct StageState {
     pub rng: RngState,
     /// zp `$54`（调用环分组判据输入——运行期来源 S4b 挂账，字段不发明）。
     pub zp_54: u8,
+    /// W-PHASE 口径（真机裁点双模式可跑化）。
+    pub wave_phase: WavePhaseTiming,
+    /// ArmAtRecordComplete 的完成延迟（tick；真机拟合参数）。
+    pub record_complete_delay: u32,
     /// 脚本游标（脚本解释器 thr 推进——子面⑦）。
     pub script: ScriptCursor,
     /// 弹网格 SoA（批次3 六数组面——自机/敌弹共用）。
@@ -598,6 +602,9 @@ pub struct WaveStream {
     pub ca: u8,
     /// 已处理（效果已落地）。
     pub processed: bool,
+    /// 记录完成·槽扫描口径的落地 tick（ArmAtLoad ⇒ =装载 tick；ArmAtRecordComplete
+    /// ⇒ =装载 tick+record_complete_delay——真机拟合参数）。
+    pub complete_at: u32,
 }
 
 /// 脚本游标（thr 精确相等推进；op5 装载波次流；op7 按 $C8 分支）。
@@ -642,7 +649,7 @@ impl ScriptCursor {
             self.threshold = rec.thr; // 尾 thr → $86/$87
             match rec.op {
                 5 => {
-                    // op5 set-wavestream：$C8:=1 + 装流 → 记录机效果（CA/C9）
+                    // op5 set-wavestream：$C8:=1 + 装流（complete_at 由调用侧口径填）
                     self.c8 = 1;
                     let addr = rec.wave.unwrap();
                     self.waves.push(WaveStream {
@@ -650,6 +657,7 @@ impl ScriptCursor {
                         c9: 0,
                         ca: 0,
                         processed: false,
+                        complete_at: tick,
                     });
                 }
                 7 => {
@@ -672,9 +680,20 @@ impl ScriptCursor {
     /// 口径）——真机验收裁点自带命名，分歧出现即可指名道姓挂账。
     /// arm 关末门/far-call 请求。返回落地流数。
     pub fn process_waves(&mut self, state: &mut StageState, fx: &mut StageEffects) -> usize {
+        let timing = state.wave_phase;
+        let delay = state.record_complete_delay;
+        let now = u32::from(state.wave.tick);
         let mut n = 0;
         for w in &mut self.waves {
             if w.processed {
+                continue;
+            }
+            // W-PHASE 双口径：ArmAtLoad=装载 tick 落地；ArmAtRecordComplete=完成 tick 落地
+            let due = match timing {
+                WavePhaseTiming::ArmAtLoad => w.complete_at,
+                WavePhaseTiming::ArmAtRecordComplete => w.complete_at.saturating_add(delay),
+            };
+            if now < due {
                 continue;
             }
             let j = ca_judgment(w.c9, w.ca, state.wave.flags_26, 0, 0);
@@ -710,9 +729,9 @@ pub const STG01_SCRIPT: [(u16, u8, Option<u16>, Option<u16>); 14] = [
 ];
 
 /// W-PHASE 二择边界（真机验收裁点命名面）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WavePhaseTiming {
-    /// 装载即处理（现实现口径）。
+    #[default]
     ArmAtLoad,
     /// 记录完成·槽扫描（二择候选）。
     ArmAtRecordComplete,
