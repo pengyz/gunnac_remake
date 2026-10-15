@@ -350,6 +350,7 @@ fn stg01_natural_run_to_stage_gate() {
     let mut fx = StageEffects::default();
     // 逐 tick 驱动（精确相等匹配）：t=0..=$330 ⇒ rec9 装 $A3CD（CA=$00 不臂门）
     for t in 0..=0x0330u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         register_wave_flags(&mut cur);
@@ -360,6 +361,7 @@ fn stg01_natural_run_to_stage_gate() {
     assert_eq!(st.wave.flags_26 & 0x10, 0, "CA=$00 不臂门");
     // t=$331..=$4D0 ⇒ rec11 装 $A3E4（CA=$05 bit0）⇒ 臂门
     for t in 0x0331..=0x04D0u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         register_wave_flags(&mut cur);
@@ -380,12 +382,14 @@ fn stg01_natural_run_to_stage_gate() {
     // 尾段不可达哨兵（test-runner advisory）：先补发 rec12/13（$4DA/$4E8），
     // rec13 尾 thr=$0000 ⇒ rec14 op7 **永不触发**
     for t in 0x04D1..=0x04E8u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         st.script = cur;
     }
     assert_eq!(st.script.next, 13, "rec12/13 已发（$4DA/$4E8）");
     for t in 0x04E9..=0x2718u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         let f = cur.step_to(t, &mut st, &mut fx);
         st.script = cur;
@@ -415,6 +419,7 @@ fn stg02_natural_run_to_stage_gate() {
     let mut st = StageState { script: ScriptCursor::from_records(&STG02_SCRIPT), ..Default::default() };
     let mut fx = StageEffects::default();
     for t in 0..=0x0350u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         register_wave_flags(&mut cur);
@@ -434,6 +439,7 @@ fn stg03_natural_run_to_stage_gate() {
     let mut st = StageState { script: ScriptCursor::from_records(&STG03_SCRIPT), ..Default::default() };
     let mut fx = StageEffects::default();
     for t in 0..=0x0440u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         register_wave_flags(&mut cur);
@@ -453,6 +459,7 @@ fn stg04_natural_run_to_stage_gate() {
     let mut st = StageState { script: ScriptCursor::from_records(&STG04_SCRIPT), ..Default::default() };
     let mut fx = StageEffects::default();
     for t in 0..=0x0318u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         register_wave_flags(&mut cur);
@@ -472,6 +479,7 @@ fn stg05_natural_run_to_stage_gate() {
     let mut st = StageState { script: ScriptCursor::from_records(&STG05_SCRIPT), ..Default::default() };
     let mut fx = StageEffects::default();
     for t in 0..=0x0289u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         register_wave_flags(&mut cur);
@@ -491,6 +499,7 @@ fn stg06_natural_run_to_stage_gate() {
     let mut st = StageState { script: ScriptCursor::from_records(&STG06_SCRIPT), ..Default::default() };
     let mut fx = StageEffects::default();
     for t in 0..=0x0412u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         register_wave_flags(&mut cur);
@@ -510,6 +519,7 @@ fn stg07_natural_run_to_stage_gate() {
     let mut st = StageState { script: ScriptCursor::from_records(&STG07_SCRIPT), ..Default::default() };
     let mut fx = StageEffects::default();
     for t in 0..=0x028Cu32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         register_wave_flags(&mut cur);
@@ -529,6 +539,7 @@ fn stg08_natural_run_to_stage_gate() {
     let mut st = StageState { script: ScriptCursor::from_records(&STG08_SCRIPT), ..Default::default() };
     let mut fx = StageEffects::default();
     for t in 0..=0x0304u32 {
+        st.wave.tick = t as u16; // W-PHASE 时相=状态
         let mut cur = core::mem::take(&mut st.script);
         cur.step_to(t, &mut st, &mut fx);
         register_wave_flags(&mut cur);
@@ -595,4 +606,38 @@ fn fast_forward_ring_per_tick_sentinel() {
     };
     fast_forward_ring(&mut cursor2, 1, &mut fx);
     assert_eq!(cursor2.next, 1, "17-型环界（1 迭代=1 tick）");
+}
+
+/// ⑱ W-PHASE 双口径可跑化（真机裁点对照面）：ArmAtLoad vs ArmAtRecordComplete。
+#[test]
+fn wave_phase_dual_mode_adjudication() {
+    use game_core::engine::WavePhaseTiming;
+    let run = |phase: WavePhaseTiming, delay: u32| {
+        let mut st = StageState {
+            script: ScriptCursor::stg01(),
+            wave_phase: phase,
+            record_complete_delay: delay,
+            ..Default::default()
+        };
+        let mut armed_at = None;
+        let mut fx = StageEffects::default();
+        for t in 0..=0x04E0u32 {
+            st.wave.tick = t as u16; // process_waves 以 wave.tick 为 now
+            let mut cur = core::mem::take(&mut st.script);
+            cur.step_to(t, &mut st, &mut fx);
+            register_wave_flags(&mut cur);
+            cur.process_waves(&mut st, &mut fx);
+            st.script = cur;
+            if armed_at.is_none() && st.wave.flags_26 & 0x10 != 0 {
+                armed_at = Some(t);
+            }
+        }
+        armed_at
+    };
+    // ArmAtLoad：$A3E4 装载 tick $04D0 即臂
+    assert_eq!(run(WavePhaseTiming::ArmAtLoad, 0), Some(0x04D0), "装载即处理");
+    // ArmAtRecordComplete delay=3：$04D3 臂（真机拟合 delay 参数）
+    assert_eq!(run(WavePhaseTiming::ArmAtRecordComplete, 3), Some(0x04D3), "完成口径延迟");
+    // delay=0 等价 ArmAtLoad（口径收敛性质）
+    assert_eq!(run(WavePhaseTiming::ArmAtRecordComplete, 0), Some(0x04D0));
 }
