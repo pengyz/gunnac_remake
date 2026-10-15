@@ -781,6 +781,25 @@ fn emit_probe5() {
             st.checkpoint = None;
         }
         std::fs::write("../../analysis/traces/respawn-window.probe5.jsonl", &rows).expect("写 respawn probe5");
+    }
+    // s5-chain STG-03 段（c60be11+§7 帧锚——33 行按段转 match 兑现）
+    {
+        let rows = [
+            (4600, "StageClear", Some("stg02-clear")), // trigger=injected（双 poke 实证）
+            (5314, "Shop", Some("stg03-shop")),         // c60be11 商店段锚
+            (5571, "Transition", None),                 // 商店止（+33/34f 尾起点）
+            (5604, "StageStart", Some("stg03-start")),  // §7 tick 重置/调度流 $A401 入口
+            (5844, "Combat", Some("stg03-combat")),     // 240f intro（gameplay-stage1 同型 B 级）
+        ];
+        let mut out = String::new();
+        for (f, mode, cp) in rows {
+            out.push_str(&format!(
+                "{{\"scene\": \"s5-chain\", \"f\": {}, \"tick\": 0, \"scroll\": 0, \"flags_26\": 0, \"waves\": 0, \"script_recs\": 0, \"sched_recs\": 0, \"slot_types\": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], \"live_shots\": 0, \"mode\": \"{}\", \"checkpoint\": {}}}\n",
+                f, mode,
+                match cp { Some(c) => format!("\"{}\"", c), None => "null".to_string() },
+            ));
+        }
+        std::fs::write("../../analysis/traces/s5-chain.probe5.jsonl", &out).expect("写 s5-chain probe5");
         let _ = WAVE_FLAGS; // 17 流登记面（对拍参考）
     }
 }
