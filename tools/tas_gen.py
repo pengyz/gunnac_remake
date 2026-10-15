@@ -7,7 +7,8 @@
 
 硬性红线（AGENTS.md §3 + README 写注入纪律）：
 - 本工具**没有任何写内存/改状态能力**：输出面只允许 `press`/`hold` 两个动词；遇到 plan 里的
-  poke 类指令直接拒绝（fail-closed）。
+  poke 类指令直接拒绝（fail-closed）；**未实现指令同样显式拒绝，不静默吞**
+  （when 子句=未实现档位，见下；复核 #78 F1）。
 - 规则只来自已证参数（R-tas-1..7，见规格 §2）；弹速表语义（Wt-6）/敌弹 RAM 布局/boss 血量
   等未证语义**不参与决策**，生成报告显式列出。
 
@@ -20,7 +21,8 @@
 plan DSL（docs/spec/tas-input-dsl.md §1.2）：
   stage <N> / frames <N> / prefix <场景名> / fire <起>-<止> / bomb budget <N>
   bomb at <帧,帧,…> / band x <lo>-<hi> y <lo>-<hi> / sweep period <F> [phase <F>]
-  when <pred> then <action>       # 生成期条件（展开后不残留）
+  when <pred> then <action>       # 【未实施·显式拒绝】生成期展开档位未建（spec §1.2 更正注）；
+                                  #   子句动作动词白名单={hold,press,avoid}，白名单外（含 poke 类）→ PlanError
 """
 from __future__ import annotations
 
@@ -44,11 +46,18 @@ HIT_ENVELOPE = 12           # R-tas-5：命中包络候选 |dx|≤12,|dy|≤12�
 AVOID_MARGIN = HIT_ENVELOPE + 4  # 包络 +4px 余量（经验值，报告显式标注）
 BOMB_AMMO_MAX = 20          # R-tas-2：商店「导弹20个 上限」+ $018F
 BOMB_CONSUME = (1, 2, 3, 2)  # R-tas-2：bank03:$A336（C-bomb-consume）
-BOMB_DEPLOY_FRAMES = 209    # R-tas-2：投放在途窗下界（chain-A 实测 209f；他链 254f → 按 209 去重）
+# R-tas-2：投放去重窗下界（生成期排程去重启发式，**不是寿命常量**）。
+#   出处：chain-A 实测在途窗 209f；他链 254f → 按 209 去重（保守下界）。
+#   ⚠ 与 player-movement A5「209f 寿命=行为链合成值，移植端禁止硬编码 209」不冲突：
+#   本常量只在生成期排程去重用，不消费 $0401 在途寿命语义，移植端不得当寿命引用
+#   （A1 改名避嫌：复核 #78 A1——原名 BOMB_DEPLOY_FRAMES 易误读为"投放=209f 寿命"）。
+BOMB_DEPLOY_DEDUP_HINT = 209
 FIRE_REPEAT_FRAMES = 7      # R-tas-1：$39=8 重复计时器（fire-hold 实测每 7 帧一发）
 
 # ---- tick→帧映射锚（实测：analysis/traces/b2-fire-probe.frames.jsonl，$84/$85 逐帧）----
-# Wt-2 裁定素材：tick 频率随滚动速度变化（8f/2f/ramp/16f 四段），非恒定 8f。
+# Wt-2 已裁定（2026-10-15，复核 #78 §4）：**tick = 16px 滚动进度**（A 级——三段全等
+#   8f×2px/f = 2f×8px/f = 16f×1px/f = 16px；$8B 逐帧 −2 直证；bank00:8D3A 减速表逐指令吻合），
+#   tick 频率随滚动速度变化（8f/2f/ramp/16f 四段），非恒定 8f。
 #   锚值 = 脚本层 tick 计数器 $84；调度流累计 tick = $84 + SCHED_TICK_OFFSET（实测 +1，
 #   B1 §2.2 锚点校验：sched +33t↔f1341 时 $84=32、+161t↔f2365 时 $84=160 → 7 锚全等）。
 TICK_MAP_ANCHORS = [
@@ -56,11 +65,37 @@ TICK_MAP_ANCHORS = [
     (350, 2957), (400, 3143), (450, 3833), (500, 4633), (558, 5561),
 ]
 SCHED_TICK_OFFSET = 1
-TICK_EXTRAP_F_PER_TICK = 16.0  # 超出实测段按 16f/tick 线性外推（假设 W-tas-3，报告显式）
+# 超出实测段按 16f/tick 线性外推（假设 W-tas-3，报告显式）。
+#   补注（复核 #78 §4）：tick558-815 实测 257 tick 全 16f，且 tick=16px 滚动进度已证（Wt-2 关闭）——
+#   16f/tick 在 1px/f 恒速段为实测值；外推仅覆盖 W-tas-3 尾段 tick 816→1232（未实测，arena 停滚期
+#   tick 不推进、rec12 set-speed 后区间未测）→ 该段仍是假设。
+TICK_EXTRAP_F_PER_TICK = 16.0
 
 
 class PlanError(Exception):
     pass
+
+
+# when 子句动作动词白名单（生成期展开档位的合法动作面；当前档位=显式拒绝，见 parse_plan）。
+#   白名单外动词（含 poke 类写注入）→ PlanError；白名单内动词 → when 未实现拒绝（不展开）。
+WHEN_ACTION_WHITELIST = ("hold", "press", "avoid")
+POKE_CLASS_VERBS = ("poke", "poke_every", "snapshot", "restore")
+
+
+def safe_name_component(name: str, what: str = "name") -> str:
+    """A1（复核 #78）：单段路径消毒——拒绝路径分隔符/点段/绝对路径/空名，防越出 SCENARIO_DIR。
+
+    `--name`/`prefix`/record-to-scenario 名字只允许单个路径段（如 `tas-stg01-v2`）。
+    """
+    if not isinstance(name, str) or not name or name in (".", ".."):
+        raise PlanError(f"{what} 非法（空名/点段）: {name!r}")
+    if "/" in name or "\\" in name or "\x00" in name:
+        raise PlanError(f"{what} 含路径分隔符/非法字符（只允许单段名）: {name!r}")
+    if name.startswith("."):
+        raise PlanError(f"{what} 不能以点开头: {name!r}")
+    if Path(name).name != name:
+        raise PlanError(f"{what} 不是单一路径段: {name!r}")
+    return name
 
 
 # ---------------------------------------------------------------- 时间线
@@ -127,7 +162,7 @@ def parse_plan(path: Path) -> dict:
         elif op == "frames":
             plan["frames"] = int(args[0])
         elif op == "prefix":
-            plan["prefix"] = args[0]
+            plan["prefix"] = safe_name_component(args[0], "prefix")  # A1 路径消毒
         elif op == "fire":
             a, b = args[0].split("-")
             plan["fire"] = (int(a), int(b))
@@ -160,7 +195,27 @@ def parse_plan(path: Path) -> dict:
         elif op == "capture_every":
             plan["capture_every"] = (int(args[0]), args[1])
         elif op == "when":
-            plan["when"].append(" ".join(args))
+            # F1（复核 #78）：when 生成期展开档位**未实现** → 显式拒绝（fail-closed，不静默吞）。
+            #   档位裁定：spec §1.2 承诺"生成期展开"但展开器不存在（旧版零消费者静默丢弃）；
+            #   谓词 spawn_near/cluster_active/slot_count 求值语义未证（未证不发明），
+            #   已验证的条件相位切换路径 = 多段 band <起帧>（v3 实测有效）→ 本轮取"拒绝未实现指令"档位。
+            #   子句动作动词先行分诊：白名单外（含 poke 类）按各自语义拒绝，白名单内按 when 未实现拒绝。
+            try:
+                then_i = args.index("then")
+            except ValueError:
+                err("when 子句缺 then <action>（语法见 spec §1.2；实现档位=显式拒绝，复核 #78 F1）")
+            if then_i + 1 >= len(args):
+                err("when 子句 then 后缺动作动词（实现档位=显式拒绝，复核 #78 F1）")
+            verb = args[then_i + 1]
+            if verb in POKE_CLASS_VERBS:
+                # 写注入伪装在 when 子句里同样拒绝（fail-closed 语义覆盖子句内部）
+                err(f"生成器拒绝 when 子句内 {verb}：TAS 输入轨只允许按键（README 写注入纪律）"
+                    f"——when 内嵌写注入不得静默吞（复核 #78 F1）")
+            if verb not in WHEN_ACTION_WHITELIST:
+                err(f"when 子句动作动词 {verb!r} 不在白名单 {WHEN_ACTION_WHITELIST}"
+                    f"（未实现指令显式拒绝，复核 #78 F1）")
+            err(f"when 生成期展开未实现（档位=显式拒绝，spec §1.2 更正注；复核 #78 F1）"
+                f"：{verb} 动作不展开；条件相位切换请用多段 band <起帧>（已验证路径）")
         elif op in ("poke", "poke_every", "snapshot", "restore"):
             # fail-closed：正常通关场景禁 poke（README 纪律）；生成器无写注入能力
             err(f"生成器拒绝 {op}：TAS 输入轨只允许按键（README 写注入纪律）")
@@ -262,7 +317,7 @@ def solve_bombs(plan: dict, timeline: list[dict]) -> list[int]:
     for f in pts:
         if f < plan["fire"][0] or f > plan["frames"]:
             continue  # 预算外/超帧界（生成物必须落在 1..frames，scenario_run 校验）
-        if f - last < BOMB_DEPLOY_FRAMES:
+        if f - last < BOMB_DEPLOY_DEDUP_HINT:
             continue
         if budget < cost:
             break
@@ -319,7 +374,7 @@ def plan_to_scenario(plan: dict, timeline: list[dict]) -> tuple[str, dict]:
         for b in m["buttons"]:
             L.append(f"hold {m['from']}-{m['to']} {b}   # {m['rule']}")
     for bf in bombs:
-        L.append(f"press {bf} a   # R-tas-2 炸弹（投放去重 {BOMB_DEPLOY_FRAMES}f）")
+        L.append(f"press {bf} a   # R-tas-2 炸弹（投放去重 {BOMB_DEPLOY_DEDUP_HINT}f）")
     L.append("")
     L.append("# ===== watch（轻量面：通关判定 + 输入纯净 + RNG/tick 探测）=====")
     for addr, label in (("0180", "stage_no"), ("0026", "flags26"), ("0027", "flags27"),
@@ -345,10 +400,17 @@ def plan_to_scenario(plan: dict, timeline: list[dict]) -> tuple[str, dict]:
              "spawns": r["spawns"]} for r in timeline
         ],
         "assumptions": [
-            "W-tas-3: tick→帧按实测锚插值 + 尾段 16f/tick 外推（tick 频率随滚动变速，Wt-2 素材）",
+            "W-tas-3: tick→帧按实测锚插值 + 尾段 16f/tick 外推"
+            "（tick558-815 实测 257 tick 全 16f；tick=16px 滚动进度已证=Wt-2 关闭，复核 #78 §4；"
+            "外推仅覆盖 tick 816→1232 未实测尾段）",
             "R-tas-4 横扫为经验启发式（非已证弹道）",
             "R-tas-5 margin=16px 为包络候选+余量（W15 未定谳）",
             "Wt-6: 弹速表语义未闭环 → 不做弹道预测",
+        ],
+        # F1（复核 #78）：未实现 DSL 显式声明（档位=拒绝，不静默吞）
+        "unimplemented_dsl": [
+            "when <pred> then <action>：生成期展开档位未建 → 显式拒绝（spec §1.2 更正注，复核 #78 F1）；"
+            "条件相位切换由多段 band <起帧> 承担（已验证路径）",
         ],
         "no_poke": True,
     }
@@ -413,11 +475,15 @@ def main():
                   f"@${rec['raw'].get('addr') or 0:04X} {sp}")
         return
     if args.cmd == "gen" or args.cmd == "report":
-        plan = parse_plan(Path(args.plan))
-        if args.cmd == "gen" and args.name:
-            plan["name"] = args.name
-        timeline = sched_timeline(plan["stage"])
-        text, report = plan_to_scenario(plan, timeline)
+        try:
+            plan = parse_plan(Path(args.plan))
+            if args.cmd == "gen" and args.name:
+                plan["name"] = safe_name_component(args.name, "--name")  # A1 路径消毒
+            timeline = sched_timeline(plan["stage"])
+            text, report = plan_to_scenario(plan, timeline)
+        except PlanError as e:
+            print(f"PlanError: {e}", file=sys.stderr)
+            sys.exit(1)
         if args.cmd == "report":
             print(json.dumps(report, ensure_ascii=False, indent=2))
             return
@@ -430,8 +496,13 @@ def main():
         print(f"报告 {rep}")
         return
     if args.cmd == "record-to-scenario":
-        out = Path(args.out_dir) / f"{args.name}.txt"
-        out.write_text(record_to_scenario(Path(args.inputs), args.name), encoding="utf-8")
+        try:
+            name = safe_name_component(args.name, "name")  # A1 路径消毒
+            out = Path(args.out_dir) / f"{name}.txt"
+            out.write_text(record_to_scenario(Path(args.inputs), name), encoding="utf-8")
+        except PlanError as e:
+            print(f"PlanError: {e}", file=sys.stderr)
+            sys.exit(1)
         print(f"生成 {out}")
 
 
