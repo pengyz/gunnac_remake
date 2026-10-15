@@ -9,6 +9,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod engine;
 pub mod enemy;
 pub mod flow;
 pub mod l2ports;
