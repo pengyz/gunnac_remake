@@ -287,3 +287,27 @@ pub fn motion_step(counter: u8, phase_2b: u8) -> MotionOut {
 /// 【2026-10-15 更正（F-D90）】~~f1595~~ → **f1592**：1595=§2.1 正弦拟合右极混记，
 /// 迁移帧=1592 逐帧直读。行为相位随型值切换；**迁移触发语义未证**（不发明）。
 pub const TYPE_MIGRATION_SLOT09: [(u32, u8); 3] = [(1479, 0x2B), (1592, 0x12), (1627, 0x4E)];
+
+/// 行为分发模式（`bank02:82F8-8311`，A 级逐指令：`LDA $41C,X / BPL $8307`）：
+/// `vec_hi` bit7=1 ⇒ **自向量**（`$41C:$438` 为跳转目标，`STA $25/LDA $438/STA $24/JMP ($24)`）；
+/// bit7=0 ⇒ **表分发**（`$80CE[Y]:$7FFF[Y]`，Y=状态码 `$400+槽`——此模式下 `$41C:$438`
+/// **非跳转目标**）。
+///
+/// 关联挂账：trace `beh=` 列 hi bit7=0 值的语义裁定（模式标记/写中间态/另有语义）转
+/// decomp-analyst——本函数只落分派判据字节义，不预判那批值的语义。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DispatchMode {
+    /// bit7=1 自向量（$41C:$438 直接跳转）。
+    SelfVector,
+    /// bit7=0 表分发（状态表间接跳转）。
+    TableDispatch,
+}
+
+/// 分派模式判据（bit7 测试）。
+pub fn dispatch_mode(vec_hi: u8) -> DispatchMode {
+    if vec_hi & 0x80 != 0 {
+        DispatchMode::SelfVector
+    } else {
+        DispatchMode::TableDispatch
+    }
+}
