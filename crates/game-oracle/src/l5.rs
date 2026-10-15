@@ -385,7 +385,11 @@ pub fn s5_chain_run_for(stages: u8) -> S5Run {
                 (5, "start") => ("s5-chain", 9600),    // 关始采样（+96f 三证同型）
                 (4, "combat") => ("s5-chain", 8100),
                 (5, "combat") => ("s5-chain", 10500), // 裁定②选样（$B674 流段 f9504-11093 真战斗窗）
-                // 未采段（stg05-08）= f=0 占位（pending 不发明帧号）
+                // **裁① fail-closed 5 行注因**（195e23a——不发明帧号）：
+                // stg08-exit/start/combat/clear+Ending all-clear-95f9 = 末关出店后段
+                // 确定性截断（4 位矩阵：0/1/2=空按、3=唯一出店位且三连截断）；
+                // 两线索（$32 末关旗/fade 调色板分叉）入台账 predicate；OBS-1 候选
+                // 观察区（不立号——立号条件=自然链复现）。
                 _ => ("s5-chain", 0),
             }
         };
