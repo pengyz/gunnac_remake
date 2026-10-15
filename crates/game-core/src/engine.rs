@@ -844,3 +844,44 @@ pub const STG08_SCRIPT: [(u16, u8, Option<u16>, Option<u16>); 9] = [
     (0xFFFF, 5, Some(0xB889), None),
     (0x2919, 7, None, Some(0x090F)),
 ];
+
+// ===== L5 真机验收前置：帧探针桥（引擎侧输出面）=====
+
+/// 帧探针（L5 trace 对拍状态向量——named 模式对齐 oracle golden JSONL 口径）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StageProbe {
+    /// 帧号。
+    pub f: u32,
+    /// `$84` tick（滚动进度域）。
+    pub tick: u16,
+    /// 滚动进度（px）。
+    pub scroll: u16,
+    /// `$26` 标志（bit4=关末门）。
+    pub flags_26: u8,
+    /// 已装波次流数。
+    pub waves: u8,
+    /// 已发脚本记录数。
+    pub script_recs: u8,
+    /// 已发调度记录数。
+    pub sched_recs: u8,
+    /// 对象槽型码摘要（28 槽 $0400 镜像——逐槽向量）。
+    pub slot_types: [u8; 28],
+    /// 存活弹数（$040E state≠0 计数）。
+    pub live_shots: u16,
+}
+
+/// 帧探针抽取（纯函数——L5 逐帧对拍面）。
+pub fn stage_probe(state: &StageState) -> StageProbe {
+    let live_shots = state.bullets.state.iter().filter(|&&s| s != 0).count() as u16;
+    StageProbe {
+        f: state.frame,
+        tick: state.wave.tick,
+        scroll: state.wave.scroll_progress,
+        flags_26: state.wave.flags_26,
+        waves: state.script.waves.len() as u8,
+        script_recs: state.script.next as u8,
+        sched_recs: state.sched.next as u8,
+        slot_types: core::array::from_fn(|i| state.grid.slots[i].type_),
+        live_shots,
+    }
+}
