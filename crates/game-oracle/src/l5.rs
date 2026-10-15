@@ -369,6 +369,8 @@ pub fn s5_chain_run_for(stages: u8) -> S5Run {
                 // 双证，<8500 分叉点两 run 同态；probe=300 整数倍帧）
                 (4, "clear") => ("s5-chain", 8501),   // poke#4 块入场（poke+1 四次同型）
                 (5, "clear") => ("s5-chain", 10601),  // poke#5 块入场（poke+1 五次同型）
+                (6, "combat") => ("s5-chain", 13000),  // 双证（$A3A5 真战斗窗 <分叉 f13500 双 run 同态）
+                (6, "clear") => ("s5-chain", 13501),   // poke#6 块入场（poke+1 六次同型）
                 (6, "shop") => ("s5-chain", 11316),    // stg06 §7 入店锚
                 (6, "exit") => ("s5-chain", 11604),    // 出店转场尾完成帧（+34f 五证）
                 (6, "start") => ("s5-chain", 11700),   // 关始采样（+96f 四证同型）
