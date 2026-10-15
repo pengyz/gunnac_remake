@@ -409,3 +409,41 @@ fn member_rhythm_cross_stage_anchors() {
     let s3 = member_schedule(4, 0x0F, 0).unwrap();
     assert_eq!(s3, vec![0, 15, 30, 45], "STG-03 主导 15f 形状（帧锚待采不作锚断言）");
 }
+
+// ===== 批次4d⑤：item 排程——两时序域红线 + $4B 饱和计数 =====
+
+/// ⑬ 投放时序域分类（enemy-item-scheduling §4 红线）：直投 tick 原子 vs 组员帧滴灌不可混。
+#[test]
+fn spawn_timing_two_domains() {
+    use game_core::wave::{spawn_timing, SpawnTiming};
+    // pair/set10 直投 ⇒ tick 原子（记录内全量一次落地）
+    assert_eq!(
+        spawn_timing(&SchedItem::Pair { type_: 0x84, param: 0x30 }),
+        Some(SpawnTiming::TickAtomic)
+    );
+    assert_eq!(
+        spawn_timing(&SchedItem::SetType { type_: 0x2A, param: 0x00 }),
+        Some(SpawnTiming::TickAtomic)
+    );
+    // ctrl13/14 寄存器写 ⇒ tick 原子
+    assert_eq!(
+        spawn_timing(&SchedItem::Reg { ctrl: 13, a: 1, b: 2 }),
+        Some(SpawnTiming::TickAtomic)
+    );
+    // ctrl1/2/11/12 组员流 ⇒ **帧滴灌**（$534 帧间隔逐员，跨 tick 展开）
+    let s = SchedItem::Spawn { ctrl: 2, type_: 0x2F, args: [0x2B, 6, 0x0A, 0x20] };
+    assert_eq!(spawn_timing(&s), Some(SpawnTiming::FrameDrip), "组员流=帧滴灌");
+    assert_ne!(
+        spawn_timing(&s),
+        Some(SpawnTiming::TickAtomic),
+        "混域必红（直投/滴灌两时序域不可混）"
+    );
+    // jump/未知无投放
+    assert_eq!(spawn_timing(&SchedItem::Jump { ctrl: 9, target: 0xA397 }), None);
+    assert_eq!(spawn_timing(&SchedItem::Unknown { ctrl: 15 }), None);
+    // $4B 饱和计数（86F3-86F8 INC/BNE/DEC）：$FF 不回绕
+    assert_eq!(spawn_count_bump(0x00), 0x01);
+    assert_eq!(spawn_count_bump(0xFE), 0xFF);
+    assert_eq!(spawn_count_bump(0xFF), 0xFF, "饱和不回绕 0（回绕必红）");
+    assert_ne!(spawn_count_bump(0xFF), 0x00);
+}

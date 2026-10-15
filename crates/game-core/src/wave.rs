@@ -409,3 +409,31 @@ impl GroupRelease {
         false
     }
 }
+
+// ===== 批次4d⑤：item 排程两时序域 + $4B 饱和计数（enemy-item-scheduling §1/§4）=====
+
+/// 投放时序域（**红线**，enemy-item-scheduling §4）：一条记录=tick 原子批量投放，
+/// 但 ctrl1/2/11/12 组员流是**跨 tick 帧滴灌**（$534 帧间隔逐员）——两域不可混。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpawnTiming {
+    /// tick 原子：记录内全量一次落地（pair/set10 直投、ctrl13/14 寄存器写）。
+    TickAtomic,
+    /// 帧滴灌：四参挂载后组员调度器按 `$534` 帧间隔展开（`GroupRelease`）。
+    FrameDrip,
+}
+
+/// 项 → 投放时序域（无投放项 ⇒ None）。
+pub fn spawn_timing(item: &SchedItem) -> Option<SpawnTiming> {
+    match item {
+        SchedItem::Pair { .. } | SchedItem::SetType { .. } | SchedItem::Reg { .. } => {
+            Some(SpawnTiming::TickAtomic)
+        }
+        SchedItem::Spawn { .. } => Some(SpawnTiming::FrameDrip),
+        SchedItem::Jump { .. } | SchedItem::Unknown { .. } => None,
+    }
+}
+
+/// `$4B` 饱和计数（`bank00:86F3-86F8`：`INC $4B / BNE / DEC $4B`）——`$FF` 不回绕 0。
+pub fn spawn_count_bump(counter: u8) -> u8 {
+    counter.saturating_add(1)
+}
