@@ -225,3 +225,53 @@ pub struct LeaderFamily {
     /// 组员释放节律（`$630` 递减 + 帧域间隔）。
     pub release: crate::wave::GroupRelease,
 }
+
+// ===== 批次4c：组员族运动机（enemy-motion-kinematics §2-3，A 级字节）=====
+//
+// 摆动动力学引擎核心=mod-8 计数器×三表进给（`bank05:8C8D-8CA9` 逐指令）。
+// **B 级拟合不入行为断言**（§2.1 正弦方程 x(t)≈127+63·sin/T≈104f=B 级拟合，
+// 引擎真身是本节三表；轨迹族①-④是观察面，行为相位选择随型值/行为指针——
+// 脚本体（t59 族）未证不发明）。
+
+/// 三角波表 `$AC5F`（→`$684+槽`，B1 §3 复核 #76 F2 真值：对称三角波）。
+pub const TRI_WAVE_684: [u8; 8] = [0xD3, 0xD7, 0xDB, 0xDF, 0xE3, 0xDF, 0xDB, 0xD7];
+
+/// 三角波表 `$AC67`（→`$534+槽`，经 `($2B&1) EOR`）。
+pub const TRI_WAVE_534: [u8; 8] = [0x03, 0x43, 0x43, 0x43, 0x03, 0x03, 0x03, 0x03];
+
+/// 三角波表 `$AC6F`（→`$518+槽`）。
+pub const TRI_WAVE_518: [u8; 8] = [0x24, 0x24, 0x24, 0x24, 0x21, 0x24, 0x24, 0x24];
+
+/// 运动机一步出参（`bank05:8C8D-8CA9` 写集）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MotionOut {
+    /// `$5DC+槽` 计数器 INC 后值（8-bit 自然回绕；索引用其 mod-8）。
+    pub counter_next: u8,
+    /// `$684+槽` := `$AC5F[idx]`。
+    pub v684: u8,
+    /// `$534+槽` := `($2B&1) EOR $AC67[idx]`。
+    pub v534: u8,
+    /// `$518+槽` := `$AC6F[idx]`。
+    pub v518: u8,
+}
+
+/// 运动机一步（`8C8D INC $5DC,X / AND #$07 / TAY` + 三表写）。
+///
+/// **字段复用两段生命周期**（§3.2）：`$518/$534+槽` 被本机重写——四参链（投放控制期）
+/// 与运动机（速度分量期）共用同字段，**不可混用语义**（stg02 §3.4 写主现身）。
+/// `phase_2b` = zp `$2B` 值（**仅 bit0** 入 EOR）。
+pub fn motion_step(counter: u8, phase_2b: u8) -> MotionOut {
+    let counter_next = counter.wrapping_add(1);
+    let idx = (counter_next & 7) as usize;
+    MotionOut {
+        counter_next,
+        v684: TRI_WAVE_684[idx],
+        v534: (phase_2b & 1) ^ TRI_WAVE_534[idx],
+        v518: TRI_WAVE_518[idx],
+    }
+}
+
+/// 型值迁移时间线（Wt-5 升级素材，A 级实测——关1 slot09 同槽三段）：
+/// `f1479 $2B`（摆动族）→ `f1595 $12`（驻留）→ `f1627 $4E`（直线下降）。
+/// 行为相位随型值切换；**迁移触发语义未证**（不发明）。
+pub const TYPE_MIGRATION_SLOT09: [(u32, u8); 3] = [(1479, 0x2B), (1595, 0x12), (1627, 0x4E)];
