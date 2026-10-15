@@ -287,3 +287,53 @@ fn dispatch_mode_bit7_gate() {
         }
     }
 }
+
+// ===== 批次4f：t59 相位 handler =====
+
+/// ⑮ $836E 恒速下沉 + $8314 duration 倒数（终止双条件 → $D10C）。
+#[test]
+fn t59_phase_handlers() {
+    use game_core::enemy::{
+        handler_const_descent, handler_duration_tick, TERMINATE_RECYCLE_EXIT,
+    };
+    // 恒速下沉：y+1，溢出终止
+    assert_eq!(handler_const_descent(0x00), Some(0x01));
+    assert_eq!(handler_const_descent(0xFE), Some(0xFF));
+    assert_eq!(handler_const_descent(0xFF), None, "y 溢出 ⇒ $D10C 终止（BCS）");
+    // duration 倒数：DEC 归零终止
+    assert_eq!(handler_duration_tick(0x05), Some(0x04));
+    assert_eq!(handler_duration_tick(0x02), Some(0x01));
+    assert_eq!(handler_duration_tick(0x01), None, "倒数归零 ⇒ $D10C（BEQ）");
+    assert_eq!(handler_duration_tick(0x00), Some(0xFF), "DEC 回绕后非零续行（D4 保真字面）");
+    // 唯一出口登记
+    assert_eq!(TERMINATE_RECYCLE_EXIT, 0xD10C);
+}
+
+/// ⑯ $83DE 参数表字节精确 + $8341 RNG jitter 算术。
+#[test]
+fn t59_param_tables_and_jitter() {
+    use game_core::enemy::{rng_jitter_offsets, PARAM_TABLE_518, PARAM_TABLE_684};
+    // 参数表 ROM 字节精确（bank02 $8406/$840B，5 项各）
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    let b2 = |a: usize| 0x10 + 2 * 0x2000 + (a & 0x1FFF);
+    assert_eq!(&PARAM_TABLE_518[..], &rom[b2(0x8406)..b2(0x8406) + 5], "$8406 表");
+    assert_eq!(&PARAM_TABLE_684[..], &rom[b2(0x840B)..b2(0x840B) + 5], "$840B 表");
+    // 族值断言（$0A/$0B/$0C 族、$5F-$67 族）
+    assert_eq!(PARAM_TABLE_518, [0x0A, 0x0B, 0x0C, 0x0C, 0x0C]);
+    assert_eq!(PARAM_TABLE_684, [0x5F, 0x61, 0x63, 0x65, 0x67]);
+    // RNG jitter 字面链偏移（SBC borrow+ADC 进位合成）：carry=1 时 nibble≥7 ⇒ +1..+8、
+    // nibble<7 ⇒ −7..−1（非对称——"±7"是近似注，字面链为准）
+    let (dx, dy) = rng_jitter_offsets(0x07, true);
+    assert_eq!((dx, dy), (1, -8), "x: 7−7+carry1=+1；y: 0−8+borrow0=−8");
+    // rng=$F0 carry=1 ⇒ x 侧 0−7、y 侧 15−7=8
+    let (dx, dy) = rng_jitter_offsets(0xF0, true);
+    assert_eq!((dx, dy), (-7, 8), "双向 ±7/±8 边界");
+    // carry 面敏感（x 侧 borrow 双态——carry 注入必红）
+    let a = rng_jitter_offsets(0x08, true);
+    let b = rng_jitter_offsets(0x08, false);
+    assert_ne!(a, b, "carry_after_rng 须入 x 侧算术");
+    // y 侧 carry=rng bit3（确定性）：bit3 翻转必影响
+    let a = rng_jitter_offsets(0x00, true);
+    let b = rng_jitter_offsets(0x08, true);
+    assert_ne!(a.1, b.1, "y 侧进位=rng bit3");
+}
