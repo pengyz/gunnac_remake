@@ -480,7 +480,8 @@ pub struct ParamSegment {
     /// 段入口。
     pub entry: u16,
     /// `$CD9D` A 参字面量（运动模式选择器——**内核 S4b-9b 未证**，仅签名登记）；
-    /// None=调用者供给（E 段 `$84C7` 起即 `JSR $CD9D` 无装载，字节直读）。
+    /// None=调用者供给。【更正】E 段入口=`$84C3`（`LDA #$50/LDY #$0F/JSR $CD9D`，
+    /// ROM 直读 f=$44D3）——原记 `$84C7` 系 JSR 子址（seed 该区失真读点偏移，decomp 补谳）。
     pub cd9d_a: Option<u8>,
     /// `$CD9D` Y 参字面量（表索引基数）；None=调用者供给。
     pub cd9d_y: Option<u8>,
@@ -503,7 +504,7 @@ pub const PARAM_SEGMENTS: [ParamSegment; 6] = [
     ParamSegment { entry: 0x83DC, cd9d_a: Some(0x30), cd9d_y: Some(5), bypass_entry: Some(0x83DE), t518: &PARAM_TABLE_518, t684: &PARAM_TABLE_684, t534: &[], tail: 0xCC6A },
     ParamSegment { entry: 0x8432, cd9d_a: Some(0x40), cd9d_y: Some(7), bypass_entry: None, t518: &SEG_C_T518, t684: &SEG_C_T684, t534: &[], tail: 0xCC6A },
     ParamSegment { entry: 0x8486, cd9d_a: Some(0x50), cd9d_y: Some(0x0E), bypass_entry: None, t518: &[], t684: &[], t534: &[], tail: 0x84D1 },
-    ParamSegment { entry: 0x84C7, cd9d_a: None, cd9d_y: None, bypass_entry: None, t518: &[], t684: &[], t534: &[], tail: 0x84D1 },
+    ParamSegment { entry: 0x84C3, cd9d_a: Some(0x50), cd9d_y: Some(0x0F), bypass_entry: None, t518: &[], t684: &[], t534: &[], tail: 0x84D1 },
     ParamSegment { entry: 0x862A, cd9d_a: Some(0x60), cd9d_y: Some(0x0F), bypass_entry: None, t518: &[], t684: &[], t534: &[], tail: 0x84D1 },
 ];
 
