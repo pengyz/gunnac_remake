@@ -55,8 +55,9 @@ fn spawn_timing_route_two_domains() {
 fn flow_consumes_stage_end_gate() {
     let mut st = StageState::default();
     st.wave.flags_26 = 0x10;
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门——E2F3 对账）
     let fx = stage_tick(&mut st, &TickInputs::default());
-    assert!(fx.stage_clear_requested, "$26 bit4 ⇒ 关末门请求");
+    assert!(fx.stage_clear_requested, "$26 bit4+slot0 ⇒ 关末门请求");
     let mut st2 = StageState::default();
     st2.wave.flags_26 = 0x00;
     let fx2 = stage_tick(&mut st2, &TickInputs::default());
@@ -373,6 +374,7 @@ fn stg01_natural_run_to_stage_gate() {
     // far-call 双门：C9=$FB bit0 + $26 bit3=0 ⇒ 请求
     assert!(!fx.far_call_requests.is_empty(), "far-call 请求登记");
     // stage_tick 主循环消费关末门
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门——E2F3 双门对账）
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested, "flow 侧消费 $26 bit4");
     // 幂等：重复处理不重臂
@@ -405,6 +407,7 @@ fn stage_tick_drives_script_to_gate() {
         script: ScriptCursor::stg01(),
         ..Default::default()
     };
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门）
     // 一次大滚动跨过 $04D0（tick=0x04D0 ⇒ scroll=0x04D0×16）
     let fx = stage_tick(&mut st, &TickInputs { scroll_delta: 0x04D0 * 16 });
     assert_eq!(st.wave.tick, 0x04D0);
@@ -428,6 +431,7 @@ fn stg02_natural_run_to_stage_gate() {
     }
     assert_ne!(st.wave.flags_26 & 0x10, 0, "STG-02 关末门臂（tick 0x0350）");
     assert!(!st.script.waves.is_empty(), "op5 流已装");
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门）
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested);
 }
@@ -448,6 +452,7 @@ fn stg03_natural_run_to_stage_gate() {
     }
     assert_ne!(st.wave.flags_26 & 0x10, 0, "STG-03 关末门臂（tick 0x0440）");
     assert!(!st.script.waves.is_empty(), "op5 流已装");
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门）
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested);
 }
@@ -468,6 +473,7 @@ fn stg04_natural_run_to_stage_gate() {
     }
     assert_ne!(st.wave.flags_26 & 0x10, 0, "STG-04 关末门臂（tick 0x0318）");
     assert!(!st.script.waves.is_empty(), "op5 流已装");
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门）
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested);
 }
@@ -488,6 +494,7 @@ fn stg05_natural_run_to_stage_gate() {
     }
     assert_ne!(st.wave.flags_26 & 0x10, 0, "STG-05 关末门臂（tick 0x0289）");
     assert!(!st.script.waves.is_empty(), "op5 流已装");
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门）
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested);
 }
@@ -508,6 +515,7 @@ fn stg06_natural_run_to_stage_gate() {
     }
     assert_ne!(st.wave.flags_26 & 0x10, 0, "STG-06 关末门臂（tick 0x0412）");
     assert!(!st.script.waves.is_empty(), "op5 流已装");
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门）
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested);
 }
@@ -528,6 +536,7 @@ fn stg07_natural_run_to_stage_gate() {
     }
     assert_ne!(st.wave.flags_26 & 0x10, 0, "STG-07 关末门臂（tick 0x028C）");
     assert!(!st.script.waves.is_empty(), "op5 流已装");
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门）
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested);
 }
@@ -548,6 +557,7 @@ fn stg08_natural_run_to_stage_gate() {
     }
     assert_ne!(st.wave.flags_26 & 0x10, 0, "STG-08 关末门臂（tick 0x0304）");
     assert!(!st.script.waves.is_empty(), "op5 流已装");
+    st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门）
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested);
 }
@@ -773,4 +783,35 @@ fn emit_probe5() {
         std::fs::write("../../analysis/traces/respawn-window.probe5.jsonl", &rows).expect("写 respawn probe5");
         let _ = WAVE_FLAGS; // 17 流登记面（对拍参考）
     }
+}
+
+/// ⑲ 关末块双门+防重入（bank15:E2F3-E307 A 级对账）：$26 bit4 臂 + $0400≠0 门 +
+/// $27 bit7 防重入；块效果=INC $180（倒数/飞离=块内语义挂账）。
+#[test]
+fn stage_end_block_dual_gate_and_reentry() {
+    // 门①：$26 bit4 臂 + slot0 类型非零 ⇒ 执行（$180 INC）
+    let mut st = StageState {
+        scene: "t".into(),
+        ..Default::default()
+    };
+    st.wave.flags_26 = 0x10;
+    st.grid.slots[0].type_ = 0x03; // slot0 在场
+    let fx = stage_tick(&mut st, &TickInputs::default());
+    assert!(fx.stage_clear_requested, "双门齐 ⇒ 执行");
+    assert_eq!(st.stage_counter, 1, "INC $180");
+    // 防重入：$27 bit7 置 ⇒ 不再执行（$180 不再 INC）
+    let fx2 = stage_tick(&mut st, &TickInputs::default());
+    assert!(!fx2.stage_clear_requested, "$27 bit7 防重入");
+    assert_eq!(st.stage_counter, 1, "重入不 INC");
+    // 门②：slot0 类型零 ⇒ 跳过（臂了也不执行）
+    let mut st2 = StageState::default();
+    st2.wave.flags_26 = 0x10;
+    let fx3 = stage_tick(&mut st2, &TickInputs::default());
+    assert!(!fx3.stage_clear_requested, "$0400==0 跳过（BEQ 门）");
+    assert_eq!(st2.stage_counter, 0);
+    // 门①缺臂 ⇒ 否
+    let mut st3 = StageState::default();
+    st3.grid.slots[0].type_ = 0x03;
+    let fx4 = stage_tick(&mut st3, &TickInputs::default());
+    assert!(!fx4.stage_clear_requested);
 }

@@ -55,6 +55,10 @@ pub struct StageState {
     pub checkpoint: Option<String>,
     /// 场景标签（checkpoint 命名前缀）。
     pub scene: String,
+    /// zp `$27` 标志（bit7=关末块防重入——bank15:E2F3 块语义）。
+    pub flags_27: u8,
+    /// `$180` 关计数（关末块执行=INC $180——倒数/飞离块内语义挂账 W-SCLEAR）。
+    pub stage_counter: u8,
     /// W-PHASE 口径（真机裁点双模式可跑化）。
     pub wave_phase: WavePhaseTiming,
     /// ArmAtRecordComplete 的完成延迟（tick；真机拟合参数）。
@@ -280,9 +284,15 @@ pub fn combat_frame(state: &mut StageState, _fx: &mut StageEffects) {
 
 /// 主环收尾步（scroll 确认+flow 消费 `$26` bit4 关末门）。
 pub fn main_loop_step(state: &mut StageState, fx: &mut StageEffects) {
-    if state.wave.flags_26 & 0x10 != 0 {
+    // 关末块（bank15:E2F3-E307，A 级对账）三条件：
+    // ① $26 bit4 臂 ② LDY $0400/BEQ 跳过（slot0 类型非零门）③ $27 bit7 防重入
+    let armed = state.wave.flags_26 & 0x10 != 0;
+    let slot0_live = state.grid.slots[0].type_ != 0;
+    let already_ran = state.flags_27 & 0x80 != 0;
+    if armed && slot0_live && !already_ran {
         fx.stage_clear_requested = true;
-        // flow 转场：关末门 ⇒ StageClear（checkpoint 事件一次性）
+        state.flags_27 |= 0x80; // 防重入
+        state.stage_counter = state.stage_counter.wrapping_add(1); // INC $180
         if state.mode != "StageClear" {
             state.mode = "StageClear".to_string();
             state.checkpoint = Some(format!("{}-clear", state.scene));
