@@ -1005,9 +1005,16 @@ pub fn flow_timeline_step(state: &mut StageState, f: u32, timeline: &[(u32, &str
     for &(tf, mode, cp) in timeline {
         if tf == f {
             state.mode = mode.to_string();
-            state.checkpoint = Some(cp.to_string());
+            state.checkpoint = if cp.is_empty() { None } else { Some(cp.to_string()) };
             return true;
         }
     }
     false
 }
+
+/// respawn-window 场景时序（trace 实帧锚——R-respawn-1 采样口径）。
+pub const FLOW_TIMELINE_RESPAWN: &[(u32, &str, &str)] = &[
+    (1260, "StageStart", ""),
+    (1350, "Combat", ""),
+    (1400, "DeathRespawn", "respawn-window"),
+];
