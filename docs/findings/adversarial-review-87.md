@@ -80,3 +80,62 @@ AC62  SEC / RTS         ; 全满 SEC ⇒ None ✓
   `GROUPS=[0x83,0x9F,0xBB,0xD7]` 一致）；
 - 空槽判定=`$40E,Y==0` 与自机分配器同判（时分复用前提 ✓）；全满 SEC→None 与实现 `None` ✓；
 - M11 突变（组基改 $9D）已咬（段 A）⇒ 算术被测试锁死 ✓。
+
+---
+
+## 段 C：②伤害物撞 Y 寻址 + ③一框一伤写集 + 对拍复跑 + Verdict
+
+### C.1 ② 伤害物撞 = 对方 `$0630` 非自身（bank14:$D680-$D6A1 逐指令）——**成立** ✅
+
+```
+D684  LDA $630,X / SEC / SBC #2     ; 弹命中路：自身 HP（X=被击者）−2
+D690  LDA $668,Y / ORA #$20 / STA   ; take-hit 标记（Y 侧）
+D698  LDA $630,X                     ; ★自身 HP（X 寻址）
+D69C  SBC $630,Y                     ; ★★物撞路：减**对方** $0630（Y 寻址）——F9 30 06
+D69F  BCC / BEQ                      ; 饱和与死亡门
+```
+
+- **`SBC $0630,Y` 的 Y=对方槽**（对比 D684/D698 的 `LDA $630,X` 自身寻址）——两路寻址分离，
+  "物撞伤害=对方 HP 值（非 −2）"语义坐实 ✓；
+- 实现 `damage_apply(hp, owner_is_shot, opponent_hp)`：shot→hp−2、物撞→hp−opponent_hp ✓ 同构；
+  测试锚（14→12 弹 −2 中 boss 实测锚 / 10−6=4 物撞 / `assert_ne!(damage_apply(14,false,30),12)` 反向哨兵）✓；
+  M12d（弹伤 2→1）已咬 ⇒ 公式被锁 ✓。
+
+### C.2 ③ 一框一伤仅清三字段（bank14:$D7DA-$D7EC 写集计数）——**成立** ✅
+
+```
+D7DA  BMI …           ; 归属位分支
+D7DC  LDA #0
+D7DE  STA $7E8,Y      ; 写 1
+D7E1  STA $7A9,Y      ; 写 2
+D7E4  STA $7BE,Y      ; 写 3
+D7E7  DEY / STY $6D / PLA / SEC / RTS
+```
+
+**清框写集 = 恰 3 写**（$7E8+Y/$7A9+Y/$7BE+Y），其后即收尾——**无第 4 写** ✓。
+实现 `clear_hit_entry` 清 top/bottom/attr、保留 left/right/owner = 3 字段写集同构 ✓
+（字段名映射依 arena-midboss §1.4 六字段布局，B 级交叉）；M12c（误清 owner）已咬 ✓。
+
+### C.3 对拍独立复跑
+
+| 项 | 实跑 | 裁定 |
+|---|---|---|
+| `cargo test --workspace` | **157 passed / 0 failed** | ✓（153 批次1+2 + 3 批次3 用例 + 1 F-B4 = 157，账平） |
+| `diff_subroutines.py`（CN） | **L2-DIFF 121/121** | ✓ 未回退 |
+| `gates/cli.py check` | **PASS=12 FAIL=0** | ✓ |
+
+### C.4 Verdict：**pass** ✅
+
+**六证伪靶全数成立**：①混叠表 8/8 逐值独立重导精确（+子口径 197/320/16 三连）②物撞 Y 寻址逐指令坐实
+（对方 $0630 非自身）③清框写集恰 3 字段（无第 4 写）④组跳算术 `$85+$1A=$9F` 逐指令精确
+⑤F-B4 mutation-kill 三态收口（#84 盲区已闭）⑥新哨兵 ⑩⑪⑫ 试咬 **7/7 全咬**（含 ⑤）。
+对拍 157/0 + 121/121 + 12/12 无回退。**零翻案点、零必修项**。
+
+**advisory（1 项，不阻断）**：`clear_hit_entry` 三写与 HitBoxEntry 字段名（attr/top/bottom）的映射
+引用 arena-midboss §1.4 六字段布局（B 级交叉）——建议 shot.rs 注释补一行 §1.4 指针，使字段名↔`$7E8/$7A9/$7BE`
+对应关系自带证据链。
+
+### C.5 纪律自查
+- mutation 7 组即做即还原（`git checkout` 后 `git status crates/` 干净、双测试面复绿）——共享树纪律 ✓；
+- 混叠表/组跳/寻址/写集全部独立重导（383 快照直读、listing 逐指令），未采信被审自述数字；
+- 未改 ROM/台账/门禁/golden/被审产物；分级：A=快照字节+listing 字节+mutation 实测；B=字段名映射（§1.4 交叉）。
