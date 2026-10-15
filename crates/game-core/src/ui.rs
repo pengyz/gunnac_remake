@@ -275,10 +275,11 @@ pub struct ShopPurchaseState {
     /// 消息返回目标。
     pub msg_back: ShopMsgReturn,
     /// `$0400` shop_slot_cursor（N-0002）。
-    /// 【stg08 run#1 dated】~~主面板 0..3 固定 4 项~~ ——**主面板项数随关卡变**：
-    /// stg01-07 过渡=4 项（光标 3=「退」）/ stg07→08 过渡=**≥5 项**（「退」=**末项**
-    /// 非固定 3；3×down 落购买项 A 触发 `$32` 40→60=购买态变化实证）。精确项数
-    /// 未钉（≥5——run #2 6×down 钳位末项中）⇒ `menu_items` 参数化 fail-closed。
+    /// 【stg08 run#1 dated】~~主面板 0..3 固定 4 项~~ ——项数随关卡变（「退」=末项
+    /// 非固定 3）。【run#2/3 dated】~~stg07→08=≥5 项~~ **推定作废**——新实测
+    /// **4 项带回绕**（0→1→2→3→0 循环）：DOWN=**wrap** 非钳位。A@光标3 触发出店
+    /// 转场突发 10f 后截断（$27 不释/无结构切换——run #1/#2 双负结果，run #3
+    /// hold A 30f 假说验证中）。`menu_items` 参数化维持。
     pub cursor: u8,
     /// 主面板项数（随关卡变——stg01-07=4/stg07→08=≥5 精确值待 run #2）。
     pub menu_items: u8,
