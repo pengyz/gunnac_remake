@@ -35,3 +35,41 @@ boot 簇 rec1-5@tick0 → 0xC0/0xD8/0x120 → **0x330 op5 ✓** → 0x4C8 → **
 ### A.3 ① 结论
 **七环全通、每环与既证 listing 真值（#88/#90/#84）同构**；"STG-01 判据=引擎层关 1 可推进至关末门"
 的链路基础成立（完成判据的实测面=测试⑬⑭，段 C mutation 试咬）。
+
+---
+
+## 段 B：②快进环 Wt-1 红线 + ③两时序域混域哨兵 + ④表分发转活
+
+### B.1 ② 快进环 Wt-1 红线——**×8 突变咬 ✓ / 跳拍突变盲区（F-B93）**
+
+实现 `fast_forward_ring`：`for t in 1..=ticks { cursor.step_to(t) }`（每迭代=1 全链 tick）+
+doc 红线"**禁止跨关换算常数**（Wt-1）"在案 ✓。
+
+| 突变 | 实测 | 裁定 |
+|---|---|---|
+| M2a **×8 帧域混算**（`ticks*8`——Wt-1 突变原款） | ✅ **2 测红**（`fast_forward_and_wave_tick_wiring`+`stg01_data_load_tick_anchors`） | 咬 |
+| M2b **跳拍**（`step_by(2)`——每 2 tick 步进一拍） | ⚠️ **21 测全绿** | **盲区（F-B93）** |
+
+**F-B93（必修，1 行级）**："每迭代=1 全链 tick（不跳拍）"声明无哨兵可咬——STG-01 脚本流在
+tick 1..=17 内**仅 tick=1 有记录**（rec 触发 1/0xC0/0xD8…），跳偶数拍的中间 tick 效果不可见；
+合成哨兵（crafted SchedCursor 挂触发 tick=2 的记录 → 断言其在环内 fire）即咬。
+**与 F-B4/C88/C89/C90 同族第 5 例**（样本值域窄一格——本例=tick 值域窄）。
+注：M2a 能咬说明"17 tick 总量"面已锁，缺口在**逐拍中间步进**面。
+
+### B.2 ③ 两时序域分流（混域哨兵）——**双向咬合** ✅
+`route_spawn_item`：Pair→`TickAtomic`（fx.spawn_events 直投同帧）/Spawn→`FrameDrip`
+（fx.drip_events 帧滴灌）——与 #84 两时序域红线（delay=tick 域/$534=帧域）接线一致；
+测试③ 三断言（直投落 spawn 通道/滴灌独立通道/spawn≠drip 混域必红）。
+
+| 突变 | 实测 |
+|---|---|
+| M3a 滴灌误入直投道 | ✅ 1 红（`spawn_timing_route_two_domains`） |
+| M3b 分类翻转（直投→滴灌） | ✅ 1 红 |
+
+**双向咬合 ✓**——混域哨兵判别力完整。
+
+### B.3 ④ 表分发转活+验证对——**4/4 咬合** ✅
+`TYPE_DISPATCH[0x2B].target=0x90AB`（→$9120 trace 吻合）/`0x38→0xB4A3`/`0x51→0xB00A`/
+`0x56→0xB289`——**4 验证对**（lead 称 3 对，实测面 4 对=覆盖更全）逐值断言在案；
+**M4 目标错位突变（0x90AB→0x90AA）→ `type_dispatch_table_wiring` 红** ✓ 表内容被锁。
+"转活"面（type_bank_switch 激活）同测覆盖 ✓。
