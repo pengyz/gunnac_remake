@@ -540,3 +540,32 @@ fn stg08_natural_run_to_stage_gate() {
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested);
 }
+
+/// ⑯ L5 帧探针桥：确定性+逐帧对拍面。
+#[test]
+fn stage_probe_determinism_and_bridge() {
+    use game_core::engine::stage_probe;
+    // 确定性：同输入两 run 探针序列全等
+    let run = || {
+        let mut st = StageState {
+            script: ScriptCursor::stg01(),
+            ..Default::default()
+        };
+        let mut seq = Vec::new();
+        for _ in 0..=0x04D0 {
+            stage_tick(&mut st, &TickInputs { scroll_delta: 16 });
+            seq.push(stage_probe(&st));
+        }
+        seq
+    };
+    let a = run();
+    let b = run();
+    assert_eq!(a, b, "探针序列确定性（L5 对拍根基）");
+    // 关末门帧探针面：tick=$04D0 时 flags bit4=1
+    let gate = a.iter().find(|p| p.tick == 0x04D0).expect("gate 帧在序列中");
+    assert_ne!(gate.flags_26 & 0x10, 0, "探针面反映关末门");
+    assert_eq!(gate.waves, 2, "两流已装");
+    assert_eq!(gate.f, 0x04D0, "逐帧推进（16px/帧）");
+    // 初始帧面
+    assert_eq!(a[0].slot_types, [0u8; 28], "空网格起始");
+}
