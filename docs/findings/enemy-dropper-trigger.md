@@ -28,7 +28,7 @@ op5 handler（bank00:82BF-82D4，set-wavestream）：
   82CB $CC/$CD:=流指针 2B
 波次记录机（bank00:8972-8D39，JMP ($CE) 入口 897B）：
   处理 23B 记录 → 清单 [count][type…] → $400+槽（8A9C-8B06）
-  C9 bit0 → far-call bank11:$8012（89D5-89DB）
+  C9 bit0 ∧ $26 bit3=0 → far-call bank11:$8012（89C9-89DB；89CF 第三门）
   CA bit0 → $26|=$10 + $D1:=0（8CFC-8D0A）→（B1 §5 链）关末块
 ```
 
@@ -74,7 +74,9 @@ op5 handler（bank00:82BF-82D4，set-wavestream）：
 | 8 | $B889（rec8 @ $0304 装载） | $FB | $81（bit0+bit7） | **[01][$CA]** | 单体 $CA + far-call + 臂门 + 跳过速度恢复（CA b7=C9 b1） |
 
 - **终段投放模板**（A 级，17 流全谱）：末流 = `count=1 单体 + C9 bit0 far-call + CA bit0 臂门`；
-  唯一多体例外 = 关4 流2 `[02][$87,$87]`（CA=$01，无 far-call——差异已在 stg04 §2 注）。
+  唯一多体例外 = 关4 流2 `[02][$87,$87]`（CA=$01 臂门最小集）。【2026-10-15 更正（port-engineer 矛盾裁定）】~~CA=$01，无 far-call~~ **作废**——far-call 门在 **C9**
+  （`C9 bit0 ∧ $26 bit3=0`，bank00:89C9-89D3），与 CA 位无关：关4 流2 `C9=$FB bit0=1` ⇒ **far-call 照常
+  条件触发**（stg04-timeline §2 解码正确；原文把 CA 位误当 far-call 门）。第三条件 `$26 bit3` = 运行期抑制门（语义未名，S4b-8；与 8A68 `AND #$88`、8CAE `$26&$88` 同族观测点）。
 - $5F/$CA = 对象类型表值，**不命名**（禁发明）；与「中 boss $4A」（B1/W-tas 已语义化）同族
   属终段域投放器（B1 §1.4：波次记录机=中 boss/boss 段编队投放器）。
 
