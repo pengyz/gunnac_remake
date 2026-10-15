@@ -815,3 +815,35 @@ fn stage_end_block_dual_gate_and_reentry() {
     let fx4 = stage_tick(&mut st3, &TickInputs::default());
     assert!(!fx4.stage_clear_requested);
 }
+
+/// ⑳ flow 响应时延面（c3398be）：输入锁存/转场尾/段判别/shop 导航。
+#[test]
+fn flow_response_timing_face() {
+    use game_core::engine::{input_bits, segment_id, shop_nav_tick, InputLatch,
+        TRANSITION_TAIL_FRAMES};
+    // 输入锁存：press@N ⇒ N+1f 入位图、保持 12f、期满清零
+    let mut l = InputLatch::default();
+    l.press(input_bits::A);
+    assert_eq!(l.bitmap_18, 0, "press 当帧不入锁存");
+    l.tick_frame();
+    assert_eq!(l.bitmap_18, input_bits::A, "N+1f 锁存");
+    for _ in 0..11 {
+        l.tick_frame();
+    }
+    assert_eq!(l.bitmap_18, input_bits::A, "保持 12f");
+    l.tick_frame();
+    assert_eq!(l.bitmap_18, 0, "期满清零");
+    // 复合键
+    let mut l = InputLatch::default();
+    l.press(input_bits::B | input_bits::START);
+    l.tick_frame();
+    assert_eq!(l.bitmap_18, input_bits::B | input_bits::START);
+    // 转场尾统一常数（≈33-34f 同量级）
+    assert_eq!(TRANSITION_TAIL_FRAMES, 33);
+    // 段判别四值
+    assert_eq!((segment_id::TITLE, segment_id::MENU, segment_id::SHOP, segment_id::GAMEPLAY),
+               (0x7C, 0x6C, 0x00, 0x01));
+    // shop 导航 +1f 端到端
+    assert_eq!(shop_nav_tick(0x00, true), 0x01);
+    assert_eq!(shop_nav_tick(0x05, false), 0x05);
+}
