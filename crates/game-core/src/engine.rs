@@ -728,3 +728,18 @@ pub fn register_wave_flags(cursor: &mut ScriptCursor) {
         }
     }
 }
+
+/// STG-02 脚本 11 记录（`wave_timeline.py script 2` golden——thr=记录尾字段）。
+pub const STG02_SCRIPT: [(u16, u8, Option<u16>, Option<u16>); 11] = [
+    (0x0000, 1, None, None),
+    (0x0000, 0, None, None),
+    (0x0000, 4, None, None),
+    (0x0000, 2, None, None),
+    (0x004A, 9, None, None),
+    (0x0218, 9, None, None),
+    (0x0218, 0, None, None),
+    (0x0350, 5, Some(0xB1CE), None),
+    (0x035A, 5, Some(0xB1E5), None),
+    (0xFFFF, 0, None, None),
+    (0x3B2B, 7, None, Some(0x1B0F)),
+];
