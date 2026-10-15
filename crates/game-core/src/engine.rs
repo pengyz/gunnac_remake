@@ -41,6 +41,8 @@ pub struct StageState {
     pub frame: u32,
     /// tick 域。
     pub wave: WaveTickState,
+    /// 调度流游标（STG-01 数据装载面——`SchedCursor::load` 装入）。
+    pub sched: SchedCursor,
 }
 
 /// 帧输入（无 I/O 数据面）。
@@ -81,9 +83,11 @@ pub fn stage_tick(state: &mut StageState, inputs: &TickInputs) -> StageEffects {
 
 /// tick 域推进（Wt-2：tick=16px 滚动进度——**滚动停 ⇒ tick 冻结**，
 /// 关1 实测冻结 824/stg02 冻结 $006C=108 双证）。
-pub fn wave_tick(state: &mut StageState, scroll_delta: u16, _fx: &mut StageEffects) {
+pub fn wave_tick(state: &mut StageState, scroll_delta: u16, fx: &mut StageEffects) {
     state.wave.scroll_progress = state.wave.scroll_progress.saturating_add(scroll_delta);
     state.wave.tick = state.wave.scroll_progress / 16;
+    // 调度游标按 tick 对点推进（到点记录项分流——两时序域红线）
+    state.sched.step_to(u32::from(state.wave.tick), fx);
 }
 
 /// 帧域行为步（行为 VM 分发调用环+运动机+滴灌 handler——子面接续；未证 fail-closed）。
@@ -111,5 +115,51 @@ pub fn route_spawn_item(item: &SchedItem, fx: &mut StageEffects) -> Option<Spawn
             fx.drip_events.push(item.clone());
             Some(t)
         }
+    }
+}
+
+// ===== STG-01 数据装载子面（合流裁定②：tick 域数据面接入）=====
+
+use crate::wave::SchedStream;
+
+/// 调度流游标（`sub_86AE` 记录推进器镜像）：按解码 tick 时点推进记录，
+/// 项经 `route_spawn_item` 分流（两时序域红线）。首记录 tick=delay+1 quirk
+/// 已在 `decode_sched` 内兑现——游标只按绝对 tick 对点。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SchedCursor {
+    /// 已解码记录（`tick` 为绝对处理时点）。
+    pub records: Vec<crate::wave::SchedRecord>,
+    /// 下一待发记录下标。
+    pub next: usize,
+}
+
+impl SchedCursor {
+    /// 从解码流装载（`decode_sched` 产物透传）。
+    pub fn load(stream: SchedStream) -> Self {
+        SchedCursor {
+            records: stream.records,
+            next: 0,
+        }
+    }
+
+    /// 推进到 `tick`（含）：到点记录的项逐一分流。返回本步发射的记录数。
+    pub fn step_to(&mut self, tick: u32, fx: &mut StageEffects) -> usize {
+        let mut fired = 0;
+        while self.next < self.records.len() && self.records[self.next].tick <= tick {
+            for item in &self.records[self.next].items {
+                route_spawn_item(item, fx);
+            }
+            self.next += 1;
+            fired += 1;
+        }
+        fired
+    }
+}
+
+/// 关首快进环（`bank00:806A-80D9`，Wt-1：17 tick 压入 f1193——每迭代=1 全链 tick）：
+/// 开场即推进 `ticks` 个 tick（STG-01=17）。**禁止跨关换算常数**（Wt-1 红线）。
+pub fn fast_forward_ring(cursor: &mut SchedCursor, ticks: u16, fx: &mut StageEffects) {
+    for t in 1..=u32::from(ticks) {
+        cursor.step_to(t, fx);
     }
 }
