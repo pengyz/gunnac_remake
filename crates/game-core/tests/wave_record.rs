@@ -266,3 +266,29 @@ fn op7_and_terminal_dropper_template() {
         assert!(is_terminal_dropper(d.count, d.c9, d.ca), "登记实例须合模板");
     }
 }
+
+/// ⑨ far-call 双门（412f96b 矛盾裁定，bank00:89C9-89D3）：C9 bit0 ∧ $26 bit3=0。
+#[test]
+fn far_call_double_gate() {
+    // 双门正例：C9 bit0=1 + $26 bit3=0 ⇒ 触发
+    assert!(far_call_fires(0xFB, 0x00), "S1/S8/S4 共同形（$FB）");
+    assert!(far_call_fires(0x01, 0xF7), "bit3 清即过（他位无关）");
+    // 门①：C9 bit0=0 不触发（CA 位无关——CA 误当门必红）
+    assert!(!far_call_fires(0xFA, 0x00), "C9 bit0=0 ⇒ 否");
+    // 门②：$26 bit3=1 运行期抑制 ⇒ 否
+    assert!(!far_call_fires(0xFB, 0x08), "$26 bit3=1 ⇒ 否");
+    assert!(!far_call_fires(0xFB, 0xFF));
+    // S4 流2 裁定断言：C9=$FB bit0=1 ⇒ **条件触发**（原"无 far-call"作废）
+    assert!(
+        far_call_fires(0xFB, 0x00),
+        "S4 流2 far-call 照常条件触发（412f96b 裁定）"
+    );
+    // 与 CA 位无关（CA 全值不入判据）
+    for ca in 0..=0xFFu8 {
+        assert_eq!(
+            far_call_fires(0xFB, 0x00),
+            far_call_fires(0xFB | (ca & 0x7E), 0x00),
+            "CA 位不得入 far-call 判据"
+        );
+    }
+}
