@@ -20,10 +20,10 @@
 {"scene": "s5-chain", "f": 7404, "mode": "Transition"}
 {"scene": "s5-chain", "f": 7500, "mode": "StageStart", "checkpoint": "stg04-start"}
 {"scene": "s5-chain", "f": 8100, "mode": "Combat", "checkpoint": "stg04-combat"}
-{"scene": "s5-chain", "f": 0, "mode": "StageClear", "checkpoint": "stg04-clear"}
-{"scene": "s5-chain", "f": 0, "mode": "Shop", "checkpoint": "stg05-shop"}
-{"scene": "s5-chain", "f": 0, "mode": "Transition"}
-{"scene": "s5-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg05-start"}
+{"scene": "s5-chain", "f": 8501, "mode": "StageClear", "checkpoint": "stg04-clear"}
+{"scene": "s5-chain", "f": 9214, "mode": "Shop", "checkpoint": "stg05-shop"}
+{"scene": "s5-chain", "f": 9504, "mode": "Transition"}
+{"scene": "s5-chain", "f": 9600, "mode": "StageStart", "checkpoint": "stg05-start"}
 {"scene": "s5-chain", "f": 10500, "mode": "Combat", "checkpoint": "stg05-combat"}
 {"scene": "s5-chain", "f": 0, "mode": "StageClear", "checkpoint": "stg05-clear"}
 {"scene": "s5-chain", "f": 0, "mode": "Shop", "checkpoint": "stg06-shop"}
