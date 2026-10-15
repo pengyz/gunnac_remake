@@ -298,7 +298,9 @@ pub struct ShopPurchaseState {
     /// `$33`/`$34`/`$018F`（`weapons::WeaponState`）。
     pub weapon: crate::weapons::WeaponState,
     /// `$018C`/`$018A`/`$32`（`weapons::PickupContext`；`flags`= `$32`，bit7=翼已购〔本线置位点
-    /// 【stg08 run#1 dated】$32 另证=**购买态字段**（A 触发 40→60 变化观测点）——
+    /// 【stg08 run#1 dated】$32 另证=**购买态字段**（A 触发 40→60 变化观测点）；
+    /// 【run#3 候选观察】$32 40→60 疑**「末关处理中」旗**（仅失败出店出现；
+    /// 成功链 $32 恒 40）——7 注入链观察区注记非原版声称——
     /// bank00:$9E0E `ORA #$80`〕）。AD65-3 互注：bit7 另一真读者=kernel 门
     /// （`weapons.rs` bank02:$922B dispatch）——同一 RAM 位两处真读者，改语义须双向对账；
     /// bit5=退出隐藏门写（bank01:$A039，登记不解释）。
