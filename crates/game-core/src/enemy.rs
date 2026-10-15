@@ -110,12 +110,19 @@ pub struct TypeSignature {
 /// 已证签名全集（B1 §3 特征表 + §2.3 trace 锚 + `wave_timeline.py spawns` 全量观测对）。
 /// 观测口径=槽激活 `0→非0` 判定式（槽复用盲区——被覆盖写不可见，签名集**可能不全**）。
 /// `beh=$0000` 观测（装载暂态/被中写先于指针写）**不登记**——非行为指针签名。
+/// 【语义挂账（转 decomp-analyst）】trace `beh=` 列中 hi bit7=0 的值（$00DC/$00F8/
+/// $00AC/$00CA/$004C…）经 `bank02:82F8` 分发器（`LDA $41C,X/BPL`——bit7=0 走**表分发**）
+/// 判读**非自向量指针**（表分发模式下 $41C:$438 非跳转目标）——B1 §3 "行为指针恒 $00DC"
+/// 标签待重审（模式标记 vs 指针）；本表暂保留 $00DC 等已录对原样（不删不改义，待裁定）。
 pub const TYPE_SIGNATURES: &[TypeSignature] = &[
     // $2F 组长族（ctrl2/12 出敌型）：$89DF、(128,8) 恒定、128f×9
     TypeSignature { type_code: 0x2F, beh_ptr: 0x89DF, spawn: Some((128, 8)) },
     // $2A 流定型（ctrl10）：$9010、(29,10) 恒定（3 点）；另一观测指针 $9079（坐标不恒定）
     TypeSignature { type_code: 0x2A, beh_ptr: 0x9010, spawn: Some((29, 10)) },
     TypeSignature { type_code: 0x2A, beh_ptr: 0x9079, spawn: None },
+    // $2E 组长族（ctrl1）：【2026-10-15 补（stg02 §4.4 帧锚 run）】$89E4、(128,8)
+    // 五点恒定（f3776/3936/4512/4704/4832）——原"beh 未观测"缺口由 19000f run 补上
+    TypeSignature { type_code: 0x2E, beh_ptr: 0x89E4, spawn: Some((128, 8)) },
     // $2B/$4E 组员族：$00DC 恒定；坐标摆动（x 序列 128→102→82→98→102→90）；
     // $2B 另有 $0079 单点观测（(34,4)——样本 1 不证恒定 ⇒ None）
     TypeSignature { type_code: 0x2B, beh_ptr: 0x00DC, spawn: None },
@@ -127,8 +134,12 @@ pub const TYPE_SIGNATURES: &[TypeSignature] = &[
     TypeSignature { type_code: 0x07, beh_ptr: 0xAAD9, spawn: None },
     // $02 编队（5 槽同帧 216f 轮）：$AB74
     TypeSignature { type_code: 0x02, beh_ptr: 0xAB74, spawn: None },
-    // $05 尾段混编：$B011（单点观测）
+    // $05 尾段混编：$B011 / $AE6B（各单点观测，stg02 §4.4）
     TypeSignature { type_code: 0x05, beh_ptr: 0xB011, spawn: None },
+    TypeSignature { type_code: 0x05, beh_ptr: 0xAE6B, spawn: None },
+    // stg02 §4.4 run 新观测自向量指针对（hi bit7=1）：$58→$B3B9、$51→$B04C
+    TypeSignature { type_code: 0x58, beh_ptr: 0xB3B9, spawn: None },
+    TypeSignature { type_code: 0x51, beh_ptr: 0xB04C, spawn: None },
 ];
 
 /// 按型值取签名（观测对全集；未登记/不发明 ⇒ 空）。
