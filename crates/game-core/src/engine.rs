@@ -163,3 +163,111 @@ pub fn fast_forward_ring(cursor: &mut SchedCursor, ticks: u16, fx: &mut StageEff
         cursor.step_to(t, fx);
     }
 }
+
+// ===== 子面③：spawn 写链落地（调度项→对象网格写集，合流裁定逐段跑通）=====
+
+use crate::enemy::{type_signatures, BehaviorField};
+use crate::wave::{alloc_c2c6, alloc_c304, AllocOutcome, SlotView};
+
+/// 对象槽（28 槽网格字段镜像：`$400` 型/四参 `$518/$630/$534/$470`/
+/// 行为字段 `$41C/$438`/码流参 `$48C`）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ObjectSlot {
+    /// `$400+槽` 型/状态（0=空）。
+    pub type_: u8,
+    /// `$518+槽` 组员 type/速度参（两段生命周期——运动机复用面）。
+    pub f518: u8,
+    /// `$630+槽` 剩余数/HP（两义——组长滴灌/中 boss 血量）。
+    pub f630: u8,
+    /// `$534+槽` 间隔帧/速度参。
+    pub f534: u8,
+    /// `$470+槽` 参数。
+    pub f470: u8,
+    /// `$41C+槽` 行为字段 hi。
+    pub beh_hi: u8,
+    /// `$438+槽` 行为字段 lo。
+    pub beh_lo: u8,
+    /// `$48C+槽` 码流附加参（ctrl2/12/set10）。
+    pub f48c: u8,
+}
+
+/// 对象网格（28 槽，槽 0..7 与 8..27 分区——分配域 8..=27）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectGrid {
+    pub slots: [ObjectSlot; 28],
+}
+
+impl Default for ObjectGrid {
+    fn default() -> Self {
+        ObjectGrid {
+            slots: [ObjectSlot::default(); 28],
+        }
+    }
+}
+
+impl ObjectGrid {
+    fn slot_views(&self) -> [SlotView; 28] {
+        core::array::from_fn(|i| SlotView {
+            type_: self.slots[i].type_,
+            flags_668: 0,
+            vec_41c: self.slots[i].beh_hi,
+        })
+    }
+}
+
+/// 落地结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LandResult {
+    /// 分配到的槽。
+    pub slot: u8,
+    /// 行为字段是否经签名登记写入（未登记 ⇒ false=fail-closed 空行为字段）。
+    pub beh_registered: bool,
+}
+
+/// pair 直投落地（`$C304` 单遍 first-fit 零副作用）：`$400:=type / $470:=param`。
+pub fn land_pair(grid: &mut ObjectGrid, type_: u8, param: u8) -> Option<u8> {
+    let slot = alloc_c304(&grid.slot_views())?;
+    let s = &mut grid.slots[slot as usize];
+    s.type_ = type_;
+    s.f470 = param;
+    Some(slot)
+}
+
+/// 组长落地（ctrl1/2/11/12 项，`$C2C6` 三级回退）：`$400:=type` + 四参
+/// `$518/$630/$534/$470:=args` + 行为字段按**签名登记**写（`TYPE_SIGNATURES`
+/// BehPtr 对；未登记 ⇒ fail-closed 空字段+标志——写点钉取挂账 W-SIGN）。
+/// `code_stream`（($3E),0）仅 ctrl2/12 写 `$48C`。
+pub fn land_leader(
+    grid: &mut ObjectGrid,
+    type_: u8,
+    args: [u8; 4],
+    code_stream: Option<u8>,
+) -> Option<LandResult> {
+    let slot = match alloc_c2c6(&grid.slot_views()) {
+        AllocOutcome::Empty { slot } | AllocOutcome::Reassign { slot } | AllocOutcome::Recycle { slot } => slot,
+        AllocOutcome::Full => return None,
+    };
+    let [f518, f630, f534, f470] = args;
+    let sig = type_signatures(type_)
+        .into_iter()
+        .find_map(|s| match s.beh {
+            BehaviorField::BehPtr(p) => Some(p),
+            BehaviorField::DispatchSeed(_) => None,
+        });
+    let s = &mut grid.slots[slot as usize];
+    s.type_ = type_;
+    s.f518 = f518;
+    s.f630 = f630;
+    s.f534 = f534;
+    s.f470 = f470;
+    s.f48c = code_stream.unwrap_or(0);
+    let beh_registered = match sig {
+        Some(p) => {
+            s.beh_hi = (p >> 8) as u8;
+            s.beh_lo = (p & 0xFF) as u8;
+            true
+        }
+        None => false,
+    };
+    Some(LandResult { slot, beh_registered })
+}
