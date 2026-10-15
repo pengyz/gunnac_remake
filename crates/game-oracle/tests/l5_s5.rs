@@ -5,7 +5,8 @@
 //! 通关判定真伪 = `$180` 真算术派发（`stage_clear_step`），负向测试锁非硬编码。
 
 use game_oracle::l5::{
-    diff_l5, l5_legality, parse_l5, parse_s5_anchors, s5_chain_run, s5_chain_run_for, L5Event,
+    diff_l5, l5_legality, l5_pending_rows, parse_l5, parse_s5_anchors, s5_chain_run,
+    s5_chain_run_for, L5Event,
 };
 
 fn golden() -> Vec<L5Event> {
@@ -107,9 +108,9 @@ fn s5_all_clear_judgement_is_state_derived() {
     bad[6].f += 1; // stg01-combat 帧 +1
     assert!(diff_l5(&g, &bad).iter().any(|p| p.contains("帧号不等")), "帧号差必检出");
     let mut bad2 = g.clone();
-    let last = bad2.len() - 1;
-    bad2[last].mode = "Title".into(); // 结局段改标题
+    bad2[6].mode = "Title".into(); // 真帧行（stg01-combat f1500）改模式
     assert!(diff_l5(&g, &bad2).iter().any(|p| p.contains("模式不等")), "模式差必检出");
+    // 契约共演注：占位行（f=0）模式差=pending 不入 0 容差面（b 案②——③ 测试锁）
 }
 
 /// ④ 合法性真闸负向：未证转移/未证模式必拒（防 S5 链发明关末直跳/结局伪造）。
@@ -141,4 +142,58 @@ fn s5_legality_gate_rejects_invented_joints() {
     let mut bad3 = g.clone();
     bad3[6].f = 100; // stg01-combat 1500→100 < 1260
     assert!(l5_legality(&bad3).iter().any(|p| p.contains("帧序倒退")), "帧序倒退必检出");
+}
+
+// ===== 契约共演（lead b 案三要素：实帧行适用帧序/占位显式豁免/0 容差同域）=====
+
+fn ev(scene: &str, f: u32, mode: &str, cp: Option<&str>) -> L5Event {
+    L5Event { scene: scene.into(), f, mode: mode.into(), checkpoint: cp.map(String::from) }
+}
+
+/// ② 帧序豁免类（b 案①）：f=0 占位行不参与单调性；真帧行域内单调照查。
+#[test]
+fn l5_legality_placeholder_exempt_real_monotonic() {
+    // 占位行夹在真帧后 ⇒ 合法（豁免类——边序合法：StageStart→Combat→StageClear→Shop）
+    let evs = vec![
+        ev("s5-chain", 5604, "StageStart", Some("stg03-start")),
+        ev("s5-chain", 5844, "Combat", Some("stg03-combat")),
+        ev("s5-chain", 0, "StageClear", Some("stg03-clear")), // 占位（f=0 在真帧后）
+        ev("s5-chain", 0, "Shop", Some("stg05-shop")),        // 占位（未回填）
+    ];
+    let problems = l5_legality(&evs);
+    assert!(problems.is_empty(), "占位豁免：{problems:?}");
+    // 真帧行倒退 ⇒ **照查违规**（强化非弱化——同模式对回避边集干扰）
+    let bad = vec![
+        ev("s5-chain", 5844, "Combat", Some("stg03-combat")),
+        ev("s5-chain", 5604, "Combat", Some("stg04-combat")), // 真帧倒退
+    ];
+    let problems = l5_legality(&bad);
+    assert_eq!(problems.len(), 1, "真帧倒退必检出：{problems:?}");
+    assert!(problems[0].contains("帧序倒退"));
+}
+
+/// ③ 0 容差同域（b 案②）：真帧行全字段 0 容差；占位行 pending 不入比对面。
+#[test]
+fn diff_l5_same_domain_zero_tolerance_and_pending() {
+    let golden = vec![
+        ev("s5-chain", 5604, "StageStart", Some("stg03-start")),
+        ev("s5-chain", 0, "StageClear", Some("stg03-clear")), // 占位=pending
+    ];
+    // 同域真帧全等 ⇒ 无问题；占位行 rust 侧任意值 ⇒ 仍无问题（pending 不比）
+    let rust = vec![
+        ev("s5-chain", 5604, "StageStart", Some("stg03-start")),
+        ev("s5-chain", 9999, "StageClear", Some("other-cp")), // 占位行不比
+    ];
+    let problems = diff_l5(&golden, &rust);
+    assert!(problems.is_empty(), "占位行 pending 不入 0 容差：{problems:?}");
+    // 真帧行差 1 帧 ⇒ 照查违规（0 容差强化）
+    let rust_bad = vec![
+        ev("s5-chain", 5605, "StageStart", Some("stg03-start")),
+        ev("s5-chain", 9999, "StageClear", Some("other-cp")),
+    ];
+    let problems = diff_l5(&golden, &rust_bad);
+    assert!(!problems.is_empty(), "真帧 1 帧差必检出");
+    // 显式挂起清单（ok-trigger-pending 同族——不冒充）
+    let pending = l5_pending_rows(&golden);
+    assert_eq!(pending, vec![1], "占位行显式挂起清单");
 }

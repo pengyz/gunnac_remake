@@ -59,12 +59,16 @@ pub fn l5_legality(events: &[L5Event]) -> Vec<String> {
     let mut last: BTreeMap<String, u32> = BTreeMap::new();
     let mut modes_per_scene: BTreeMap<String, Mode> = BTreeMap::new();
     for e in events {
-        if let Some(&pf) = last.get(&e.scene) {
-            if e.f < pf {
-                problems.push(format!("{} f{}: 帧序倒退（前 f{}）", e.scene, e.f, pf));
+        // 契约共演（b 案①）：f=0 占位行=帧未知哨兵**显式豁免**帧序单调性
+        //（ok-trigger-pending 同族注记，不冒充真帧）；真帧行域内单调照查（强化非弱化）
+        if e.f != 0 {
+            if let Some(&pf) = last.get(&e.scene) {
+                if e.f < pf {
+                    problems.push(format!("{} f{}: 帧序倒退（前 f{}）", e.scene, e.f, pf));
+                }
             }
+            last.insert(e.scene.clone(), e.f);
         }
-        last.insert(e.scene.clone(), e.f);
         // 模式解析 + 边集校验（fail-closed：未知模式即违规）
         let m = match e.mode.as_str() {
             "Boot" => Mode::Boot,
@@ -130,6 +134,11 @@ pub fn diff_l5(golden: &[L5Event], rust: &[L5Event]) -> Vec<String> {
         problems.push(format!("事件数不等 golden {} vs rust {}", golden.len(), rust.len()));
     }
     for (i, (g, r)) in golden.iter().zip(rust.iter()).enumerate() {
+        // 契约共演（b 案②）：f=0 占位行 **pending 不入 0 容差比对面**（显式挂起不冒充）；
+        // 真帧行同域 0 容差（scene/f/mode/checkpoint 全等）
+        if g.f == 0 {
+            continue;
+        }
         if g.scene != r.scene {
             problems.push(format!("[{i}] 场景不等 {} vs {}", g.scene, r.scene));
         }
@@ -144,6 +153,17 @@ pub fn diff_l5(golden: &[L5Event], rust: &[L5Event]) -> Vec<String> {
         }
     }
     problems
+}
+
+/// 显式挂起清单（b 案②配套）：golden 中 f=0 占位行的行号（pending 不入 0 容差面
+/// ——ok-trigger-pending 同族注记，不冒充 natural/真帧）。
+pub fn l5_pending_rows(events: &[L5Event]) -> Vec<usize> {
+    events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.f == 0)
+        .map(|(i, _)| i)
+        .collect()
 }
 
 // ===== G-S5-6 真帧锚台账（oracle/traces/s5-all-clear.anchors.jsonl；golden 回填诚实性锁）=====
