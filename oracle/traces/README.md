@@ -53,3 +53,8 @@ pgrep 清孤儿 Mesen（此时存活者必为孤儿，不影响他人持锁运�
 `first_sample_s`（启动→首采样帧），超历史中位 3 倍显式告警 + 等待循环每 60s 无进展即打印
 `[时长告警]`（防静默挂起）。修复后干净重跑 **51.2s/2400 帧 DONE**（历史 51.7s 同量级）；
 `first_sample_s=2.1s`（基线 ~1.3-2.1s，3 倍阈值+15s 地板）。
+
+> 【2026-10-16 dated 更正（lead 裁决①）】`stg01-chain.l5.jsonl` 两行 checkpoint 改标准族：
+> `shop-in`→`stg01-shop`、`combat`→`stg01-combat`——命名权威=l5-all-clear §段表（stgN-shop/stgN-combat），
+> s5-all-clear.anchors.jsonl 现行口径为标准族（两 golden 互不一致时以 s5 族为准，port 证据）。
+> 性质=命名对齐 spec 的更正（"golden 只升不降"红线内，非内容回退）。
