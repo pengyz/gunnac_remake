@@ -218,3 +218,51 @@ fn d86b_transition_table_byte_exact() {
     // 负向哨兵：$01 非恒等（identity 映射必红）
     assert_ne!(state_transition(0x01), 0x01);
 }
+
+// ===== 批次4d④：终段投放器触发链（enemy-dropper-trigger.md）=====
+
+/// ⑦ thr 精确相等 + $FFFF 流尾停泊哨兵（16 位比较非 ≥；tick 冻结永不触发）。
+#[test]
+fn thr_exact_equality_and_ffff_sentinel() {
+    // 精确相等（非 ≥/≤）——81A3-81AD 两字节 CMP
+    assert!(thr_fires(0x01F0, 0x01F0));
+    assert!(!thr_fires(0x01F1, 0x01F0), "tick>thr 不触发（≥ 语义必红）");
+    assert!(!thr_fires(0x01EF, 0x01F0), "tick<thr 不触发");
+    // 16 位敏感（高字节参与比较——8 位截断必红）
+    assert!(!thr_fires(0x00F0, 0x01F0), "低字节同高字节异 ⇒ 不触发");
+    assert!(!thr_fires(0x0100, 0x0000));
+    // $FFFF 哨兵：tick=滚动进度冻结于关末（关1 实测冻结 824）⇒ 永不触发
+    assert!(is_stream_end(0xFFFF));
+    assert!(!is_stream_end(0xFFFE));
+    for tick in 0..=824u16 {
+        assert!(!thr_fires(tick, STREAM_END_SENTINEL), "tick={tick} 永不命中 $FFFF");
+    }
+    // 关8 尾序实测（dropper §2）：rec8 thr=$FFFF ⇒ rec9(op7) 永不触发
+    assert!(!thr_fires(0x0304, STREAM_END_SENTINEL));
+}
+
+/// ⑧ op7 jump-if-wave-busy（8252-8275）+ 目标字节登记 + 终段模板。
+#[test]
+fn op7_and_terminal_dropper_template() {
+    // $C8≠0 ⇒ 跳转体（与 op3 共享）+ tick 重基；$C8=0 ⇒ 跳过 2B 直行
+    assert_eq!(
+        op7_action(0x01, 0x080F),
+        Op7Action::JumpRebase { target: 0x080F }
+    );
+    assert_eq!(op7_action(0x00, 0x080F), Op7Action::Skip2B);
+    // 不可达段目标字节登记（S4b-5：仅登记不反推语义）
+    assert_eq!(OP7_TARGETS, [(1, 0x080F), (2, 0x1B0F), (8, 0x090F)]);
+    // 终段投放模板（末流 count=1 单体 + C9 bit0 far-call + CA bit0 臂门）
+    assert!(is_terminal_dropper(1, 0xFB, 0x05), "S1 [01][$5F] 模板合");
+    assert!(is_terminal_dropper(1, 0xFB, 0x81), "S8 [01][$CA] 模板合");
+    assert!(!is_terminal_dropper(2, 0xFB, 0x01), "S4 流2 多体例外（count=2）不合模板");
+    assert!(!is_terminal_dropper(1, 0xFA, 0x05), "C9 bit0=0 无 far-call 不合");
+    assert!(!is_terminal_dropper(1, 0xFB, 0x04), "CA bit0=0 不臂门不合");
+    // 实例登记（S1/S8 clean 对）
+    assert_eq!(TERMINAL_DROPPERS.len(), 2);
+    assert_eq!(TERMINAL_DROPPERS[0].types, &[0x5F], "型值不命名仅登记");
+    assert_eq!(TERMINAL_DROPPERS[1].types, &[0xCA]);
+    for d in TERMINAL_DROPPERS {
+        assert!(is_terminal_dropper(d.count, d.c9, d.ca), "登记实例须合模板");
+    }
+}

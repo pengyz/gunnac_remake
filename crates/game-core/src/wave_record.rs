@@ -114,3 +114,75 @@ pub const STATE_TRANSITION: [u8; 256] = [
 pub fn state_transition(old_state: u8) -> u8 {
     STATE_TRANSITION[old_state as usize]
 }
+
+// ===== 批次4d④：终段投放器触发链（enemy-dropper-trigger.md，A 级）=====
+
+/// `$FFFF` 流尾停泊哨兵：thr=16 位**精确相等**比较（`bank00:81A3-81AD`），
+/// tick=16px 滚动进度（Wt-2）且滚动尽头冻结（关1 实测冻结 824）⇒ tick 永不达
+/// `$FFFF` ⇒ **thr=$FFFF 记录永不触发**（其后内容=流尾停泊区；B 级意图=防越流尾）。
+pub const STREAM_END_SENTINEL: u16 = 0xFFFF;
+
+/// thr 触发判定（`81A3 LDA $84/CMP $86/BNE` + `81A9 LDA $85/CMP $87/BEQ`）：
+/// 16 位精确相等（非 ≥——tick 单调递增时每个 thr 值恰命中一次，除 `$FFFF`）。
+pub fn thr_fires(tick: u16, thr: u16) -> bool {
+    tick == thr
+}
+
+/// 流尾停泊判定。
+pub fn is_stream_end(thr: u16) -> bool {
+    thr == STREAM_END_SENTINEL
+}
+
+/// op7 jump-if-wave-busy 出参（`bank00:8252-8275`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Op7Action {
+    /// `$C8≠0` ⇒ 跳转体（与 op3 共享 `$825A`）：流指针换目标 + **tick 重基**
+    /// （新流头 2B 同写 `$84/$85`（tick）与 `$86/$87`（首阈值））。
+    JumpRebase { target: u16 },
+    /// `$C8=0` ⇒ 跳过 2B 直行（`8256 INY / JMP $82EF`）。
+    Skip2B,
+}
+
+/// op7 分派（正常流程不可达——前驱 thr=`$FFFF` 哨兵；防御性尾段）。
+pub fn op7_action(wave_state_c8: u8, target: u16) -> Op7Action {
+    if wave_state_c8 != 0 {
+        Op7Action::JumpRebase { target }
+    } else {
+        Op7Action::Skip2B
+    }
+}
+
+/// op7 跳转目标字节登记（(关, 目标)——不可达段仅登记字节，不反推语义，S4b-5）。
+pub const OP7_TARGETS: [(u8, u16); 3] = [(1, 0x080F), (2, 0x1B0F), (8, 0x090F)];
+
+/// 终段投放模板判定（enemy-dropper-trigger §4）：末流 = **count=1 单体 +
+/// C9 bit0 far-call bank11:$8012 + CA bit0 臂关末门**。
+pub fn is_terminal_dropper(count: u8, c9: u8, ca: u8) -> bool {
+    count == 1 && c9 & 0x01 != 0 && ca & 0x01 != 0
+}
+
+/// 终段投放实例登记（型值**不命名**——对象类型表值）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DropperInstance {
+    /// 关号。
+    pub stage: u8,
+    /// 流址（op5 装载）。
+    pub stream: u16,
+    /// 清单 count。
+    pub count: u8,
+    /// 清单型值序列（不命名）。
+    pub types: &'static [u8],
+    /// 记录 C9 标志。
+    pub c9: u8,
+    /// 记录 CA 标志（⚠ 与型值 `$CA` 同名异物）。
+    pub ca: u8,
+}
+
+/// 已证实例（clean 模板对）：S1 `[01][$5F]`、S8 `[01][$CA]`。
+/// S4 流2 `[02][$87,$87]`（CA=$01）为**多体例外**不入登记；
+/// ⚠ 文档矛盾挂账：dropper §4 称该例"无 far-call"，stg04 §2 解码 C9=$FB（bit0→far-call）
+/// ——待 decomp-analyst 裁定，此处不采信任何一侧。
+pub const TERMINAL_DROPPERS: &[DropperInstance] = &[
+    DropperInstance { stage: 1, stream: 0xA3E4, count: 1, types: &[0x5F], c9: 0xFB, ca: 0x05 },
+    DropperInstance { stage: 8, stream: 0xB889, count: 1, types: &[0xCA], c9: 0xFB, ca: 0x81 },
+];
