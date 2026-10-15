@@ -173,6 +173,20 @@ fn motion_tables_byte_exact_and_step() {
     let o = motion_step(0x07, 0x00);
     assert_eq!(o.counter_next, 0x08);
     assert_eq!(o.v684, 0xD3, "idx=8&7=0 回绕首项");
+    // F-C89 必修（#89 段B）：idx≥4 掩码宽度哨兵——idx∈{0,1} 采样下 &7→&3/&1 恒等
+    //（掩码宽度面补咬；表常量已① 24B ROM 比对锁死）
+    let o = motion_step(0x04, 0x00); // next=5 ⇒ idx=5（&3=1、&1=1 皆错位）
+    assert_eq!(
+        (o.counter_next, o.v684, o.v534, o.v518),
+        (0x05, 0xDF, 0x03, 0x24),
+        "idx=5 三表值（&7→&3 必红：idx1 值 0xD7/0x43/0x24）"
+    );
+    let o = motion_step(0x06, 0x00); // next=7 ⇒ idx=7（&3=3 错位）
+    assert_eq!(
+        (o.counter_next, o.v684, o.v534, o.v518),
+        (0x07, 0xD7, 0x03, 0x24),
+        "idx=7 三表值（&3 ⇒ idx3=0xDF/0x43/0x24 必红）"
+    );
     // counter 8-bit 回绕（INC 全字节）：next=0 ⇒ idx=0 ⇒ 首项
     let o = motion_step(0xFF, 0x00);
     assert_eq!(o.counter_next, 0x00);
