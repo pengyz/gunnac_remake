@@ -278,3 +278,134 @@ pub fn stg01_tick_to_frame(tick: u32) -> u32 {
         1221 + (tick - 18) * 8
     }
 }
+
+// ===== 批次2：记录处理出参（L2 对拍面）+ 组员投放节律（帧域）=====
+
+/// 记录项处理出参（L2 型差分面：6502 核跑 `bank00:872C-87EA` 写集 == 本枚举值）。
+///
+/// 写点归属（八关同源，stg02 §3.1）：四 ctrl 收敛同一写链 `bank00:8743-8763`；
+/// ctrl2/12 附加 `bank00:8783-878E`；ctrl10 `bank00:87A4-87CA`。
+/// 槽选择（`$C2C6` 分配器）与组员槽字段写主**未证** ⇒ 本枚举只出写值，不出槽位。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemEffect {
+    /// `(type,param)` 对（type≥$10）：`$400+槽:=type`、`$470+槽:=param`（86E6 出敌写链）。
+    PairWrite { type_: u8, param: u8 },
+    /// ctrl1/2/11/12 四参写链（8743-8763）：`$400+槽:=leader_type`、
+    /// `args→$518/$630/$534/$470`（=组员type/组员数/间隔帧/参数）。
+    QuadWrite {
+        leader_type: u8,
+        args: [u8; 4],
+        /// ctrl2/12 附加 `($3E),0→$48C+槽`（8783-878E）；ctrl1/11 不读码流 ⇒ None。
+        write_48c: Option<u8>,
+        /// 码流步进 `INC $3E/$3F`（8763-876E）：判据=**leader_type&1**（非 ctrl 判据）。
+        code_stream_step: bool,
+    },
+    /// ctrl10 流内定型（87A4-87CA）：`$400+槽:=type`、`$470+槽:=param`、
+    /// `$48C+槽:=($3E),0`、码流**无条件**步进（87C4-87C8）。
+    SetTypeWrite {
+        type_: u8,
+        param: u8,
+        write_48c: u8,
+        code_stream_step: bool,
+    },
+    /// ctrl13/14（87CD-87F0）：寄存器写 `$E63D(Y=0,1 / 4,5)` 透传（音画参数语义未证）。
+    RegWrite { ctrl: u8, a: u8, b: u8 },
+    /// ctrl0 记录分隔 / ctrl3..9 流跳转（8795-87A3 只改流指针）：无槽写集。
+    NoWrite,
+    /// 未证 ctrl（handler 表外）：**不发明出参**（fail-closed）。
+    Unproven,
+}
+
+/// 项 → 处理出参。`code_stream_byte` = 处理时刻 `($3E),0` 值（仅 ctrl2/12/10 消费）。
+pub fn item_effect(item: &SchedItem, code_stream_byte: u8) -> ItemEffect {
+    match *item {
+        SchedItem::Pair { type_, param } => ItemEffect::PairWrite { type_, param },
+        SchedItem::Spawn { ctrl, type_, args } => {
+            let write_48c = if ctrl == 2 || ctrl == 12 {
+                Some(code_stream_byte)
+            } else {
+                None
+            };
+            ItemEffect::QuadWrite {
+                leader_type: type_,
+                args,
+                write_48c,
+                code_stream_step: type_ & 1 != 0,
+            }
+        }
+        SchedItem::SetType { type_, param } => ItemEffect::SetTypeWrite {
+            type_,
+            param,
+            write_48c: code_stream_byte,
+            code_stream_step: true,
+        },
+        SchedItem::Reg { ctrl, a, b } => ItemEffect::RegWrite { ctrl, a, b },
+        SchedItem::Jump { .. } => ItemEffect::NoWrite,
+        SchedItem::Unknown { .. } => ItemEffect::Unproven,
+    }
+}
+
+/// 组员投放事件帧序列（**帧域**——`$534` 间隔字节直接以帧兑现，勿乘 tick 换算）。
+///
+/// 可观察契约（A 级 trace 双关四例 10f/15f/30f）：**首员与组长同帧**（STG-01 f1725
+/// slot13 `$4E` 与 slot24 `$2F` 同帧；f1341 slot8 与 slot27 同帧），其后每
+/// `interval_frames` 帧一员，共 `count` 员 ⇒ 帧 = `leader_frame + k×interval`，
+/// k=0..count−1。组员槽字段写主未证（stg02 §3.4）⇒ 本函数只出帧序列，不出字段。
+///
+/// fail-closed：`count==0` 或 `interval_frames==0` 均未观测 ⇒ 返回 `None`（不发明）。
+pub fn member_schedule(count: u8, interval_frames: u8, leader_frame: u32) -> Option<Vec<u32>> {
+    if count == 0 || interval_frames == 0 {
+        return None;
+    }
+    Some(
+        (0..u32::from(count))
+            .map(|k| leader_frame + k * u32::from(interval_frames))
+            .collect(),
+    )
+}
+
+/// 组员投放状态机（`$630` 递减字段 + `$534` 帧域间隔；节律机构可观察契约）。
+///
+/// 装载即投首员（stg02 §3.4「装载后先递减一次」）⇒ **`$630` 首现 = count−1**；
+/// 其后每 `interval_frames` 帧投一员、`$630` 递减，至 0 止（总投员 = count）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GroupRelease {
+    /// `$630` 当前值（未投余数；首现 = count−1）。
+    pub remaining: u8,
+    /// `$534` 出敌间隔（**帧**）。
+    pub interval_frames: u8,
+    next_in: u8,
+}
+
+impl GroupRelease {
+    /// 装载四参 count/interval：投首员。返回 (状态, `$630` 首现值)。
+    /// `count==0` / `interval_frames==0` 未观测 ⇒ `None`（fail-closed 不发明）。
+    pub fn load(count: u8, interval_frames: u8) -> Option<(Self, u8)> {
+        if count == 0 || interval_frames == 0 {
+            return None;
+        }
+        let first_seen = count - 1; // 装载后先递减一次（首员即投）
+        Some((
+            GroupRelease {
+                remaining: first_seen,
+                interval_frames,
+                next_in: interval_frames,
+            },
+            first_seen,
+        ))
+    }
+
+    /// 推进一帧：返回本帧是否投员（间隔到且尚有余员）。
+    pub fn tick_frame(&mut self) -> bool {
+        if self.remaining == 0 {
+            return false;
+        }
+        self.next_in -= 1;
+        if self.next_in == 0 {
+            self.remaining -= 1;
+            self.next_in = self.interval_frames;
+            return true;
+        }
+        false
+    }
+}
