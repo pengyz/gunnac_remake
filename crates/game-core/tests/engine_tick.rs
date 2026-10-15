@@ -147,7 +147,7 @@ fn spawn_write_chain_landing() {
     // 组长 $2F：四参+签名 $89DF+ctrl2 码流参
     let r = land_leader(&mut g, 0x2F, [0x2B, 6, 0x0A, 0x20], Some(0x77)).expect("有槽");
     let s = &g.slots[r.slot as usize];
-    assert_eq!((s.type_, s.f518, s.f630, s.f534, s.f470), (0x2F, 0x2B, 6, 0x0A, 0x20));
+    assert_eq!((s.type_, s.f518, s.f630, s.f534, s.f470), (0x2F, 0x2B, 5, 0x0A, 0x20), "$630 首现=数−1");
     assert_eq!((s.beh_hi, s.beh_lo), (0x89, 0xDF), "$89DF 签名驱动写");
     assert!(r.beh_registered);
     assert_eq!(s.f48c, 0x77, "ctrl2 码流参写 $48C");
@@ -174,4 +174,77 @@ fn landing_allocator_paths() {
     }
     assert!(land_pair(&mut g2, 0x84, 0).is_none(), "满载 fail-closed");
     assert!(land_leader(&mut g2, 0x2F, [0; 4], None).is_none());
+}
+
+// ===== 子面④：behavior_frame 调用环 =====
+
+use game_core::engine::{
+    behavior_frame, rng_ec12, run_handler, HandlerResult, ObjectSlot, RngState,
+};
+
+/// ⑨ $EC12 LFSR 字面体 + 已证 handler 执行面。
+#[test]
+fn rng_lfsr_and_handlers() {
+    // LFSR golden：A=(z2c+z2d+1)^z2b，z2d INC（字面体确定性）
+    let mut r = RngState { z2c: 0x10, z2d: 0x20, z2b: 0x00 };
+    let (a1, c1) = rng_ec12(&mut r);
+    assert_eq!(a1, 0x31, "0x10+0x20+1=0x31 ^ 0");
+    assert_eq!((r.z2c, r.z2d), (0x31, 0x21));
+    assert!(!c1, "无进位");
+    // 进位链出口（carry 注入面）：z2c+z2d 溢出
+    let mut r2 = RngState { z2c: 0xFF, z2d: 0x01, z2b: 0x00 };
+    let (a2, c2) = rng_ec12(&mut r2);
+    assert_eq!(a2, 0x01, "0xFF+0x01+1=0x101 低 8=0x01");
+    assert!(c2, "ADC 进位链出口=1");
+    // $836E 恒速下沉
+    let mut s = ObjectSlot { y: 0x10, ..Default::default() };
+    let mut rng = RngState::default();
+    assert_eq!(run_handler(&mut s, 0x836E, &mut rng), HandlerResult::Continue);
+    assert_eq!(s.y, 0x11, "y+1");
+    s.y = 0xFF;
+    assert_eq!(run_handler(&mut s, 0x836E, &mut rng), HandlerResult::Recycle, "溢出终止");
+    // $8314 duration 倒数（$438 字段复用三义面——表模式）
+    let mut s = ObjectSlot { beh_lo: 0x02, ..Default::default() };
+    assert_eq!(run_handler(&mut s, 0x8314, &mut rng), HandlerResult::Continue);
+    assert_eq!(s.beh_lo, 0x01);
+    assert_eq!(run_handler(&mut s, 0x8314, &mut rng), HandlerResult::Recycle, "归零终止");
+    // 终止直通×3
+    for t in [0x8334u16, 0x837E, 0x8403] {
+        assert_eq!(run_handler(&mut s, t, &mut rng), HandlerResult::Recycle);
+    }
+    // $8337 jitter+续链改写 → $836E
+    let mut s = ObjectSlot { x: 100, y: 100, ..Default::default() };
+    let mut rng = RngState { z2c: 0x78, z2d: 0x00, z2b: 0x00 };
+    assert_eq!(run_handler(&mut s, 0x8337, &mut rng), HandlerResult::Continue);
+    assert_eq!((s.beh_hi, s.beh_lo), (0x83, 0x6E), "续链改写 $836E");
+    assert_ne!((s.x, s.y), (100, 100), "jitter 必动（跳零面）");
+    // 未分析 handler fail-closed
+    let mut s = ObjectSlot { y: 50, ..Default::default() };
+    assert_eq!(run_handler(&mut s, 0x9120, &mut rng), HandlerResult::Unproven);
+    assert_eq!(s.y, 50, "fail-closed 字段不动");
+}
+
+/// ⑩ 滴灌 handler（$89DF 四参消费）：首员同帧+帧间隔+$630 递减。
+#[test]
+fn drip_handler_cadence() {
+    let mut st = StageState::default();
+    land_leader(&mut st.grid, 0x2F, [0x2B, 6, 0x0A, 0x20], None).unwrap();
+    // 首帧：首员同帧落地（$630 首现=数−1=5）
+    let leaders: Vec<usize> = (8..28).filter(|&i| st.grid.slots[i].type_ == 0x2F).collect();
+    assert_eq!(leaders.len(), 1);
+    let li = leaders[0];
+    assert_eq!(st.grid.slots[li].f630, 5, "装载后先递减一次（首现=数−1）");
+    behavior_frame(&mut st, &mut StageEffects::default());
+    let members = (8..28).filter(|&i| st.grid.slots[i].type_ == 0x2B).count();
+    assert_eq!(members, 1, "首员=装载帧同帧（load 发射）");
+    assert_eq!(st.grid.slots[li].f630, 5, "load 发射不递减（GroupRelease 语义）");
+    assert_eq!(st.grid.slots[li].drip_cd, 0x0A, "间隔 10f 装载");
+    // 9 帧静默后第 10 帧第二员（递减 5→4）
+    for _ in 0..9 {
+        behavior_frame(&mut st, &mut StageEffects::default());
+    }
+    assert_eq!((8..28).filter(|&i| st.grid.slots[i].type_ == 0x2B).count(), 1);
+    behavior_frame(&mut st, &mut StageEffects::default());
+    assert_eq!((8..28).filter(|&i| st.grid.slots[i].type_ == 0x2B).count(), 2, "10f 节律");
+    assert_eq!(st.grid.slots[li].f630, 4, "滴灌递减");
 }
