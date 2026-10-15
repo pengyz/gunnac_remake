@@ -30,46 +30,61 @@ fn type_signature_registry() {
     // $2F：$89DF、x=128,y=8 恒定（B1 §3/§2.3 trace 9 签名）
     let s = type_signatures(0x2F);
     assert_eq!(s.len(), 1);
-    assert_eq!((s[0].beh_ptr, s[0].spawn), (0x89DF, Some((128, 8))));
+    assert_eq!((s[0].beh, s[0].spawn), (BehaviorField::BehPtr(0x89DF), Some((128, 8))));
     // $2A：$9010、(29,10)（f1789/2109/2365 三点）
     let s = type_signatures(0x2A);
-    assert_eq!((s[0].beh_ptr, s[0].spawn), (0x9010, Some((29, 10))));
-    // $2B/$4E 组员族：行为指针恒 $00DC；出生坐标不恒定 ⇒ None（不发明）
+    assert_eq!((s[0].beh, s[0].spawn), (BehaviorField::BehPtr(0x9010), Some((29, 10))));
+    // $2B/$4E 组员族：【c4e6b68】$DC=表分发种子（出生帧瞬态快照，B1"恒 $00DC"作废）；坐标 ⇒ None
     for t in [0x2Bu8, 0x4E] {
         let s = type_signatures(t);
-        assert_eq!(s[0].beh_ptr, 0x00DC);
+        assert_eq!(s[0].beh, BehaviorField::DispatchSeed(0xDC), "c4e6b68 改标：种子非指针");
         assert_eq!(s[0].spawn, None, "成员坐标摆动不登记恒定值");
     }
     // $07 三行为指针（底部点 $A631 / 尾段流 $AB30 / $AAD9）——同型多指针按观测对登记
     let s = type_signatures(0x07);
-    let ptrs: Vec<u16> = s.iter().map(|x| x.beh_ptr).collect();
+    let ptrs: Vec<u16> = s
+        .iter()
+        .map(|x| match x.beh {
+            BehaviorField::BehPtr(p) => p,
+            BehaviorField::DispatchSeed(_) => panic!("$07 须 BehPtr"),
+        })
+        .collect();
     assert_eq!(ptrs, vec![0xA631, 0xAB30, 0xAAD9], "同型多指针均登记（勿 1:1 强绑）");
     // $02 编队：$AB74（5 槽同帧 216f 轮）
-    assert_eq!(type_signatures(0x02)[0].beh_ptr, 0xAB74);
+    assert_eq!(type_signatures(0x02)[0].beh, BehaviorField::BehPtr(0xAB74));
     // 扩表观测对（trace spawns 全量）：$2A→$9079、$2B→$0079、$05→$B011
-    assert!(type_signatures(0x2A).iter().any(|s| s.beh_ptr == 0x9079));
-    assert!(type_signatures(0x2B).iter().any(|s| s.beh_ptr == 0x0079));
-    assert_eq!(type_signatures(0x05)[0].beh_ptr, 0xB011);
+    assert!(type_signatures(0x2A).iter().any(|s| s.beh == BehaviorField::BehPtr(0x9079)));
+    assert!(type_signatures(0x2B).iter().any(|s| s.beh == BehaviorField::DispatchSeed(0x79)));
+    assert_eq!(type_signatures(0x05)[0].beh, BehaviorField::BehPtr(0xB011));
     // 恒定坐标仅 2 例（$2F/$2A 主指针）；其余 None
     for s in type_signatures(0x07) {
         assert_eq!(s.spawn, None, "$07 坐标不恒定不登记");
     }
     // beh=$0000 暂态**不登记**（非行为指针——登记即发明必红）
     for sig in TYPE_SIGNATURES {
-        assert_ne!(sig.beh_ptr, 0x0000, "$0000 装载暂态禁入签名表");
+        match sig.beh {
+            BehaviorField::BehPtr(p) => assert_ne!(p & 0x8000, 0, "BehPtr 须 hi bit7=1"),
+            BehaviorField::DispatchSeed(v) => assert_ne!(v, 0, "种子非 $00"),
+        }
     }
     // $2E 组长族：【2026-10-15 补】$89E4@(128,8) 五点实测（stg02 §4.4 帧锚 run 补证）
-    // ——原"未观测不发明"缺口收口，dated 注留痕
     let s = type_signatures(0x2E);
     assert_eq!(s.len(), 1, "$2E 登记观测对（原空缺口已由 run 补上）");
-    assert_eq!((s[0].beh_ptr, s[0].spawn), (0x89E4, Some((128, 8))));
+    assert_eq!((s[0].beh, s[0].spawn), (BehaviorField::BehPtr(0x89E4), Some((128, 8))));
     // run 新增自向量对（hi bit7=1）
-    assert!(type_signatures(0x58).iter().any(|x| x.beh_ptr == 0xB3B9));
-    assert!(type_signatures(0x51).iter().any(|x| x.beh_ptr == 0xB04C));
-    assert!(type_signatures(0x05).iter().any(|x| x.beh_ptr == 0xAE6B));
-    // 自向量指针判别面：登记对 hi bit7=1（表分发模式值非指针——语义挂账注见敌型登记头）
+    assert!(type_signatures(0x58).iter().any(|x| x.beh == BehaviorField::BehPtr(0xB3B9)));
+    assert!(type_signatures(0x51).iter().any(|x| x.beh == BehaviorField::BehPtr(0xB04C)));
+    assert!(type_signatures(0x05).iter().any(|x| x.beh == BehaviorField::BehPtr(0xAE6B)));
+    // c4e6b68 改标一致性：BehPtr 恒 hi bit7=1、DispatchSeed 恒 hi=$00（双类判据互斥）
     for sig in TYPE_SIGNATURES {
-        assert_ne!(sig.beh_ptr, 0x0000);
+        match sig.beh {
+            BehaviorField::BehPtr(p) => {
+                assert_ne!(p & 0x8000, 0, "BehPtr 须 hi bit7=1（{p:#X}）")
+            }
+            BehaviorField::DispatchSeed(v) => {
+                assert_ne!(v, 0, "种子非 $00（出生帧 $00 另义）");
+            }
+        }
     }
     // 未登记型值 ⇒ 空
     assert!(type_signatures(0x66).is_empty(), "清单型值 $66 不命名不发明");
@@ -260,8 +275,15 @@ fn dispatch_mode_bit7_gate() {
             "{ptr:#X} hi bit7=0 ⇒ 表分发（值语义挂账中）"
         );
     }
-    // 登记表一致性：全部登记对按判据归类不 panic（两模式均合法登记面）
+    // 登记表一致性（c4e6b68 双类）：BehPtr 项归自向量、DispatchSeed 项归表分发
     for sig in TYPE_SIGNATURES {
-        let _ = dispatch_mode((sig.beh_ptr >> 8) as u8);
+        match sig.beh {
+            BehaviorField::BehPtr(p) => {
+                assert_eq!(dispatch_mode((p >> 8) as u8), DispatchMode::SelfVector)
+            }
+            BehaviorField::DispatchSeed(_) => {
+                assert_eq!(dispatch_mode(0x00), DispatchMode::TableDispatch)
+            }
+        }
     }
 }
