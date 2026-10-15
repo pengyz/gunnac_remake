@@ -728,8 +728,12 @@ fn emit_probe5() {
             st.script = cur;
             flow_timeline_step(&mut st, f, FLOW_TIMELINE_S5);
             let p = stage_probe(&st);
+            // 裁决②：boot 三行（f<1080）scene=title-menu（源头谱系）——对照类
+            // ok-provenance-note 兜底（内容 match+scene 差=attribution 注记）
+            let scene = if f < 1080 { "title-menu" } else { "gameplay-stage1" };
             rows.push_str(&format!(
-                "{{\"scene\": \"gameplay-stage1\", \"f\": {}, \"tick\": {}, \"scroll\": {}, \"flags_26\": {}, \"waves\": {}, \"script_recs\": {}, \"sched_recs\": {}, \"slot_types\": {:?}, \"live_shots\": {}, \"mode\": \"{}\", \"checkpoint\": {}}}\n",
+                "{{\"scene\": \"{}\", \"f\": {}, \"tick\": {}, \"scroll\": {}, \"flags_26\": {}, \"waves\": {}, \"script_recs\": {}, \"sched_recs\": {}, \"slot_types\": {:?}, \"live_shots\": {}, \"mode\": \"{}\", \"checkpoint\": {}}}\n",
+                scene,
                 p.f, p.tick, p.scroll, p.flags_26, p.waves, p.script_recs, p.sched_recs,
                 p.slot_types, p.live_shots, p.mode,
                 match &p.checkpoint { Some(c) => format!("\"{}\"", c), None => "null".to_string() },
