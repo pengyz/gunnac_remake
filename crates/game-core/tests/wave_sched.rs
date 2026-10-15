@@ -479,7 +479,7 @@ fn eee5_accumulator_and_settle_chain() {
     assert_eq!(settle_weight(0xFF), 0x01);
     let (lo, hi, w) = pair_settle(0x00, 0x00, 0x02);
     assert_eq!((lo, hi, w), (0xE6, 0x00, 0xE6), "清算灌入 $A325[2]=$E6");
-    // 表 18B 字节精确 vs ROM（bank02 $A325=file 0x4325）
+    // 表 18B 字节精确 vs ROM（bank02 $A325=file 0x4335=PRG 0x4325+0x10 头）
     let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
     assert_eq!(
         &A325_WEIGHTS[..],
