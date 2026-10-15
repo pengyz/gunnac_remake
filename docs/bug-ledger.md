@@ -23,3 +23,11 @@
 ## 台账（当前为空 —— 尚无已证实的原版 bug 登记）
 
 <!-- 新登记追加在下方，按编号递增；证伪不删历史，原地标注日期更正（AGENTS.md §3.6） -->
+
+## BUG-021 · C9 bit5 死分支 quirk（波次流头部）
+
+- 现象：波次流 C9 判定链中 `AND #$20 / BEQ +0`（零效果分支）——bit5 被测试但分支目标=下一指令，读写两侧均无效果
+- 复现：`python3 tools/wave_stream_decode.py wave 1..8` 任意流头部 C9 位义段；bank00:89xx C9 判定链逐指令（wave-ca-flags.md §6）
+- 影响：行为零差异（死代码）；移植时**保留该判定形态**（D4 保真，不许优化删除）
+- trace id：无动态面（静态死分支）
+- 立账：2026-10-15（decomp-analyst S3-3 发现，captain 按 D4 立账）；Stage A 不修，Stage B 清理候选
