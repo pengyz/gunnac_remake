@@ -673,24 +673,70 @@ fn emit_probe5() {
         (8, &STG08_SCRIPT),
     ];
     for (n, rows_ref) in stages {
+        let ns = format!("{:02}", n);
         let mut st = StageState {
             script: ScriptCursor::from_records(rows_ref),
+            scene: ns.clone(),
+            mode: "StageStart".to_string(),
+            checkpoint: Some(format!("{}-start", ns)),
             ..Default::default()
         };
-        let ns = format!("{:02}", n);
         let mut rows = String::new();
         // 每关自然跑至关末门+64 帧余量
         for f in 0..0x0800u32 {
             stage_tick(&mut st, &TickInputs { scroll_delta: 16 });
             let p = stage_probe(&st);
             rows.push_str(&format!(
-                "{{\"scene\": \"stg{}\", \"f\": {}, \"tick\": {}, \"scroll\": {}, \"flags_26\": {}, \"waves\": {}, \"script_recs\": {}, \"sched_recs\": {}, \"slot_types\": {:?}, \"live_shots\": {}}}\n", ns,
-                p.f, p.tick, p.scroll, p.flags_26, p.waves, p.script_recs, p.sched_recs,
-                p.slot_types, p.live_shots
+                "{{\"scene\": \"stg{}\", \"f\": {}, \"tick\": {}, \"scroll\": {}, \"flags_26\": {}, \"waves\": {}, \"script_recs\": {}, \"sched_recs\": {}, \"slot_types\": {:?}, \"live_shots\": {}, \"mode\": \"{}\", \"checkpoint\": {}}}\n",
+                ns,
+                p.f,
+                p.tick,
+                p.scroll,
+                p.flags_26,
+                p.waves,
+                p.script_recs,
+                p.sched_recs,
+                p.slot_types,
+                p.live_shots,
+                p.mode,
+                match &p.checkpoint {
+                    Some(c) => format!("\"{}\"", c),
+                    None => "null".to_string(),
+                },
             ));
         }
         let path = format!("../../analysis/traces/stg{}.probe5.jsonl", ns);
         std::fs::write(&path, &rows).expect("写 probe5");
+    }
+    // gameplay-stage1 场景（flow 时序面——缺口②：mode/checkpoint 行闭合）
+    {
+        use game_core::engine::{flow_timeline_step, FLOW_TIMELINE_S5};
+        let mut st = StageState {
+            script: ScriptCursor::stg01(),
+            scene: "gameplay-stage1".to_string(),
+            ..Default::default()
+        };
+        let mut rows = String::new();
+        for f in 0..0x0F00u32 {
+            st.wave.tick = f as u16;
+            st.frame = f; // 帧号=f（L5 对齐）
+            let mut fx = StageEffects::default();
+            let mut cur = core::mem::take(&mut st.script);
+            cur.step_to(f, &mut st, &mut fx);
+            register_wave_flags(&mut cur);
+            cur.process_waves(&mut st, &mut fx);
+            st.script = cur;
+            flow_timeline_step(&mut st, f, FLOW_TIMELINE_S5);
+            let p = stage_probe(&st);
+            rows.push_str(&format!(
+                "{{\"scene\": \"gameplay-stage1\", \"f\": {}, \"tick\": {}, \"scroll\": {}, \"flags_26\": {}, \"waves\": {}, \"script_recs\": {}, \"sched_recs\": {}, \"slot_types\": {:?}, \"live_shots\": {}, \"mode\": \"{}\", \"checkpoint\": {}}}\n",
+                p.f, p.tick, p.scroll, p.flags_26, p.waves, p.script_recs, p.sched_recs,
+                p.slot_types, p.live_shots, p.mode,
+                match &p.checkpoint { Some(c) => format!("\"{}\"", c), None => "null".to_string() },
+            ));
+            st.checkpoint = None;
+        }
+        std::fs::write("../../analysis/traces/gameplay-stage1.probe5.jsonl", &rows).expect("写 gameplay probe5");
         let _ = WAVE_FLAGS; // 17 流登记面（对拍参考）
     }
 }

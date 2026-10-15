@@ -49,6 +49,12 @@ pub struct StageState {
     pub rng: RngState,
     /// zp `$54`（调用环分组判据输入——运行期来源 S4b 挂账，字段不发明）。
     pub zp_54: u8,
+    /// flow 模式名（flow.rs Mode 镜像——golden L5 口径）。
+    pub mode: String,
+    /// 本帧 checkpoint（一次性事件）。
+    pub checkpoint: Option<String>,
+    /// 场景标签（checkpoint 命名前缀）。
+    pub scene: String,
     /// W-PHASE 口径（真机裁点双模式可跑化）。
     pub wave_phase: WavePhaseTiming,
     /// ArmAtRecordComplete 的完成延迟（tick；真机拟合参数）。
@@ -273,9 +279,14 @@ pub fn combat_frame(state: &mut StageState, _fx: &mut StageEffects) {
 }
 
 /// 主环收尾步（scroll 确认+flow 消费 `$26` bit4 关末门）。
-pub fn main_loop_step(state: &StageState, fx: &mut StageEffects) {
+pub fn main_loop_step(state: &mut StageState, fx: &mut StageEffects) {
     if state.wave.flags_26 & 0x10 != 0 {
         fx.stage_clear_requested = true;
+        // flow 转场：关末门 ⇒ StageClear（checkpoint 事件一次性）
+        if state.mode != "StageClear" {
+            state.mode = "StageClear".to_string();
+            state.checkpoint = Some(format!("{}-clear", state.scene));
+        }
     }
 }
 
@@ -903,6 +914,10 @@ pub struct StageProbe {
     pub slot_types: [u8; 28],
     /// 存活弹数（$040E state≠0 计数）。
     pub live_shots: u16,
+    /// flow 模式（flow.rs Mode 命名——golden L5 口径）。
+    pub mode: String,
+    /// 本帧 checkpoint（转场帧一次性事件；无 ⇒ None）。
+    pub checkpoint: Option<String>,
 }
 
 /// 帧探针抽取（纯函数——L5 逐帧对拍面）。
@@ -918,6 +933,8 @@ pub fn stage_probe(state: &StageState) -> StageProbe {
         sched_recs: state.sched.next as u8,
         slot_types: core::array::from_fn(|i| state.grid.slots[i].type_),
         live_shots,
+        mode: state.mode.clone(),
+        checkpoint: state.checkpoint.clone(),
     }
 }
 
@@ -961,4 +978,36 @@ pub fn motion_update(slot: &mut ObjectSlot) -> MotionOutcome {
 /// `$5C0` 亚像素溢出→`INC $5DC`（相位计数增量源，099c510 ②连接件）。
 pub fn phase_counter_bump(slot: &mut ObjectSlot) {
     slot.f5dc = slot.f5dc.wrapping_add(1);
+}
+
+/// flow 时序面（缺口②）：s5 场景 mode/checkpoint 转场表——**trace A 级帧锚登记**
+///（R-ui-6/7 实机采样帧：Black f180/Title f360/Menu f540+/Shop f1080/Transition
+/// f1200/StageStart f1260/Combat f1500+）；转场逻辑=flow.rs 状态机+场景输入，
+/// 本表仅登记实测时点（时序常量注册同迁移帧口径）。boot/menu/shop 段行为语义
+/// 未移植部分=显式缺口（不发明响应时延）。
+pub const FLOW_TIMELINE_S5: &[(u32, &str, &str)] = &[
+    (180, "Black", "boot-black"),
+    (360, "Title", "title-in"),
+    (540, "Menu", "menu-in"),
+    (1080, "Shop", "stg01-shop"),
+    (1200, "Transition", "shop-exit"),
+    (1260, "StageStart", "stg01-start"),
+    (1500, "Combat", "stg01-combat"),
+    (2401, "StageClear", "stg01-clear"),
+    (3116, "Shop", "stg02-shop"),
+    (3400, "Transition", "shop-exit-2"),
+    (3450, "StageStart", "stg02-start"),
+    (3900, "Combat", "stg02-combat"),
+];
+
+/// flow 转场施加（时序表驱动——调用侧按帧号触发；返回本帧事件）。
+pub fn flow_timeline_step(state: &mut StageState, f: u32, timeline: &[(u32, &str, &str)]) -> bool {
+    for &(tf, mode, cp) in timeline {
+        if tf == f {
+            state.mode = mode.to_string();
+            state.checkpoint = Some(cp.to_string());
+            return true;
+        }
+    }
+    false
 }
