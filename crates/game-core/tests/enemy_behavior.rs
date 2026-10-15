@@ -505,3 +505,44 @@ fn t59_phase_machine_tables() {
     assert!(PHASE_FLAG.iter().any(|v| v & 0x80 != 0));
     assert!(PHASE_FLAG.iter().any(|v| v & 0x80 == 0));
 }
+
+/// ㉑ 敌侧框形取框（bank14:$D511-$D5AE）：指针表/子框流/翻转/钳位。
+#[test]
+fn shape_box_fetch() {
+    use game_core::enemy::{fetch_shape_boxes, shape_stream_addr, SHAPE_PTR_HI, SHAPE_PTR_LO};
+    // 指针表 88B×2 字节精确 vs ROM（bank2 R6 窗）
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    let r6 = |a: usize| 0x10 + 2 * 0x2000 + (a - 0x8000);
+    assert_eq!(&SHAPE_PTR_LO[..], &rom[r6(0x97BA)..r6(0x97BA) + 88], "lo 表");
+    assert_eq!(&SHAPE_PTR_HI[..], &rom[r6(0x9812)..r6(0x9812) + 88], "hi 表");
+    // 形 $27（中 boss）：流 $9936 = [01][F9 07 F9 07] = ±7 对称 14×14
+    assert_eq!(shape_stream_addr(0x27), Some(0x9936));
+    let stream = &rom[r6(0x9936)..r6(0x9936) + 5];
+    let boxes = fetch_shape_boxes(stream, 128, 100, false, false);
+    assert_eq!(boxes, vec![(121, 135, 93, 107)], "x±7/y±7 对称框");
+    // 翻转判别（非对称框）：x=−2..+1 ⇒ flip_x 左'=-右=-1、右'=-左=+2
+    let asym = [1u8, 0xFE, 0x01, 0x00, 0x04]; // −2..+1, 0..+4
+    assert_eq!(
+        fetch_shape_boxes(&asym, 50, 50, false, false),
+        vec![(48, 51, 50, 54)],
+        "无翻转原样"
+    );
+    assert_eq!(
+        fetch_shape_boxes(&asym, 50, 50, true, false),
+        vec![(49, 52, 50, 54)],
+        "flip_x: 左'=-右=-1、右'=-左=+2（对称框不可判此必红）"
+    );
+    assert_eq!(
+        fetch_shape_boxes(&asym, 50, 50, false, true),
+        vec![(48, 51, 46, 50)],
+        "flip_y: 上'=-下=-4、下'=-上=0"
+    );
+    // 钳位：负偏移钳 0、正溢出钳 FF
+    let edge = [1u8, 0xFC, 0x04, 0xFC, 0x04]; // −4..+4
+    assert_eq!(fetch_shape_boxes(&edge, 2, 2, false, false), vec![(0, 6, 0, 6)]);
+    assert_eq!(fetch_shape_boxes(&edge, 253, 253, false, false), vec![(249, 255, 249, 255)]);
+    // 子框数多框 + 流不足 fail-closed（已解析部分）
+    let two = [2u8, 0xFF, 0x01, 0xFF, 0x01, 0xF0, 0x10, 0xF0, 0x10];
+    assert_eq!(fetch_shape_boxes(&two, 100, 100, false, false).len(), 2);
+    assert_eq!(fetch_shape_boxes(&two[..6], 100, 100, false, false).len(), 1, "流不足截断");
+}
