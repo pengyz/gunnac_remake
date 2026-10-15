@@ -10,16 +10,16 @@
 {"scene": "s5-stg01", "f": 3400, "mode": "Transition"}
 {"scene": "s5-stg01", "f": 3450, "mode": "StageStart", "checkpoint": "stg02-start"}
 {"scene": "s5-stg01", "f": 3900, "mode": "Combat", "checkpoint": "stg02-combat"}
-{"scene": "s5-chain", "f": 0, "mode": "StageClear", "checkpoint": "stg02-clear"}
-{"scene": "s5-chain", "f": 0, "mode": "Shop", "checkpoint": "stg03-shop"}
-{"scene": "s5-chain", "f": 0, "mode": "Transition"}
-{"scene": "s5-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg03-start"}
-{"scene": "s5-chain", "f": 0, "mode": "Combat", "checkpoint": "stg03-combat"}
-{"scene": "s5-chain", "f": 0, "mode": "StageClear", "checkpoint": "stg03-clear"}
-{"scene": "s5-chain", "f": 0, "mode": "Shop", "checkpoint": "stg04-shop"}
-{"scene": "s5-chain", "f": 0, "mode": "Transition"}
-{"scene": "s5-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg04-start"}
-{"scene": "s5-chain", "f": 0, "mode": "Combat", "checkpoint": "stg04-combat"}
+{"scene": "s5-chain", "f": 4601, "mode": "StageClear", "checkpoint": "stg02-clear"}
+{"scene": "s5-chain", "f": 5314, "mode": "Shop", "checkpoint": "stg03-shop"}
+{"scene": "s5-chain", "f": 5604, "mode": "Transition"}
+{"scene": "s5-chain", "f": 5700, "mode": "StageStart", "checkpoint": "stg03-start"}
+{"scene": "s5-chain", "f": 6000, "mode": "Combat", "checkpoint": "stg03-combat"}
+{"scene": "s5-chain", "f": 6401, "mode": "StageClear", "checkpoint": "stg03-clear"}
+{"scene": "s5-chain", "f": 7116, "mode": "Shop", "checkpoint": "stg04-shop"}
+{"scene": "s5-chain", "f": 7404, "mode": "Transition"}
+{"scene": "s5-chain", "f": 7500, "mode": "StageStart", "checkpoint": "stg04-start"}
+{"scene": "s5-chain", "f": 9000, "mode": "Combat", "checkpoint": "stg04-combat"}
 {"scene": "s5-chain", "f": 0, "mode": "StageClear", "checkpoint": "stg04-clear"}
 {"scene": "s5-chain", "f": 0, "mode": "Shop", "checkpoint": "stg05-shop"}
 {"scene": "s5-chain", "f": 0, "mode": "Transition"}

@@ -352,6 +352,21 @@ pub fn s5_chain_run_for(stages: u8) -> S5Run {
                 (2, "exit") => ("s5-stg01", 3400),
                 (2, "start") => ("s5-stg01", 3450),
                 (2, "combat") => ("s5-stg01", 3900),
+                // ── (b) 同域回填锚（run #3/stg04 run 实测——trigger/injected 逐项登记
+                // 由锚台账负责；本表仅真帧域坐标）──
+                (2, "clear") => ("s5-chain", 4601),
+                (3, "shop") => ("s5-chain", 5314),
+                (3, "exit") => ("s5-chain", 5604),
+                (3, "start") => ("s5-chain", 5700),
+                // 【裁定① dated】f6500=倒数期残影作废（判定式 dated 注已入台账）——
+                // 重锚 f6000（双 run trace#f6000+双 probe 截图四证；$A418 真战斗窗）
+                (3, "combat") => ("s5-chain", 6000),
+                (3, "clear") => ("s5-chain", 6401),
+                (4, "shop") => ("s5-chain", 7116),
+                (4, "exit") => ("s5-chain", 7404),
+                (4, "start") => ("s5-chain", 7500),
+                (4, "combat") => ("s5-chain", 9000),
+                // 未采段（stg05-08）= f=0 占位（pending 不发明帧号）
                 _ => ("s5-chain", 0),
             }
         };
