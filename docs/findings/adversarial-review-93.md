@@ -131,3 +131,17 @@ l2-diff 121/121 各子面声明"未触面"与纯新增模块性质一致 ✓。
 mutation 全程逆串精确还原（M2a/M2b/M3a/M3b/M4/M6a/M6b 共 7 组）；还原后 engine_tick 22/22+
 enemy_behavior 16/16 复绿；A 级主张与既证 listing 真值同构面全数映射核毕；流 quirk
 （rec13 尾 thr=$0000→op7 不可达）如实登记不粉饰。
+
+---
+
+## 段 E：F-B93 复验收口——**#93 改判 pass** ✅
+
+| 态 | 实测 |
+|---|---|
+| M2b 原突变（`step_by(2)` 跳拍——段B 盲区实证同款） | **`fast_forward_ring_per_tick_sentinel` FAILED** ✓（修复前 21 测全绿的盲区已闭——crafted tick=1+2 双发断言咬住 tick=2 漏发） |
+| 逆串精确还原 | **23/23 复绿** ✓ |
+
+F-B93 mutation-kill 三态完整；修形（crafted tick=2 双发+反向环界）= 段 B 处方兑现。
+**#93 总裁定改判：pass** ✅——①七环全通 ②Wt-1 总量+逐拍双面锁 ③混域双向咬 ④表分发 4 对
+⑤combat 原语装配 ⑥⑬⑭ 双咬 ⑦账目 201 闭合，**零遗留必修**。
+（样本值域族累计 5 例全部闭环：F-B4/C88/C89/C90/F-B93。）
