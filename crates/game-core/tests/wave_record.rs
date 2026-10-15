@@ -101,6 +101,11 @@ fn ca_judgment_golden_representative() {
 }
 
 /// ② 17/17 全谱不变量（§3 相关性表）+ aux 派生式。
+///
+/// **恒值列声明（#90 段A advisory）**：本"全谱"=17 条真流记录，样本列存在恒值——
+/// C9 ∈ {$F2,$FB,$E2}（bit1 **恒 1**）、CA bit1 **恒 0**、CA bit7 仅 {$B1,$81}。
+/// 这些位的真路/双路覆盖**不在本测**：bit1 通道真路=⑩、bit5 零效果=⑤ 合成对、
+/// CA bit1 true 路=⑩——新增判据消费位时勿以本测当真路覆盖（家族审计 #90 结论）。
 #[test]
 fn ca_judgment_full_spectrum_invariants() {
     for &(c9, ca) in &CA_GOLDEN {
