@@ -1,0 +1,2054 @@
+{
+ "schema": 1,
+ "kind": "behavior-type-dispatch-table",
+ "source": "rom/gunnac_cn.nes bank2 $80CE(hi)/$7FFF(lo)/$816E(bank switch)",
+ "wiring": "dispatch bank2:82F8: LDA $41C,X/BPL table; table: hi=$80CE+type, lo=$7FFF+type, JMP ($24); type>=${30} 前置 MMC3 reg7 切 A000 窗 bank=$816E+type",
+ "verified": {
+  "$2B": "bank2:$90AB →链 $9120（trace f+1 ($91,$20) 吻合）",
+  "$38": "bank3:$B4A3",
+  "$51": "bank4:$B00A",
+  "$56": "bank4:$B289"
+ },
+ "entries": [
+  {
+   "type": "$01",
+   "hi": "$A0",
+   "lo": "$00",
+   "target": "$A000",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$02",
+   "hi": "$AB",
+   "lo": "$6A",
+   "target": "$AB6A",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$03",
+   "hi": "$AB",
+   "lo": "$97",
+   "target": "$AB97",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$04",
+   "hi": "$AC",
+   "lo": "$64",
+   "target": "$AC64",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$05",
+   "hi": "$AE",
+   "lo": "$05",
+   "target": "$AE05",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$06",
+   "hi": "$B0",
+   "lo": "$93",
+   "target": "$B093",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$07",
+   "hi": "$A6",
+   "lo": "$01",
+   "target": "$A601",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$08",
+   "hi": "$A4",
+   "lo": "$65",
+   "target": "$A465",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$09",
+   "hi": "$A4",
+   "lo": "$E3",
+   "target": "$A4E3",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$0A",
+   "hi": "$83",
+   "lo": "$34",
+   "target": "$8334",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$0B",
+   "hi": "$83",
+   "lo": "$34",
+   "target": "$8334",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$0C",
+   "hi": "$83",
+   "lo": "$34",
+   "target": "$8334",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$0D",
+   "hi": "$83",
+   "lo": "$14",
+   "target": "$8314",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$0E",
+   "hi": "$D1",
+   "lo": "$0C",
+   "target": "$D10C",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$0F",
+   "hi": "$A3",
+   "lo": "$3E",
+   "target": "$A33E",
+   "window": "A000-window",
+   "bank_switch": null
+  },
+  {
+   "type": "$10",
+   "hi": "$83",
+   "lo": "$37",
+   "target": "$8337",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$11",
+   "hi": "$83",
+   "lo": "$81",
+   "target": "$8381",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$12",
+   "hi": "$83",
+   "lo": "$BA",
+   "target": "$83BA",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$13",
+   "hi": "$84",
+   "lo": "$10",
+   "target": "$8410",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$14",
+   "hi": "$84",
+   "lo": "$5A",
+   "target": "$845A",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$15",
+   "hi": "$84",
+   "lo": "$97",
+   "target": "$8497",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$16",
+   "hi": "$85",
+   "lo": "$B1",
+   "target": "$85B1",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$17",
+   "hi": "$85",
+   "lo": "$EA",
+   "target": "$85EA",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$18",
+   "hi": "$8C",
+   "lo": "$CE",
+   "target": "$8CCE",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$19",
+   "hi": "$8C",
+   "lo": "$F7",
+   "target": "$8CF7",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$1A",
+   "hi": "$8D",
+   "lo": "$B8",
+   "target": "$8DB8",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$1B",
+   "hi": "$8E",
+   "lo": "$50",
+   "target": "$8E50",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$1C",
+   "hi": "$8E",
+   "lo": "$53",
+   "target": "$8E53",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$1D",
+   "hi": "$8E",
+   "lo": "$90",
+   "target": "$8E90",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$1E",
+   "hi": "$8F",
+   "lo": "$1E",
+   "target": "$8F1E",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$1F",
+   "hi": "$8F",
+   "lo": "$66",
+   "target": "$8F66",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$20",
+   "hi": "$8A",
+   "lo": "$8C",
+   "target": "$8A8C",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$21",
+   "hi": "$8A",
+   "lo": "$E0",
+   "target": "$8AE0",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$22",
+   "hi": "$8B",
+   "lo": "$08",
+   "target": "$8B08",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$23",
+   "hi": "$8B",
+   "lo": "$63",
+   "target": "$8B63",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$24",
+   "hi": "$8B",
+   "lo": "$D0",
+   "target": "$8BD0",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$25",
+   "hi": "$8C",
+   "lo": "$09",
+   "target": "$8C09",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$26",
+   "hi": "$8C",
+   "lo": "$88",
+   "target": "$8C88",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$27",
+   "hi": "$8C",
+   "lo": "$88",
+   "target": "$8C88",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$28",
+   "hi": "$83",
+   "lo": "$34",
+   "target": "$8334",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$29",
+   "hi": "$83",
+   "lo": "$34",
+   "target": "$8334",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$2A",
+   "hi": "$8F",
+   "lo": "$CE",
+   "target": "$8FCE",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$2B",
+   "hi": "$90",
+   "lo": "$AB",
+   "target": "$90AB",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$2C",
+   "hi": "$89",
+   "lo": "$53",
+   "target": "$8953",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$2D",
+   "hi": "$89",
+   "lo": "$57",
+   "target": "$8957",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$2E",
+   "hi": "$89",
+   "lo": "$8A",
+   "target": "$898A",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$2F",
+   "hi": "$89",
+   "lo": "$9B",
+   "target": "$899B",
+   "window": "R6/bank2",
+   "bank_switch": null
+  },
+  {
+   "type": "$30",
+   "hi": "$B1",
+   "lo": "$83",
+   "target": "$B183",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$31",
+   "hi": "$B2",
+   "lo": "$2C",
+   "target": "$B22C",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$32",
+   "hi": "$B2",
+   "lo": "$E3",
+   "target": "$B2E3",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$33",
+   "hi": "$B3",
+   "lo": "$5C",
+   "target": "$B35C",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$34",
+   "hi": "$B4",
+   "lo": "$07",
+   "target": "$B407",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$35",
+   "hi": "$83",
+   "lo": "$34",
+   "target": "$8334",
+   "window": "R6/bank2",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$36",
+   "hi": "$83",
+   "lo": "$34",
+   "target": "$8334",
+   "window": "R6/bank2",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$37",
+   "hi": "$83",
+   "lo": "$34",
+   "target": "$8334",
+   "window": "R6/bank2",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$38",
+   "hi": "$B4",
+   "lo": "$A3",
+   "target": "$B4A3",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$39",
+   "hi": "$A2",
+   "lo": "$09",
+   "target": "$A209",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$3A",
+   "hi": "$A2",
+   "lo": "$7D",
+   "target": "$A27D",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$3B",
+   "hi": "$A4",
+   "lo": "$C0",
+   "target": "$A4C0",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$3C",
+   "hi": "$A5",
+   "lo": "$62",
+   "target": "$A562",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$3D",
+   "hi": "$A0",
+   "lo": "$4D",
+   "target": "$A04D",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$3E",
+   "hi": "$A2",
+   "lo": "$35",
+   "target": "$A235",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$3F",
+   "hi": "$83",
+   "lo": "$34",
+   "target": "$8334",
+   "window": "R6/bank2",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$40",
+   "hi": "$A6",
+   "lo": "$11",
+   "target": "$A611",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$41",
+   "hi": "$A6",
+   "lo": "$DE",
+   "target": "$A6DE",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$42",
+   "hi": "$A7",
+   "lo": "$35",
+   "target": "$A735",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$43",
+   "hi": "$A7",
+   "lo": "$A8",
+   "target": "$A7A8",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$44",
+   "hi": "$A7",
+   "lo": "$F4",
+   "target": "$A7F4",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$45",
+   "hi": "$A8",
+   "lo": "$86",
+   "target": "$A886",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$46",
+   "hi": "$A9",
+   "lo": "$18",
+   "target": "$A918",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$47",
+   "hi": "$A9",
+   "lo": "$AF",
+   "target": "$A9AF",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$48",
+   "hi": "$AA",
+   "lo": "$72",
+   "target": "$AA72",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$49",
+   "hi": "$AA",
+   "lo": "$EA",
+   "target": "$AAEA",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$4A",
+   "hi": "$AB",
+   "lo": "$DB",
+   "target": "$ABDB",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$4B",
+   "hi": "$AD",
+   "lo": "$2C",
+   "target": "$AD2C",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$4C",
+   "hi": "$AD",
+   "lo": "$87",
+   "target": "$AD87",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$4D",
+   "hi": "$AD",
+   "lo": "$F1",
+   "target": "$ADF1",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$4E",
+   "hi": "$AE",
+   "lo": "$44",
+   "target": "$AE44",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$4F",
+   "hi": "$AE",
+   "lo": "$83",
+   "target": "$AE83",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$50",
+   "hi": "$A0",
+   "lo": "$00",
+   "target": "$A000",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$51",
+   "hi": "$B0",
+   "lo": "$0A",
+   "target": "$B00A",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$52",
+   "hi": "$B0",
+   "lo": "$D4",
+   "target": "$B0D4",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$53",
+   "hi": "$B1",
+   "lo": "$5B",
+   "target": "$B15B",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$54",
+   "hi": "$B1",
+   "lo": "$AA",
+   "target": "$B1AA",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$55",
+   "hi": "$B2",
+   "lo": "$1B",
+   "target": "$B21B",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$56",
+   "hi": "$B2",
+   "lo": "$89",
+   "target": "$B289",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$57",
+   "hi": "$B3",
+   "lo": "$23",
+   "target": "$B323",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$58",
+   "hi": "$B3",
+   "lo": "$A8",
+   "target": "$B3A8",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$59",
+   "hi": "$B4",
+   "lo": "$36",
+   "target": "$B436",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$5A",
+   "hi": "$A0",
+   "lo": "$E2",
+   "target": "$A0E2",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$5B",
+   "hi": "$B4",
+   "lo": "$80",
+   "target": "$B480",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$5C",
+   "hi": "$B4",
+   "lo": "$E5",
+   "target": "$B4E5",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$5D",
+   "hi": "$AF",
+   "lo": "$2F",
+   "target": "$AF2F",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$5E",
+   "hi": "$B5",
+   "lo": "$88",
+   "target": "$B588",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$5F",
+   "hi": "$B9",
+   "lo": "$DB",
+   "target": "$B9DB",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$60",
+   "hi": "$B6",
+   "lo": "$48",
+   "target": "$B648",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$61",
+   "hi": "$A1",
+   "lo": "$29",
+   "target": "$A129",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$62",
+   "hi": "$A0",
+   "lo": "$00",
+   "target": "$A000",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$63",
+   "hi": "$B0",
+   "lo": "$6B",
+   "target": "$B06B",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$64",
+   "hi": "$A1",
+   "lo": "$3A",
+   "target": "$A13A",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$65",
+   "hi": "$A2",
+   "lo": "$F4",
+   "target": "$A2F4",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$66",
+   "hi": "$B5",
+   "lo": "$26",
+   "target": "$B526",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$67",
+   "hi": "$B7",
+   "lo": "$3C",
+   "target": "$B73C",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$68",
+   "hi": "$B6",
+   "lo": "$EE",
+   "target": "$B6EE",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$69",
+   "hi": "$B7",
+   "lo": "$33",
+   "target": "$B733",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$6A",
+   "hi": "$B8",
+   "lo": "$1E",
+   "target": "$B81E",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$6B",
+   "hi": "$B8",
+   "lo": "$EF",
+   "target": "$B8EF",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$6C",
+   "hi": "$B9",
+   "lo": "$E4",
+   "target": "$B9E4",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$6D",
+   "hi": "$BA",
+   "lo": "$33",
+   "target": "$BA33",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$6E",
+   "hi": "$BB",
+   "lo": "$1E",
+   "target": "$BB1E",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$6F",
+   "hi": "$BB",
+   "lo": "$5C",
+   "target": "$BB5C",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$70",
+   "hi": "$BB",
+   "lo": "$EF",
+   "target": "$BBEF",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$71",
+   "hi": "$BC",
+   "lo": "$97",
+   "target": "$BC97",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$72",
+   "hi": "$A2",
+   "lo": "$FC",
+   "target": "$A2FC",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$73",
+   "hi": "$A2",
+   "lo": "$FC",
+   "target": "$A2FC",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$74",
+   "hi": "$BD",
+   "lo": "$44",
+   "target": "$BD44",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$75",
+   "hi": "$A3",
+   "lo": "$F1",
+   "target": "$A3F1",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$76",
+   "hi": "$BD",
+   "lo": "$DF",
+   "target": "$BDDF",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$77",
+   "hi": "$BE",
+   "lo": "$41",
+   "target": "$BE41",
+   "window": "A000-window",
+   "bank_switch": "$04"
+  },
+  {
+   "type": "$78",
+   "hi": "$B7",
+   "lo": "$F9",
+   "target": "$B7F9",
+   "window": "A000-window",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$79",
+   "hi": "$AB",
+   "lo": "$17",
+   "target": "$AB17",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$7A",
+   "hi": "$AB",
+   "lo": "$C6",
+   "target": "$ABC6",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$7B",
+   "hi": "$AC",
+   "lo": "$77",
+   "target": "$AC77",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$7C",
+   "hi": "$AC",
+   "lo": "$BA",
+   "target": "$ACBA",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$7D",
+   "hi": "$AC",
+   "lo": "$FC",
+   "target": "$ACFC",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$7E",
+   "hi": "$AD",
+   "lo": "$4A",
+   "target": "$AD4A",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$7F",
+   "hi": "$A0",
+   "lo": "$00",
+   "target": "$A000",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$80",
+   "hi": "$AD",
+   "lo": "$D4",
+   "target": "$ADD4",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$81",
+   "hi": "$AE",
+   "lo": "$42",
+   "target": "$AE42",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$82",
+   "hi": "$AE",
+   "lo": "$97",
+   "target": "$AE97",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$83",
+   "hi": "$AE",
+   "lo": "$C2",
+   "target": "$AEC2",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$84",
+   "hi": "$A1",
+   "lo": "$06",
+   "target": "$A106",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$85",
+   "hi": "$A1",
+   "lo": "$CE",
+   "target": "$A1CE",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$86",
+   "hi": "$A3",
+   "lo": "$AC",
+   "target": "$A3AC",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$87",
+   "hi": "$A4",
+   "lo": "$E3",
+   "target": "$A4E3",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$88",
+   "hi": "$AF",
+   "lo": "$9B",
+   "target": "$AF9B",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$89",
+   "hi": "$B0",
+   "lo": "$CB",
+   "target": "$B0CB",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$8A",
+   "hi": "$B1",
+   "lo": "$28",
+   "target": "$B128",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$8B",
+   "hi": "$A9",
+   "lo": "$15",
+   "target": "$A915",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$8C",
+   "hi": "$B1",
+   "lo": "$EC",
+   "target": "$B1EC",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$8D",
+   "hi": "$B2",
+   "lo": "$B2",
+   "target": "$B2B2",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$8E",
+   "hi": "$B3",
+   "lo": "$11",
+   "target": "$B311",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$8F",
+   "hi": "$B3",
+   "lo": "$AA",
+   "target": "$B3AA",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$90",
+   "hi": "$B4",
+   "lo": "$0D",
+   "target": "$B40D",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$91",
+   "hi": "$B4",
+   "lo": "$D6",
+   "target": "$B4D6",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$92",
+   "hi": "$B5",
+   "lo": "$5F",
+   "target": "$B55F",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$93",
+   "hi": "$B6",
+   "lo": "$04",
+   "target": "$B604",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$94",
+   "hi": "$B6",
+   "lo": "$47",
+   "target": "$B647",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$95",
+   "hi": "$B6",
+   "lo": "$AD",
+   "target": "$B6AD",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$96",
+   "hi": "$B7",
+   "lo": "$E9",
+   "target": "$B7E9",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$97",
+   "hi": "$B8",
+   "lo": "$33",
+   "target": "$B833",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$98",
+   "hi": "$B8",
+   "lo": "$B1",
+   "target": "$B8B1",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$99",
+   "hi": "$B9",
+   "lo": "$2F",
+   "target": "$B92F",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$9A",
+   "hi": "$BA",
+   "lo": "$47",
+   "target": "$BA47",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$9B",
+   "hi": "$BA",
+   "lo": "$9B",
+   "target": "$BA9B",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$9C",
+   "hi": "$BB",
+   "lo": "$42",
+   "target": "$BB42",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$9D",
+   "hi": "$BB",
+   "lo": "$A2",
+   "target": "$BBA2",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$9E",
+   "hi": "$BF",
+   "lo": "$1B",
+   "target": "$BF1B",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$9F",
+   "hi": "$A9",
+   "lo": "$E0",
+   "target": "$A9E0",
+   "window": "A000-window",
+   "bank_switch": "$05"
+  },
+  {
+   "type": "$A0",
+   "hi": "$A3",
+   "lo": "$CC",
+   "target": "$A3CC",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$A1",
+   "hi": "$A5",
+   "lo": "$82",
+   "target": "$A582",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$A2",
+   "hi": "$A6",
+   "lo": "$1D",
+   "target": "$A61D",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$A3",
+   "hi": "$A0",
+   "lo": "$00",
+   "target": "$A000",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$A4",
+   "hi": "$A2",
+   "lo": "$C0",
+   "target": "$A2C0",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$A5",
+   "hi": "$A3",
+   "lo": "$55",
+   "target": "$A355",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$A6",
+   "hi": "$A3",
+   "lo": "$7E",
+   "target": "$A37E",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$A7",
+   "hi": "$A3",
+   "lo": "$EE",
+   "target": "$A3EE",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$A8",
+   "hi": "$A4",
+   "lo": "$9B",
+   "target": "$A49B",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$A9",
+   "hi": "$A4",
+   "lo": "$E0",
+   "target": "$A4E0",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$AA",
+   "hi": "$A5",
+   "lo": "$56",
+   "target": "$A556",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$AB",
+   "hi": "$A5",
+   "lo": "$AC",
+   "target": "$A5AC",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$AC",
+   "hi": "$A6",
+   "lo": "$6B",
+   "target": "$A66B",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$AD",
+   "hi": "$A6",
+   "lo": "$F5",
+   "target": "$A6F5",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$AE",
+   "hi": "$A8",
+   "lo": "$0A",
+   "target": "$A80A",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$AF",
+   "hi": "$A8",
+   "lo": "$74",
+   "target": "$A874",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B0",
+   "hi": "$AD",
+   "lo": "$5D",
+   "target": "$AD5D",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B1",
+   "hi": "$AD",
+   "lo": "$FA",
+   "target": "$ADFA",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B2",
+   "hi": "$AE",
+   "lo": "$AB",
+   "target": "$AEAB",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B3",
+   "hi": "$AF",
+   "lo": "$59",
+   "target": "$AF59",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B4",
+   "hi": "$B0",
+   "lo": "$2A",
+   "target": "$B02A",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B5",
+   "hi": "$B1",
+   "lo": "$04",
+   "target": "$B104",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B6",
+   "hi": "$B2",
+   "lo": "$0E",
+   "target": "$B20E",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B7",
+   "hi": "$B2",
+   "lo": "$B1",
+   "target": "$B2B1",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B8",
+   "hi": "$B4",
+   "lo": "$23",
+   "target": "$B423",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$B9",
+   "hi": "$B4",
+   "lo": "$79",
+   "target": "$B479",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$BA",
+   "hi": "$B6",
+   "lo": "$2B",
+   "target": "$B62B",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$BB",
+   "hi": "$B6",
+   "lo": "$8B",
+   "target": "$B68B",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$BC",
+   "hi": "$B6",
+   "lo": "$FB",
+   "target": "$B6FB",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$BD",
+   "hi": "$B7",
+   "lo": "$8B",
+   "target": "$B78B",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$BE",
+   "hi": "$B7",
+   "lo": "$FE",
+   "target": "$B7FE",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$BF",
+   "hi": "$B8",
+   "lo": "$E9",
+   "target": "$B8E9",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C0",
+   "hi": "$B9",
+   "lo": "$BC",
+   "target": "$B9BC",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C1",
+   "hi": "$BA",
+   "lo": "$44",
+   "target": "$BA44",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C2",
+   "hi": "$BA",
+   "lo": "$F9",
+   "target": "$BAF9",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C3",
+   "hi": "$BB",
+   "lo": "$81",
+   "target": "$BB81",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C4",
+   "hi": "$BB",
+   "lo": "$E9",
+   "target": "$BBE9",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C5",
+   "hi": "$BC",
+   "lo": "$5A",
+   "target": "$BC5A",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C6",
+   "hi": "$BC",
+   "lo": "$DD",
+   "target": "$BCDD",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C7",
+   "hi": "$BD",
+   "lo": "$36",
+   "target": "$BD36",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C8",
+   "hi": "$BD",
+   "lo": "$A6",
+   "target": "$BDA6",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$C9",
+   "hi": "$BD",
+   "lo": "$E8",
+   "target": "$BDE8",
+   "window": "A000-window",
+   "bank_switch": "$06"
+  },
+  {
+   "type": "$CA",
+   "hi": "$A6",
+   "lo": "$EC",
+   "target": "$A6EC",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$CB",
+   "hi": "$AC",
+   "lo": "$E5",
+   "target": "$ACE5",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$CC",
+   "hi": "$AE",
+   "lo": "$3A",
+   "target": "$AE3A",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$CD",
+   "hi": "$AE",
+   "lo": "$B0",
+   "target": "$AEB0",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$CE",
+   "hi": "$AF",
+   "lo": "$21",
+   "target": "$AF21",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$CF",
+   "hi": "$B0",
+   "lo": "$C7",
+   "target": "$B0C7",
+   "window": "A000-window",
+   "bank_switch": "$07"
+  },
+  {
+   "type": "$D0",
+   "hi": "$03",
+   "lo": "$A0",
+   "target": "$03A0",
+   "window": "R6/bank2",
+   "bank_switch": "$20"
+  },
+  {
+   "type": "$D1",
+   "hi": "$03",
+   "lo": "$AB",
+   "target": "$03AB",
+   "window": "R6/bank2",
+   "bank_switch": "$F9"
+  },
+  {
+   "type": "$D2",
+   "hi": "$03",
+   "lo": "$AB",
+   "target": "$03AB",
+   "window": "R6/bank2",
+   "bank_switch": "$CF"
+  },
+  {
+   "type": "$D3",
+   "hi": "$03",
+   "lo": "$AC",
+   "target": "$03AC",
+   "window": "R6/bank2",
+   "bank_switch": "$20"
+  },
+  {
+   "type": "$D4",
+   "hi": "$03",
+   "lo": "$AE",
+   "target": "$03AE",
+   "window": "R6/bank2",
+   "bank_switch": "$27"
+  },
+  {
+   "type": "$D5",
+   "hi": "$03",
+   "lo": "$B0",
+   "target": "$03B0",
+   "window": "R6/bank2",
+   "bank_switch": "$DB"
+  },
+  {
+   "type": "$D6",
+   "hi": "$03",
+   "lo": "$A6",
+   "target": "$03A6",
+   "window": "R6/bank2",
+   "bank_switch": "$A9"
+  },
+  {
+   "type": "$D7",
+   "hi": "$03",
+   "lo": "$A4",
+   "target": "$03A4",
+   "window": "R6/bank2",
+   "bank_switch": "$03"
+  },
+  {
+   "type": "$D8",
+   "hi": "$03",
+   "lo": "$A4",
+   "target": "$03A4",
+   "window": "R6/bank2",
+   "bank_switch": "$20"
+  },
+  {
+   "type": "$D9",
+   "hi": "$04",
+   "lo": "$83",
+   "target": "$0483",
+   "window": "R6/bank2",
+   "bank_switch": "$2E"
+  },
+  {
+   "type": "$DA",
+   "hi": "$04",
+   "lo": "$83",
+   "target": "$0483",
+   "window": "R6/bank2",
+   "bank_switch": "$E6"
+  },
+  {
+   "type": "$DB",
+   "hi": "$04",
+   "lo": "$83",
+   "target": "$0483",
+   "window": "R6/bank2",
+   "bank_switch": "$A5"
+  },
+  {
+   "type": "$DC",
+   "hi": "$04",
+   "lo": "$83",
+   "target": "$0483",
+   "window": "R6/bank2",
+   "bank_switch": "$32"
+  },
+  {
+   "type": "$DD",
+   "hi": "$06",
+   "lo": "$D1",
+   "target": "$06D1",
+   "window": "R6/bank2",
+   "bank_switch": "$29"
+  },
+  {
+   "type": "$DE",
+   "hi": "$06",
+   "lo": "$A3",
+   "target": "$06A3",
+   "window": "R6/bank2",
+   "bank_switch": "$EF"
+  },
+  {
+   "type": "$DF",
+   "hi": "$06",
+   "lo": "$83",
+   "target": "$0683",
+   "window": "R6/bank2",
+   "bank_switch": "$85"
+  },
+  {
+   "type": "$E0",
+   "hi": "$04",
+   "lo": "$83",
+   "target": "$0483",
+   "window": "R6/bank2",
+   "bank_switch": "$32"
+  },
+  {
+   "type": "$E1",
+   "hi": "$04",
+   "lo": "$83",
+   "target": "$0483",
+   "window": "R6/bank2",
+   "bank_switch": "$29"
+  },
+  {
+   "type": "$E2",
+   "hi": "$04",
+   "lo": "$84",
+   "target": "$0484",
+   "window": "R6/bank2",
+   "bank_switch": "$01"
+  },
+  {
+   "type": "$E3",
+   "hi": "$04",
+   "lo": "$84",
+   "target": "$0484",
+   "window": "R6/bank2",
+   "bank_switch": "$F0"
+  },
+  {
+   "type": "$E4",
+   "hi": "$04",
+   "lo": "$84",
+   "target": "$0484",
+   "window": "R6/bank2",
+   "bank_switch": "$0E"
+  },
+  {
+   "type": "$E5",
+   "hi": "$04",
+   "lo": "$85",
+   "target": "$0485",
+   "window": "R6/bank2",
+   "bank_switch": "$A5"
+  },
+  {
+   "type": "$E6",
+   "hi": "$04",
+   "lo": "$85",
+   "target": "$0485",
+   "window": "R6/bank2",
+   "bank_switch": "$32"
+  },
+  {
+   "type": "$E7",
+   "hi": "$04",
+   "lo": "$8C",
+   "target": "$048C",
+   "window": "R6/bank2",
+   "bank_switch": "$29"
+  },
+  {
+   "type": "$E8",
+   "hi": "$04",
+   "lo": "$8C",
+   "target": "$048C",
+   "window": "R6/bank2",
+   "bank_switch": "$FE"
+  },
+  {
+   "type": "$E9",
+   "hi": "$04",
+   "lo": "$8D",
+   "target": "$048D",
+   "window": "R6/bank2",
+   "bank_switch": "$85"
+  },
+  {
+   "type": "$EA",
+   "hi": "$04",
+   "lo": "$8E",
+   "target": "$048E",
+   "window": "R6/bank2",
+   "bank_switch": "$32"
+  },
+  {
+   "type": "$EB",
+   "hi": "$04",
+   "lo": "$8E",
+   "target": "$048E",
+   "window": "R6/bank2",
+   "bank_switch": "$AD"
+  },
+  {
+   "type": "$EC",
+   "hi": "$04",
+   "lo": "$8E",
+   "target": "$048E",
+   "window": "R6/bank2",
+   "bank_switch": "$A5"
+  },
+  {
+   "type": "$ED",
+   "hi": "$04",
+   "lo": "$8F",
+   "target": "$048F",
+   "window": "R6/bank2",
+   "bank_switch": "$01"
+  },
+  {
+   "type": "$EE",
+   "hi": "$04",
+   "lo": "$8F",
+   "target": "$048F",
+   "window": "R6/bank2",
+   "bank_switch": "$A0"
+  },
+  {
+   "type": "$EF",
+   "hi": "$04",
+   "lo": "$8A",
+   "target": "$048A",
+   "window": "R6/bank2",
+   "bank_switch": "$02"
+  },
+  {
+   "type": "$F0",
+   "hi": "$04",
+   "lo": "$8A",
+   "target": "$048A",
+   "window": "R6/bank2",
+   "bank_switch": "$20"
+  },
+  {
+   "type": "$F1",
+   "hi": "$04",
+   "lo": "$8B",
+   "target": "$048B",
+   "window": "R6/bank2",
+   "bank_switch": "$3D"
+  },
+  {
+   "type": "$F2",
+   "hi": "$04",
+   "lo": "$8B",
+   "target": "$048B",
+   "window": "R6/bank2",
+   "bank_switch": "$E6"
+  },
+  {
+   "type": "$F3",
+   "hi": "$04",
+   "lo": "$8B",
+   "target": "$048B",
+   "window": "R6/bank2",
+   "bank_switch": "$E6"
+  },
+  {
+   "type": "$F4",
+   "hi": "$04",
+   "lo": "$8C",
+   "target": "$048C",
+   "window": "R6/bank2",
+   "bank_switch": "$2B"
+  },
+  {
+   "type": "$F5",
+   "hi": "$04",
+   "lo": "$8C",
+   "target": "$048C",
+   "window": "R6/bank2",
+   "bank_switch": "$20"
+  },
+  {
+   "type": "$F6",
+   "hi": "$04",
+   "lo": "$8C",
+   "target": "$048C",
+   "window": "R6/bank2",
+   "bank_switch": "$3B"
+  },
+  {
+   "type": "$F7",
+   "hi": "$04",
+   "lo": "$83",
+   "target": "$0483",
+   "window": "R6/bank2",
+   "bank_switch": "$D9"
+  },
+  {
+   "type": "$F8",
+   "hi": "$04",
+   "lo": "$83",
+   "target": "$0483",
+   "window": "R6/bank2",
+   "bank_switch": "$A2"
+  },
+  {
+   "type": "$F9",
+   "hi": "$04",
+   "lo": "$8F",
+   "target": "$048F",
+   "window": "R6/bank2",
+   "bank_switch": "$00"
+  },
+  {
+   "type": "$FA",
+   "hi": "$04",
+   "lo": "$90",
+   "target": "$0490",
+   "window": "R6/bank2",
+   "bank_switch": "$86"
+  },
+  {
+   "type": "$FB",
+   "hi": "$04",
+   "lo": "$89",
+   "target": "$0489",
+   "window": "R6/bank2",
+   "bank_switch": "$74"
+  },
+  {
+   "type": "$FC",
+   "hi": "$04",
+   "lo": "$89",
+   "target": "$0489",
+   "window": "R6/bank2",
+   "bank_switch": "$A5"
+  },
+  {
+   "type": "$FD",
+   "hi": "$04",
+   "lo": "$89",
+   "target": "$0489",
+   "window": "R6/bank2",
+   "bank_switch": "$DB"
+  },
+  {
+   "type": "$FE",
+   "hi": "$04",
+   "lo": "$89",
+   "target": "$0489",
+   "window": "R6/bank2",
+   "bank_switch": "$F0"
+  },
+  {
+   "type": "$FF",
+   "hi": "$03",
+   "lo": "$B1",
+   "target": "$03B1",
+   "window": "R6/bank2",
+   "bank_switch": "$11"
+  }
+ ]
+}
