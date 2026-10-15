@@ -61,11 +61,11 @@ fn s5_golden_parses_and_legality_gate() {
             assert!(!a.predicate.is_empty(), "[{i}] 真锚必须带判定式（可机器重导）");
         }
     }
-    // 回填口径显式（R-l5-8 更新）：27 真锚 / 17 占位
-    //（stg05 段 4 行入账后 epoch——8501/9214/9504/9600）
+    // 回填口径显式（R-l5-8 更新）：31 真锚 / 13 占位
+    //（stg06 段 4 行入账后 epoch——10601/11316/11604/11700）
     let real = ganchors.iter().filter(|a| a.f > 0).count();
     let ph = ganchors.iter().filter(|a| a.f == 0).count();
-    assert_eq!((real, ph), (27, 17), "G-S5-6 回填口径：27 真锚 / 17 占位");
+    assert_eq!((real, ph), (31, 13), "G-S5-6 回填口径：31 真锚 / 13 占位");
 }
 
 /// ② S5-ALL-CLEAR 链可跑通：移植侧运行 vs golden 0 容差对拍 + 运行面（到店/出店/购买/骨架）。
@@ -227,6 +227,6 @@ fn s5_chain_run_anchored_real_frames() {
     let t3 = run.events.iter().filter(|e| e.mode == "Transition").nth(2).expect("stg03 Transition");
     assert_eq!(t3.f, 5604, "stg03 Transition=转场尾完成帧（台账口径）");
     // 未采段保持占位（pending 类——不发明帧号）
-    let p = run.events.iter().find(|e| e.checkpoint.as_deref() == Some("stg06-start")).unwrap();
-    assert_eq!(p.f, 0, "stg06 未采段占位（stg05 已实锚）");
+    let p = run.events.iter().find(|e| e.checkpoint.as_deref() == Some("stg07-start")).unwrap();
+    assert_eq!(p.f, 0, "stg07 未采段占位（stg06 已实锚）");
 }
