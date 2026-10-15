@@ -386,3 +386,10 @@ pub fn rng_jitter_offsets(rng: u8, carry_after_rng: bool) -> (i8, i8) {
 /// `$D10C` = 槽回收/终止**唯一出口**（行为机与分配器②③路径共用——回收即终止，
 /// 终止即回收）。枚举仅登记语义归属，调用侧负责槽字段清写（CB42-CBA1 初始化段）。
 pub const TERMINATE_RECYCLE_EXIT: u16 = 0xD10C;
+
+/// threaded-code 续链写（`$438,X:=lo / $41C,X:=hi`——handler 自改写指针→下一 handler，
+/// behavior-vm-scripts §1 自续链族 8337→$836E/8381→$838E 实证）。返回 `(lo, hi)`=
+/// **写序对**（lo 先 hi 后，与出生三写 8B8E-8B95 同型——中间态可见性同源）。
+pub fn chain_rewrite(next_handler: u16) -> (u8, u8) {
+    ((next_handler & 0xFF) as u8, (next_handler >> 8) as u8)
+}

@@ -337,3 +337,35 @@ fn t59_param_tables_and_jitter() {
     let b = rng_jitter_offsets(0x08, true);
     assert_ne!(a.1, b.1, "y 侧进位=rng bit3");
 }
+
+/// ⑰ jitter 数值面 256 值穷举锁（behavior-vm-handlers §3.2 表复核）+ 续链写原语。
+#[test]
+fn t59_jitter_exhaustive_and_chain() {
+    use game_core::enemy::{chain_rewrite, rng_jitter_offsets};
+    let mut yvals = std::collections::BTreeSet::new();
+    for rng in 0..=255u8 {
+        for carry in [true, false] {
+            let (dx, dy) = rng_jitter_offsets(rng, carry);
+            // 跳零（SBC/ADC 链 0 偏移永不出现——每帧必动 ≥1px，D4 保真）
+            assert!(dx != 0 && dy != 0, "rng={rng:#X} c={carry} 零偏移禁现");
+            // 并集界 −8..−1 ∪ +1..+9
+            assert!((-8..=-1).contains(&dx) || (1..=9).contains(&dx), "dx={dx} 越域");
+            assert!((-8..=-1).contains(&dy) || (1..=9).contains(&dy), "dy={dy} 越域");
+        }
+        yvals.insert(rng_jitter_offsets(rng, true).1);
+        // y 侧确定性：与 carry_after_rng 无关
+        assert_eq!(
+            rng_jitter_offsets(rng, true).1,
+            rng_jitter_offsets(rng, false).1,
+            "y 侧只看 rng bit3"
+        );
+    }
+    // y 值域全集=−8..−1∪+1..+9（**含 +1**——§3.2 表"bit3=1⇒+2..+9"漏叉例的字节实证）
+    let expect: std::collections::BTreeSet<i8> =
+        (-8i8..=-1).chain(1i8..=9).collect();
+    assert_eq!(yvals, expect, "y 值域穷举真值");
+    assert_eq!(rng_jitter_offsets(0x78, true).1, 1, "rng=$78（h=7,bit3=1）⇒ dy=+1 叉例");
+    // 续链写原语（8337 型：$438:=lo 先 / $41C:=hi 后——写序照 8B8E-8B95 同型）
+    assert_eq!(chain_rewrite(0x836E), (0x6E, 0x83), "(lo, hi) 写序对");
+    assert_eq!(chain_rewrite(0x838E), (0x8E, 0x83));
+}
