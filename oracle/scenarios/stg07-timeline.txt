@@ -1,0 +1,127 @@
+# 场景：STG-07 敌波时间线取证（stg07-timeline 证据源 run；stg02-08 帧锚采集令·第 6 关）
+# 战役文档：docs/findings/stg07-timeline.md（§7 帧锚表填表源，stg03 §7 同型）
+#
+# 链 = stg02-timeline 同源前缀（f1-3404 已证确定性）+ STG-02 战斗段自然
+# → f5100 **第 2 注入**（$26 bit4 关末门，trigger=injected #2；注入点在 STG-02 冻结点后）
+# → STG-03 段 → 注入#3 → 商店 → STG-04 段 → 注入#4 → 商店 → STG-05 段 → 注入#5 → 商店 → STG-06 段 → 注入#6 → 商店 → STG-07 战斗段自然。
+# ★波次数据全程未触碰；注入=双 poke（$26 bit4 + $0400），逐项登记（lead 扩写口径）。
+name stg07-timeline
+frames 32000
+press_len 4
+
+# ===== 输入前缀（gameplay-stage1 / gs5-stg01-clear-anchor 同源；勿改）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+press_every 12 1250-2350 a
+hold 1300-1450 right
+hold 1470-1620 left
+hold 1650-1800 right
+hold 1830-1950 down
+hold 1980-2100 up
+hold 2130-2280 right
+press 1500 b
+
+# ===== 触发注入（G-S5-6；trigger=injected，$26 bit4）=====
+poke 2400 0026 10
+
+# ===== 商店出店导航（主菜单：1.武器 → 3×down → 4.退 + A）=====
+press 3250 down
+press 3290 down
+press 3330 down
+press 3370 a
+
+# ===== STG-02 战斗段自然（f3404+；锚至冻结 f5033）=====
+# ===== STG-02 关末门注入（trigger=injected #2；**双 poke 扩写口径**（lead 授权 2026-10-16））=====
+# 注入项逐项登记（trigger=injected 不计 natural 红线不动）：
+#   ① poke 5100 $0026:=$10 —— 关末门 $26 bit4（gs5 同型）
+#   ② poke 5100 $0400:=$01 —— 关末块 slot0 非零门（bank15:E304 `LDY $0400/BEQ 跳过`；
+#      值 $01=STG-01 自然过关时刻实测值（stg02-timeline f2350 $0400=$01）就近复用）
+#   另注：$27 bit7 防重入门（E2FC）自然语义不动，不注入。
+# 负结果存档：run #1（f5100 单 poke）$0400=$00 ⇒ 块跳过；run #2（f5100 双 poke）门全满足
+# 但 $27 未置位=**关末块 poll 未执行**——假说：poll 仅在滚动活跃段运行（STG-01 f2400 时刻
+# tick $A4→$A5 仍在走，f2401 即 $27:=$80 ✓；f5100 处于 arena 冻结段（f5033 起 $8B 停）⇒ poll 停）。
+# run #3：pokes 前移 **f4600**（STG-02 滚动活跃段，冻结 f5033 前）——目的：测「滚动活段 poll」假说。
+# 代价：stg02 事件锚收窄至 f4600（f4600-5024 ≈15 事件损失；stg02 §4 全表已有 19000f run 独立底）。
+poke 4600 0026 10
+poke 4600 0400 01
+
+# ===== STG-02→03 商店出店导航（估 +850f 同 STG-01 比例）=====
+press 5450 down
+press 5490 down
+press 5530 down
+press 5570 a
+
+# ===== STG-03 关末门注入（trigger=injected #3；双 poke 同口径，滚动活段 f6400（冻结 f6893 前，
+# 倒数 400f 全在活段内）；STG-03 锚已由 run #3 全测（stg03 §7），本链早切不损锚）=====
+poke 6400 0026 10
+poke 6400 0400 01
+
+# ===== STG-03→04 商店出店导航（估 poke+850f 同型）=====
+press 7250 down
+press 7290 down
+press 7330 down
+press 7370 a
+
+# ===== STG-04 关末门注入（trigger=injected #4；双 poke 同口径，滚动活段 f8500（冻结 f9164 前，
+# 倒数 400f 全活段内）；STG-04 锚已由上一 run 全测（stg04 §7））=====
+poke 8500 0026 10
+poke 8500 0400 01
+
+# ===== STG-04→05 商店出店导航（估 poke+850f 同型）=====
+press 9350 down
+press 9390 down
+press 9430 down
+press 9470 a
+
+# ===== STG-05 关末门注入（trigger=injected #5；双 poke 同口径，滚动活段 f10600（冻结 f11093 前，
+# 倒数 400f 全活段内）；**约束：>10500（stg05-combat 定样窗）** ✓；STG-05 锚已全测）=====
+poke 10600 0026 10
+poke 10600 0400 01
+
+# ===== STG-05→06 商店出店导航（估 poke+850f 同型）=====
+press 11450 down
+press 11490 down
+press 11530 down
+press 11570 a
+
+# ===== STG-06 关末门注入（trigger=injected #6；双 poke 同口径，滚动活段 f13500（冻结 f13977 前，
+# 倒数 400f 全活段内）；stg06-combat 定样 f13000 <13501 ✓ 窗成立）=====
+poke 13500 0026 10
+poke 13500 0400 01
+
+# ===== STG-06→07 商店出店导航（估 poke+850f 同型）=====
+press 14350 down
+press 14390 down
+press 14430 down
+press 14470 a
+
+# ===== 采集面 =====
+capture_every 300 probe
+capture 3404 stg02-start
+capture 4600 stg02-clear-inject
+capture 5700 stg03-start-approx
+capture 6500 stg03-combat
+capture 7500 stg04-start-approx
+capture 9000 stg04-combat
+capture 9600 stg05-start-approx
+capture 11000 stg05-combat
+capture 20000 stg05-late
+capture 16000 stg04-late
+capture 11700 stg06-start-approx
+capture 13000 stg06-combat
+capture 22000 stg06-late
+capture 14600 stg07-start-approx
+capture 16000 stg07-combat
+capture 26000 stg07-late
+capture 12000 stg03-late
+
+watch_range 0000-00ff zp
+watch_range 0300-07ff iram
