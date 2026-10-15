@@ -61,11 +61,11 @@ fn s5_golden_parses_and_legality_gate() {
             assert!(!a.predicate.is_empty(), "[{i}] 真锚必须带判定式（可机器重导）");
         }
     }
-    // 回填口径显式（R-l5-8 更新）：37 真锚 / 7 占位
-    //（stg07 段 4 行入账后 epoch——14219/14504/14600/15000）
+    // 回填口径显式（R-l5-8 更新）：39 真锚 / 5 占位
+    //（stg07-clear/stg08-shop 入账后 epoch——15501/16221）
     let real = ganchors.iter().filter(|a| a.f > 0).count();
     let ph = ganchors.iter().filter(|a| a.f == 0).count();
-    assert_eq!((real, ph), (37, 7), "G-S5-6 回填口径：37 真锚 / 7 占位");
+    assert_eq!((real, ph), (39, 5), "G-S5-6 回填口径：39 真锚 / 5 占位");
 }
 
 /// ② S5-ALL-CLEAR 链可跑通：移植侧运行 vs golden 0 容差对拍 + 运行面（到店/出店/购买/骨架）。
