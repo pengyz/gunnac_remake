@@ -905,3 +905,44 @@ pub const TYPE_DISPATCH: [TypeDispatch; 256] = [
     TypeDispatch { target: 0x0489, bank_switch: Some(0xF0) },
     TypeDispatch { target: 0x03B1, bank_switch: Some(0x11) },
 ];
+
+// ===== S4b-2 ③ 行为链断言面（f8c02b2 六表↔轨迹配对）=====
+
+/// `$914B` 相位参表（4B——$2B 首段 `$518` 取值族 {$25,$29}）。
+pub const PHASE_T914B: [u8; 4] = [0x25, 0x25, 0x29, 0x25];
+
+/// `$914F` 相位循环表（8B——`$684` 取值族 {$F7,$FB,$FF}；循环 F7→FB→FF→FB→F7
+/// =5 相位×~5.25f≈26f/周期，x 轨迹 104f=4×26f 亚像素合成比）。
+pub const PHASE_T914F: [u8; 8] = [0xF7, 0xFB, 0xFF, 0xFB, 0x27, 0x27, 0x27, 0x25];
+
+/// `$832E` 相位参表（4B——`$534` 取值族；运行面 `|2`：`$00|2=$02`、`$40|2=$42`
+/// ={$02,$42} 族）。
+pub const PHASE_T832E: [u8; 4] = [0x00, 0x00, 0x00, 0x40];
+
+/// `$832E` 表运行值（`|2` 合成——{$02,$42} 族）。
+pub fn phase_t832e_value(raw: u8) -> u8 {
+    raw | 0x02
+}
+
+/// 型值↔驱动指派总表（S4b-2 §4.2 8 行——**内态族**（$84D1 相位机）与出生型值分野）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DriverAssignment {
+    /// 型值（低区）或型值域起点（高区）。
+    pub type_code: u8,
+    /// 驱动族描述（不发明语义名——指派标签）。
+    pub driver: &'static str,
+    /// 内态族（$84D1 相位机状态）而非出生型值。
+    pub inner_state: bool,
+}
+
+/// 指派 8 行（f8c02b2 定谳）。
+pub const DRIVER_ASSIGNMENTS: [DriverAssignment; 8] = [
+    DriverAssignment { type_code: 0x2B, driver: "$9120 三角族", inner_state: false },
+    DriverAssignment { type_code: 0x12, driver: "$83DC 段族 B", inner_state: false },
+    DriverAssignment { type_code: 0x10, driver: "jitter/跳板", inner_state: false },
+    DriverAssignment { type_code: 0x11, driver: "jitter/跳板", inner_state: false },
+    DriverAssignment { type_code: 0x14, driver: "$84D1 相位机", inner_state: true },
+    DriverAssignment { type_code: 0x15, driver: "$84D1 相位机", inner_state: true },
+    DriverAssignment { type_code: 0x17, driver: "$84D1 相位机", inner_state: true },
+    DriverAssignment { type_code: 0x4E, driver: "bank4 直线", inner_state: false },
+];
