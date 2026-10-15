@@ -335,6 +335,10 @@ pub fn hit_resolves(a: &HitBoxEntry, b: &HitBoxEntry) -> bool {
 
 /// 一框一伤（命中收尾 `$D7DA`：AND 结果 bit7 清 → 清被中条目框 `$07E8/$07A9/$07BE:=0`）。
 /// 返回清框后的条目（attr/top/bottom 清 0；left/right/owner 不动）。
+///
+/// 写集↔字段名映射（arena-midboss §1.4/§2.1 表，索引=条目号−1 的 −1 偏移）：
+/// `$07E8`=`$07E9` 属性掩码 −1、`$07A9`=`$07AA` 上 −1、`$07BE`=`$07BF` 下 −1
+/// ⇒ 清框三写 = (attr, top, bottom)；left `$0780`/right `$0795`/归属 `$07D4` 不在写集。
 pub fn clear_hit_entry(e: &HitBoxEntry) -> HitBoxEntry {
     HitBoxEntry {
         left: e.left,
