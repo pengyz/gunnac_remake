@@ -784,17 +784,18 @@ fn emit_probe5() {
     }
     // s5-chain STG-03 段（c60be11+§7 帧锚——33 行按段转 match 兑现）
     {
+        // 三方同步（golden/anchors/probe5）——帧值=锚台账判定式权威值（同实机帧域）
         let rows = [
-            (4600, "StageClear", Some("stg02-clear")), // trigger=injected（双 poke 实证）
-            (5314, "Shop", Some("stg03-shop")),         // c60be11 商店段锚
-            (5570, "Transition", None),                 // 尾起点=出店 5604−34（统一公式）
-            (5604, "StageStart", Some("stg03-start")),  // §7 tick 重置/调度流 $A401 入口
-            (5844, "Combat", Some("stg03-combat")),     // 240f intro（B 级——golden 可钉正）
-            (6400, "StageClear", Some("stg03-clear")),  // trigger=injected（注入 #3）
-            (7116, "Shop", Some("stg04-shop")),         // stg04 §7 入店锚
-            (7370, "Transition", None),                 // 尾起点=出店 7404−34
-            (7404, "StageStart", Some("stg04-start")),  // §7 调度流 $ADAD 入口（+34f 三证）
-            (7644, "Combat", Some("stg04-combat")),     // 240f intro（B 级）
+            (4601, "StageClear", Some("stg02-clear")), // 台账：flags27∧countdown 同帧
+            (5314, "Shop", Some("stg03-shop")),         // 台账：$0400:=0 商店 init
+            (5604, "Transition", None),                 // 台账：出店转场尾完成帧（$27:=$00∧$A409 切）
+            (5700, "StageStart", Some("stg03-start")),  // 台账：关始采样帧（+96f 于出店）
+            (6000, "Combat", Some("stg03-combat")),     // 台账裁定①：f6000 四证（f6500 残影作废）
+            (6401, "StageClear", Some("stg03-clear")),  // 台账：flags27∧countdown 同帧（注入 #3）
+            (7116, "Shop", Some("stg04-shop")),         // 台账：$0400:=0 商店 init
+            (7404, "Transition", None),                 // 台账：出店转场尾完成帧（+34f 三证）
+            (7500, "StageStart", Some("stg04-start")),  // 台账：关始采样帧（+96f 于出店）
+            (9000, "Combat", Some("stg04-combat")),     // 台账：战斗段采样帧（$ADCE 流段）
         ];
         let mut out = String::new();
         for (f, mode, cp) in rows {

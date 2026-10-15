@@ -61,10 +61,11 @@ fn s5_golden_parses_and_legality_gate() {
             assert!(!a.predicate.is_empty(), "[{i}] 真锚必须带判定式（可机器重导）");
         }
     }
-    // 回填口径显式（R-l5-8 更新）：12 真锚（7 trace 锚 + 5 触发注入链锚）/ 32 占位
+    // 回填口径显式（R-l5-8 更新）：22 真锚（7 trace 锚 + 15 触发注入链锚）/ 22 占位
+    //（本批 10 行回填 + stg03-combat 重锚 f6000 后的 epoch——裁定①②同步）
     let real = ganchors.iter().filter(|a| a.f > 0).count();
     let ph = ganchors.iter().filter(|a| a.f == 0).count();
-    assert_eq!((real, ph), (12, 32), "G-S5-6 回填口径：12 真锚 / 32 占位");
+    assert_eq!((real, ph), (22, 22), "G-S5-6 回填口径：22 真锚 / 22 占位");
 }
 
 /// ② S5-ALL-CLEAR 链可跑通：移植侧运行 vs golden 0 容差对拍 + 运行面（到店/出店/购买/骨架）。
@@ -196,4 +197,35 @@ fn diff_l5_same_domain_zero_tolerance_and_pending() {
     // 显式挂起清单（ok-trigger-pending 同族——不冒充）
     let pending = l5_pending_rows(&golden);
     assert_eq!(pending, vec![1], "占位行显式挂起清单");
+}
+
+/// ④ (b) 侧同域输出：s5_chain_run 事件帧=真帧域（回填锚——golden f4600 vs rust f0 解）。
+#[test]
+fn s5_chain_run_anchored_real_frames() {
+    let run = s5_chain_run();
+    // 回填十点（run #3/stg04 run 实测）——事件帧与 golden 同域
+    let expected = [
+        ("stg02-clear", 4601u32),
+        ("stg03-shop", 5314),
+        ("stg03-start", 5700),
+        ("stg03-combat", 6000),
+        ("stg03-clear", 6401),
+        ("stg04-shop", 7116),
+        ("stg04-start", 7500),
+        ("stg04-combat", 9000),
+    ];
+    for (cp, f) in expected {
+        let e = run
+            .events
+            .iter()
+            .find(|e| e.checkpoint.as_deref() == Some(cp))
+            .unwrap_or_else(|| panic!("缺事件 {cp}"));
+        assert_eq!(e.f, f, "{cp} 真帧域锚（与 golden 同域）");
+    }
+    // Transition 行（exit）真帧
+    let t3 = run.events.iter().filter(|e| e.mode == "Transition").nth(2).expect("stg03 Transition");
+    assert_eq!(t3.f, 5604, "stg03 Transition=转场尾完成帧（台账口径）");
+    // 未采段保持占位（pending 类——不发明帧号）
+    let p = run.events.iter().find(|e| e.checkpoint.as_deref() == Some("stg05-start")).unwrap();
+    assert_eq!(p.f, 0, "stg05 未采段占位");
 }
