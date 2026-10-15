@@ -35,8 +35,8 @@
 {"scene": "s5-chain", "f": 14504, "mode": "Transition"}
 {"scene": "s5-chain", "f": 14600, "mode": "StageStart", "checkpoint": "stg07-start"}
 {"scene": "s5-chain", "f": 15000, "mode": "Combat", "checkpoint": "stg07-combat"}
-{"scene": "s5-chain", "f": 0, "mode": "StageClear", "checkpoint": "stg07-clear"}
-{"scene": "s5-chain", "f": 0, "mode": "Shop", "checkpoint": "stg08-shop"}
+{"scene": "s5-chain", "f": 15501, "mode": "StageClear", "checkpoint": "stg07-clear"}
+{"scene": "s5-chain", "f": 16221, "mode": "Shop", "checkpoint": "stg08-shop"}
 {"scene": "s5-chain", "f": 0, "mode": "Transition"}
 {"scene": "s5-chain", "f": 0, "mode": "StageStart", "checkpoint": "stg08-start"}
 {"scene": "s5-chain", "f": 0, "mode": "Combat", "checkpoint": "stg08-combat"}
