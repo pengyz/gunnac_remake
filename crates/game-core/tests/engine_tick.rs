@@ -377,6 +377,21 @@ fn stg01_natural_run_to_stage_gate() {
     let mut cur = core::mem::take(&mut st.script);
     assert_eq!(cur.process_waves(&mut st, &mut fx), 0);
     st.script = cur;
+    // 尾段不可达哨兵（test-runner advisory）：先补发 rec12/13（$4DA/$4E8），
+    // rec13 尾 thr=$0000 ⇒ rec14 op7 **永不触发**
+    for t in 0x04D1..=0x04E8u32 {
+        let mut cur = core::mem::take(&mut st.script);
+        cur.step_to(t, &mut st, &mut fx);
+        st.script = cur;
+    }
+    assert_eq!(st.script.next, 13, "rec12/13 已发（$4DA/$4E8）");
+    for t in 0x04E9..=0x2718u32 {
+        let mut cur = core::mem::take(&mut st.script);
+        let f = cur.step_to(t, &mut st, &mut fx);
+        st.script = cur;
+        assert_eq!(f, 0, "tick {t:#X} 零触发（阈值 $0000 已过）");
+    }
+    assert_eq!(st.script.next, 13, "rec14 永久挂起（$0000 型哨兵语义）");
 }
 
 /// ⑭ 全链驱动面（stage_tick 挂接）：滚动驱动 tick→脚本 thr→op5→臂门。
