@@ -433,3 +433,87 @@ pub fn type_bank_switch(type_: u8, current_bank: u8, bank_table: &[u8]) -> Optio
         Some(v)
     }
 }
+
+// ===== 批次4g-3：进场族/参数化段族模板（behavior-vm-handlers §1，A 级登记）=====
+
+/// 进场族模板（6 型同构：改写续链+CBAF+8689+863B+ED3B 登记+[$4E 门/字段预置/y+=$91 支]
+/// +尾跳参数化段）。字段预置=($072C 相位索引, $0710 循环上限)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EntryTemplate {
+    /// 进场入口。
+    pub entry: u16,
+    /// 续链目标（`$438/$41C` 改写值，见 `chain_rewrite`）。
+    pub chain_target: u16,
+    /// `ED3B` 登记参数（音画域 S2-5，仅透传）。
+    pub ed3b_param: u8,
+    /// 字段预置 (072C, 0710)；无预置 ⇒ None。
+    pub preset: Option<(u8, u8)>,
+    /// 尾跳目标（参数化段入口）。
+    pub tail: u16,
+}
+
+/// 进场族全集（6 型）。
+pub const ENTRY_TEMPLATES: [EntryTemplate; 6] = [
+    EntryTemplate { entry: 0x83BA, chain_target: 0x83DC, ed3b_param: 0x23, preset: None, tail: 0x83DC },
+    EntryTemplate { entry: 0x8410, chain_target: 0x8432, ed3b_param: 0x24, preset: None, tail: 0x8432 },
+    EntryTemplate { entry: 0x845A, chain_target: 0x8486, ed3b_param: 0x24, preset: Some((0x00, 0x05)), tail: 0x8486 },
+    EntryTemplate { entry: 0x8497, chain_target: 0x84C3, ed3b_param: 0x24, preset: None, tail: 0x84C3 },
+    EntryTemplate { entry: 0x85B1, chain_target: 0x85D3, ed3b_param: 0x26, preset: None, tail: 0x85D3 },
+    EntryTemplate { entry: 0x85EA, chain_target: 0x8616, ed3b_param: 0x20, preset: Some((0x03, 0x08)), tail: 0x85D3 },
+];
+
+/// 段 A 参数表（`$83AE`→`$518`）。
+pub const SEG_A_T518: [u8; 4] = [0x0A, 0x0B, 0x0C, 0x0C];
+/// 段 A 参数表（`$83B2`→`$684`）。
+pub const SEG_A_T684: [u8; 4] = [0x5F, 0x61, 0x65, 0x67];
+/// 段 A 参数表（`$83B6`→`$534`，第三表——A 段独有）。
+pub const SEG_A_T534: [u8; 4] = [0x01, 0x00, 0x01, 0x00];
+/// 段 C 参数表（`$844C`→`$518`）。
+pub const SEG_C_T518: [u8; 7] = [0x0B, 0x0C, 0x0D, 0x0E, 0x0D, 0x0C, 0x0C];
+/// 段 C 参数表（`$8453`→`$684`）。
+pub const SEG_C_T684: [u8; 7] = [0x61, 0x63, 0x69, 0x6D, 0x69, 0x65, 0x67];
+
+/// 参数化段族（6 型 A-F：`LDA #A/LDY #Y/JSR $CD9D` → 失败/超限 `$D10C`；成功 ⇒
+/// Y 索引查参数表写 `$518/$684/$534` → `JMP $CC6A` 公共运动尾）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ParamSegment {
+    /// 段入口。
+    pub entry: u16,
+    /// `$CD9D` A 参字面量（运动模式选择器——**内核 S4b-9b 未证**，仅签名登记）；
+    /// None=调用者供给（E 段 `$84C7` 起即 `JSR $CD9D` 无装载，字节直读）。
+    pub cd9d_a: Option<u8>,
+    /// `$CD9D` Y 参字面量（表索引基数）；None=调用者供给。
+    pub cd9d_y: Option<u8>,
+    /// 旁路入口（跳过 A 装载的落点——B 段 `$83DE`=`$836E` 尾带 `A=$40` 落点，
+    /// `$83DC` 入口才装 `A=$30`；双入口两态）。
+    pub bypass_entry: Option<u16>,
+    /// →`$518` 表（None=D/E/F 段走波形驱动无此写）。
+    pub t518: &'static [u8],
+    /// →`$684` 表。
+    pub t684: &'static [u8],
+    /// →`$534` 表（None=B 段走 `$2B&1` 相位翻转支）。
+    pub t534: &'static [u8],
+    /// 尾跳（`$CC6A` 公共运动尾 或 `$84D1` 波形驱动入口）。
+    pub tail: u16,
+}
+
+/// 参数化段全集（A-F）。B 段表=`PARAM_TABLE_518/684`（$8406/$840B，批次4f）。
+pub const PARAM_SEGMENTS: [ParamSegment; 6] = [
+    ParamSegment { entry: 0x838E, cd9d_a: Some(0x40), cd9d_y: Some(4), bypass_entry: None, t518: &SEG_A_T518, t684: &SEG_A_T684, t534: &SEG_A_T534, tail: 0xCC6A },
+    ParamSegment { entry: 0x83DC, cd9d_a: Some(0x30), cd9d_y: Some(5), bypass_entry: Some(0x83DE), t518: &PARAM_TABLE_518, t684: &PARAM_TABLE_684, t534: &[], tail: 0xCC6A },
+    ParamSegment { entry: 0x8432, cd9d_a: Some(0x40), cd9d_y: Some(7), bypass_entry: None, t518: &SEG_C_T518, t684: &SEG_C_T684, t534: &[], tail: 0xCC6A },
+    ParamSegment { entry: 0x8486, cd9d_a: Some(0x50), cd9d_y: Some(0x0E), bypass_entry: None, t518: &[], t684: &[], t534: &[], tail: 0x84D1 },
+    ParamSegment { entry: 0x84C7, cd9d_a: None, cd9d_y: None, bypass_entry: None, t518: &[], t684: &[], t534: &[], tail: 0x84D1 },
+    ParamSegment { entry: 0x862A, cd9d_a: Some(0x60), cd9d_y: Some(0x0F), bypass_entry: None, t518: &[], t684: &[], t534: &[], tail: 0x84D1 },
+];
+
+/// `$CD9D(A,Y)` 运动模式选择器三态出口（**内核 S4b-9b 未证——仅签名登记，无实现**）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cd9dOutcome {
+    /// BCC=继续（参数化段落表写字段）。
+    Continue,
+    /// BEQ=`$D10C` 终止（回收即终止）。
+    Terminate,
+    /// BNE=另一支（语义未名）。
+    OtherBranch,
+}

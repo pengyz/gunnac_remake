@@ -408,3 +408,59 @@ fn t59_call_loop_and_bank_switch() {
     assert_eq!(type_bank_switch(0x31, 0, &tbl), Some(3));
     assert_eq!(type_bank_switch(0x30, 7, &tbl), None, "同值跳过（防重写）");
 }
+
+/// ⑲ 进场族/参数化段族模板登记 + 段表字节精确。
+#[test]
+fn t59_entry_and_segment_templates() {
+    use game_core::enemy::{
+        chain_rewrite, EntryTemplate, ENTRY_TEMPLATES, PARAM_SEGMENTS, SEG_A_T518, SEG_A_T534,
+        SEG_A_T684, SEG_C_T518, SEG_C_T684,
+    };
+    // 进场族 6 型：续链写对与 chain_rewrite 一致（lo/hi 拆分互证）
+    for t in &ENTRY_TEMPLATES {
+        let (lo, hi) = chain_rewrite(t.chain_target);
+        assert_eq!(
+            u16::from(hi) << 8 | u16::from(lo),
+            t.chain_target,
+            "续链写对互证（{:04X}）",
+            t.entry
+        );
+    }
+    // 已知对 golden
+    assert_eq!(ENTRY_TEMPLATES[0], EntryTemplate { entry: 0x83BA, chain_target: 0x83DC, ed3b_param: 0x23, preset: None, tail: 0x83DC });
+    assert_eq!(ENTRY_TEMPLATES[2].preset, Some((0x00, 0x05)), "$845A 预置 $072C:=0/$0710:=05");
+    assert_eq!(ENTRY_TEMPLATES[5].preset, Some((0x03, 0x08)), "$85EA 预置");
+    assert_eq!(ENTRY_TEMPLATES[5].tail, 0x85D3, "$85EA 尾跳 85D3 族");
+    // 段表 ROM 字节精确（5 表）
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    let f = |a: usize| 0x10 + 2 * 0x2000 + (a & 0x1FFF);
+    for (addr, tbl, name) in [
+        (0x83AEusize, &SEG_A_T518[..], "A518"),
+        (0x83B2, &SEG_A_T684[..], "A684"),
+        (0x83B6, &SEG_A_T534[..], "A534"),
+        (0x844C, &SEG_C_T518[..], "C518"),
+        (0x8453, &SEG_C_T684[..], "C684"),
+    ] {
+        assert_eq!(tbl, &rom[f(addr)..f(addr) + tbl.len()], "{name} 表字节精确");
+    }
+    // 段族结构：A/B/C 尾 $CC6A（公共运动尾）、D/E/F 尾 $84D1（波形驱动）
+    for s in &PARAM_SEGMENTS[..3] {
+        assert_eq!(s.tail, 0xCC6A);
+    }
+    for s in &PARAM_SEGMENTS[3..] {
+        assert_eq!(s.tail, 0x84D1);
+        assert!(s.t518.is_empty() && s.t684.is_empty() && s.t534.is_empty(), "D/E/F 走波形驱动无表写");
+    }
+    // A 段独有第三表（$534）；B 段空表=相位翻转支
+    assert_eq!(PARAM_SEGMENTS[0].t534, &SEG_A_T534[..]);
+    assert!(PARAM_SEGMENTS[1].t534.is_empty());
+    // Y 索引基数登记面（A=4/B=5/C=7/D=$0E/**E=None 调用者**/F=$0F）
+    assert_eq!(
+        PARAM_SEGMENTS.map(|s| s.cd9d_y),
+        [Some(4), Some(5), Some(7), Some(0x0E), None, Some(0x0F)],
+        "E 段 $84C7 无字面量装载（JSR $CD9D 直入，字节直读）"
+    );
+    // B 段双入口（$83DC 装 A=$30 / $83DE 旁路=调用者 A=$40，$836E 尾带落点）
+    assert_eq!(PARAM_SEGMENTS[1].bypass_entry, Some(0x83DE));
+    assert_eq!(PARAM_SEGMENTS[1].cd9d_a, Some(0x30));
+}
