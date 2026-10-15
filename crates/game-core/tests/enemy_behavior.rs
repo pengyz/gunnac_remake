@@ -466,3 +466,42 @@ fn t59_entry_and_segment_templates() {
     assert_eq!(PARAM_SEGMENTS[1].bypass_entry, Some(0x83DE));
     assert_eq!(PARAM_SEGMENTS[1].cd9d_a, Some(0x30));
 }
+
+/// ⑳ $84D1 相位机六表字节精确 + 阈判/翻转原语。
+#[test]
+fn t59_phase_machine_tables() {
+    use game_core::enemy::{
+        phase_flip_534, phase_threshold_hit, PHASE_FLAG, PHASE_PTR_HI, PHASE_PTR_LO,
+        PHASE_T518, PHASE_T684, PHASE_THRESHOLD,
+    };
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    let f = |a: usize| 0x10 + 2 * 0x2000 + (a - 0x8000);
+    for (addr, tbl, name) in [
+        (0x854Dusize, &PHASE_T518[..], "518对"),
+        (0x8565, &PHASE_T684[..], "684对"),
+        (0x857D, &PHASE_THRESHOLD[..], "相位阈"),
+        (0x858A, &PHASE_PTR_LO[..], "指针lo"),
+        (0x8597, &PHASE_PTR_HI[..], "指针hi"),
+        (0x85A4, &PHASE_FLAG[..], "标志"),
+    ] {
+        assert_eq!(tbl, &rom[f(addr)..f(addr) + tbl.len()], "{name} 字节精确");
+    }
+    // 尺寸结构：24/24/13/13/13/13（$85B1=#19 进场⑤ 边界收口）
+    assert_eq!(f(0x854D) + 24, f(0x8565));
+    assert_eq!(f(0x8565) + 24, f(0x857D));
+    assert_eq!(f(0x857D) + 13, f(0x858A));
+    assert_eq!(f(0x85A4) + 13, f(0x85B1), "尾表贴 #19 入口");
+    // 阈判：<8 窗（wrapping 差）
+    assert!(phase_threshold_hit(0x05, 0x00), "5−0=5<8 命中");
+    assert!(phase_threshold_hit(0x07, 0x00));
+    assert!(!phase_threshold_hit(0x08, 0x00), "8−0=8 不命中（边界）");
+    assert!(phase_threshold_hit(0x02, 0xFF), "回绕 3<8 命中");
+    assert!(!phase_threshold_hit(0x00, 0x10), "未到阈（回绕大差）不命中");
+    // 相位翻转：($2B&1)^快照（bit0 判据同 Wt-6）
+    assert_eq!(phase_flip_534(0x12, 0x00), 0x12);
+    assert_eq!(phase_flip_534(0x12, 0x01), 0x13);
+    assert_eq!(phase_flip_534(0x12, 0xFF), 0x13, "仅 bit0 入 XOR");
+    // 标志表 bit7 开关存在性（翻转相位分布非全零）
+    assert!(PHASE_FLAG.iter().any(|v| v & 0x80 != 0));
+    assert!(PHASE_FLAG.iter().any(|v| v & 0x80 == 0));
+}
