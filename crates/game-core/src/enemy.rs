@@ -107,20 +107,28 @@ pub struct TypeSignature {
     pub spawn: Option<(u8, u8)>,
 }
 
-/// 已证签名全集（B1 §3 特征表 + §2.3 trace 锚）。
+/// 已证签名全集（B1 §3 特征表 + §2.3 trace 锚 + `wave_timeline.py spawns` 全量观测对）。
+/// 观测口径=槽激活 `0→非0` 判定式（槽复用盲区——被覆盖写不可见，签名集**可能不全**）。
+/// `beh=$0000` 观测（装载暂态/被中写先于指针写）**不登记**——非行为指针签名。
 pub const TYPE_SIGNATURES: &[TypeSignature] = &[
     // $2F 组长族（ctrl2/12 出敌型）：$89DF、(128,8) 恒定、128f×9
     TypeSignature { type_code: 0x2F, beh_ptr: 0x89DF, spawn: Some((128, 8)) },
-    // $2A 流定型（ctrl10）：$9010、(29,10)
+    // $2A 流定型（ctrl10）：$9010、(29,10) 恒定（3 点）；另一观测指针 $9079（坐标不恒定）
     TypeSignature { type_code: 0x2A, beh_ptr: 0x9010, spawn: Some((29, 10)) },
-    // $2B/$4E 组员族：$00DC 恒定；坐标摆动（x 序列 128→102→82→98→102→90）
+    TypeSignature { type_code: 0x2A, beh_ptr: 0x9079, spawn: None },
+    // $2B/$4E 组员族：$00DC 恒定；坐标摆动（x 序列 128→102→82→98→102→90）；
+    // $2B 另有 $0079 单点观测（(34,4)——样本 1 不证恒定 ⇒ None）
     TypeSignature { type_code: 0x2B, beh_ptr: 0x00DC, spawn: None },
+    TypeSignature { type_code: 0x2B, beh_ptr: 0x0079, spawn: None },
     TypeSignature { type_code: 0x4E, beh_ptr: 0x00DC, spawn: None },
-    // $07 双指针：底部固定点 $A631（y=155 恒定 5 重现）/ 尾段流 $AB30（y=13 流）
+    // $07 三指针：底部点 $A631（y=155×4+177×1 不恒定）/ 尾段流 $AB30（y=13）/ $AAD9（y=80）
     TypeSignature { type_code: 0x07, beh_ptr: 0xA631, spawn: None },
     TypeSignature { type_code: 0x07, beh_ptr: 0xAB30, spawn: None },
+    TypeSignature { type_code: 0x07, beh_ptr: 0xAAD9, spawn: None },
     // $02 编队（5 槽同帧 216f 轮）：$AB74
     TypeSignature { type_code: 0x02, beh_ptr: 0xAB74, spawn: None },
+    // $05 尾段混编：$B011（单点观测）
+    TypeSignature { type_code: 0x05, beh_ptr: 0xB011, spawn: None },
 ];
 
 /// 按型值取签名（观测对全集；未登记/不发明 ⇒ 空）。
