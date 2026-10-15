@@ -43,8 +43,16 @@ def diff(probe, golden, scene=None, anchors=None, scene_map=None):
         if scene and g.get("scene") != scene:
             continue
         p = idx.get((g.get("scene"), g["f"]))
-        keys = [k for k in PROBE_FIELDS if k in g]  # golden 驱动投影
+        keys = [k for k in PROBE_FIELDS if k in g]  # golden 驱动投影（scene=谱系不入判据）
         if p is None:
+            # 谱系容错查（裁决②）：同 f 内容全等但 scene 归属差 ⇒ ok-provenance-note
+            alt = [r for (sc, ff), r in idx.items() if ff == g["f"] and sc != g.get("scene")]
+            hit = next((r for r in alt if all(k in r and r.get(k) == g.get(k)
+                                              for k in PROBE_FIELDS if k in g)), None)
+            if hit is not None:
+                out.append((g, "ok-provenance-note",
+                            f"内容全等 scene 归属差（probe={hit.get('scene')} golden={g.get('scene')}）"))
+                continue
             out.append((g, "unknown", "golden 无 probe 覆盖"))
             continue
         absent = [k for k in keys if k not in p]  # probe 无字段面 ⇒ 不可裁（fail-closed）
@@ -85,7 +93,10 @@ def main(argv):
         assert diff([{"scene": "stg02", "f": 1, "mode": "StageStart", "checkpoint": "stg02-start"}],
                     [{"scene": "stg02-08-chain", "f": 1, "mode": "StageStart", "checkpoint": "stg02-start"}],
                     scene_map={"stg02": "stg02-08-chain"})[0][1] == "ok", "④场景映射"
-        print("selftest: ok（投影/全字段/trigger 分级/三场景汇总/场景映射）")
+        rpn = diff([{"scene": "gameplay-stage1", "f": 180, "mode": "Black", "checkpoint": "boot-black"}],
+                   [{"scene": "title-menu", "f": 180, "mode": "Black", "checkpoint": "boot-black"}])
+        assert rpn[0][1] == "ok-provenance-note", rpn
+        print("selftest: ok（投影/全字段/trigger 分级/三场景汇总/场景映射/谱系注记）")
         return 0
     get = lambda k: argv[argv.index(k) + 1] if k in argv else None
     probe, golden = get("--probe"), get("--golden")
@@ -106,7 +117,10 @@ def main(argv):
     for sc, vs in sorted(by_scene.items()):
         ok = sum(1 for v in vs if v == "ok")
         print(f"L5-DIFF[{sc}]: {ok}/{len(vs)} natural 通过（unknown/ok-injected 不计）")
-    bad = sum(1 for _, v, _ in res if v != "ok")
+    notes = sum(1 for _, v, _ in res if v == "ok-provenance-note")
+    if notes:
+        print(f"L5-DIFF 谱系注记: {notes} 行（内容 match+scene 归属差，公开不静默；不计 natural）")
+    bad = sum(1 for _, v, _ in res if v not in ("ok", "ok-provenance-note"))
     return 1 if bad else 0
 
 
