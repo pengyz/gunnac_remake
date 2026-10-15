@@ -1204,3 +1204,45 @@ impl ChainCycle {
         None
     }
 }
+
+// ===== 33f 转场尾分布原语（S5-2 ①定名 2561e99）=====
+
+/// fade 档序列（`$04 fade_level` 观测值 77→53→24→23→20→17→4→0——数值源
+/// 表/公式二候选未定（S5-2 ①残余），登记观测序列）。
+pub const FADE_LEVELS: [u8; 8] = [77, 53, 24, 23, 20, 17, 4, 0];
+
+/// fade 步进 cadence（`$23 nmi_pending_frames` 消费环 ~4f/步——主循环转场期
+/// 负载相位（2561e99：$23=NMI 置/主循环自旋消费清零））。
+pub const FADE_STEP_FRAMES: u8 = 4;
+
+/// 转场尾 33f 分布（段 2=fade 7 档×4f cadence；段 1 4f=RNG churn 不入本原语
+/// （GameRng 移植域）；段 3=完成帧重置批（$27 释放+$18 锁释+调度族））。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TailDistribution {
+    /// 当前 fade 档下标。
+    pub fade_index: usize,
+    /// 步内帧计数。
+    pub frames_in_step: u8,
+    /// 完成（段 3 重置批已到点）。
+    pub done: bool,
+}
+
+impl TailDistribution {
+    /// 帧推进（返回本帧 fade_level——**每档恰 4f**；序列尽 ⇒ done 置位+None
+    ///（段 3 重置批到点））。
+    pub fn tick_frame(&mut self) -> Option<u8> {
+        if self.done {
+            return None;
+        }
+        let v = FADE_LEVELS[self.fade_index];
+        self.frames_in_step += 1;
+        if self.frames_in_step >= FADE_STEP_FRAMES {
+            self.frames_in_step = 0;
+            self.fade_index += 1;
+            if self.fade_index >= FADE_LEVELS.len() {
+                self.done = true;
+            }
+        }
+        Some(v)
+    }
+}

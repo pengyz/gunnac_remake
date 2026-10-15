@@ -912,3 +912,30 @@ fn chain_cycle_timing_and_poll_gate() {
     main_loop_step_with_scroll(&mut st, &mut fx, true);
     assert!(fx.stage_clear_requested, "滚动活段 poll ⇒ 执行");
 }
+
+/// ㉖ 33f 转场尾分布原语（S5-2 ①定名）：fade 7 档×4f cadence+完成重置。
+#[test]
+fn tail_distribution_fade_cadence() {
+    use game_core::engine::{TailDistribution, FADE_LEVELS, FADE_STEP_FRAMES};
+    assert_eq!(FADE_LEVELS, [77, 53, 24, 23, 20, 17, 4, 0]);
+    assert_eq!(FADE_STEP_FRAMES, 4);
+    let mut t = TailDistribution::default();
+    // 每档 4f：首档 77 停 4f，第二档 53 停 4f……
+    assert_eq!(t.tick_frame(), Some(77));
+    for _ in 0..3 {
+        assert_eq!(t.tick_frame(), Some(77), "档内 4f 不变");
+    }
+    assert_eq!(t.tick_frame(), Some(53), "第 5f 进档");
+    // 全程 8 档×4f=32f 后 done（33f 尾的段 2 主体）
+    let mut levels = vec![77u8];
+    while !t.done {
+        if let Some(v) = t.tick_frame() {
+            if *levels.last().unwrap() != v {
+                levels.push(v);
+            }
+        }
+    }
+    assert_eq!(levels, vec![77, 53, 24, 23, 20, 17, 4, 0], "7 档步进序（含终点 0）");
+    assert!(t.done);
+    assert_eq!(t.tick_frame(), None, "完成后 None（段 3 重置批到点）");
+}
