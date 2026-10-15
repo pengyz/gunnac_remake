@@ -614,31 +614,23 @@ pub struct ScriptCursor {
 }
 
 impl ScriptCursor {
-    /// STG-01 脚本装载（`wave_timeline.py script 1` golden——14 记录）。
-    pub fn stg01() -> Self {
-        use ScriptRecord as R;
+    /// 通用装载（`(thr, op, wave, target)` 序列——thr=记录尾字段，阈值链自动传递）。
+    pub fn from_records(rows: &[(u16, u8, Option<u16>, Option<u16>)]) -> Self {
         ScriptCursor {
-            records: vec![
-                R { thr: 0x0000, op: 1, wave: None, target: None },
-                R { thr: 0x0000, op: 0, wave: None, target: None },
-                R { thr: 0x0000, op: 4, wave: None, target: None },
-                R { thr: 0x0000, op: 2, wave: None, target: None }, // sched=$A26D
-                R { thr: 0x00C0, op: 9, wave: None, target: None },
-                R { thr: 0x00D8, op: 0, wave: None, target: None },
-                R { thr: 0x0120, op: 9, wave: None, target: None },
-                R { thr: 0x0330, op: 0, wave: None, target: None },
-                R { thr: 0x04C8, op: 5, wave: Some(0xA3CD), target: None },
-                R { thr: 0x04D0, op: 4, wave: None, target: None },
-                R { thr: 0x04DA, op: 5, wave: Some(0xA3E4), target: None },
-                R { thr: 0x04E8, op: 0, wave: None, target: None },
-                R { thr: 0x0000, op: 4, wave: None, target: None },
-                R { thr: 0x2718, op: 7, wave: None, target: Some(0x080F) },
-            ],
+            records: rows
+                .iter()
+                .map(|&(thr, op, wave, target)| ScriptRecord { thr, op, wave, target })
+                .collect(),
             next: 0,
             waves: Vec::new(),
             c8: 0,
-            threshold: 0, // 头 2B T0=$0000
+            threshold: 0,
         }
+    }
+
+    /// STG-01 脚本装载（`wave_timeline.py script 1` golden——14 记录）。
+    pub fn stg01() -> Self {
+        Self::from_records(&STG01_SCRIPT)
     }
 
     /// 逐 tick 推进（`$81A3` **精确相等**匹配 `threshold==tick`，同 tick 连锁（尾 thr
@@ -697,14 +689,40 @@ impl ScriptCursor {
     }
 }
 
-/// 波次流登记（STG-01 两条 op5 流——`wave_stream_decode` golden：$A3CD CA=$00、
-/// $A3E4 CA=$05 bit0=关末门源）。
-pub const STG01_WAVES: [(u16, u8, u8); 2] = [(0xA3CD, 0xF2, 0x00), (0xA3E4, 0xFB, 0x05)];
+/// STG-01 脚本 14 记录（thr=记录尾字段）。
+pub const STG01_SCRIPT: [(u16, u8, Option<u16>, Option<u16>); 14] = [
+    (0x0000, 1, None, None),
+    (0x0000, 0, None, None),
+    (0x0000, 4, None, None),
+    (0x0000, 2, None, None), // sched=$A26D
+    (0x00C0, 9, None, None),
+    (0x00D8, 0, None, None),
+    (0x0120, 9, None, None),
+    (0x0330, 0, None, None),
+    (0x04C8, 5, Some(0xA3CD), None),
+    (0x04D0, 4, None, None),
+    (0x04DA, 5, Some(0xA3E4), None),
+    (0x04E8, 0, None, None),
+    (0x0000, 4, None, None),
+    (0x2718, 7, None, Some(0x080F)),
+];
 
-/// 装载波次流登记（把 STG01_WAVES 的 C9/CA 灌入游标 waves——CA 判定链数据面）。
+/// 波次流 C9/CA 全登记（**17 条 op5 流**八关全谱——`wave_stream_decode` golden）。
+pub const WAVE_FLAGS: [(u16, u8, u8); 17] = [
+    (0xA3CD, 0xF2, 0x00), (0xA3E4, 0xFB, 0x05), // STG-01
+    (0xB1CE, 0xF2, 0x00), (0xB1E5, 0xFB, 0x31), // STG-02
+    (0xA5BF, 0xF2, 0x70), (0xA5DC, 0xFB, 0x31), // STG-03
+    (0xAF51, 0xE2, 0x00), (0xAF68, 0xFB, 0x01), // STG-04
+    (0xB7D7, 0xF2, 0x70), (0xB801, 0xFB, 0x31), // STG-05
+    (0xA5D9, 0xE2, 0x00), (0xA5F0, 0xFB, 0x01), // STG-06
+    (0xAF7F, 0xFB, 0xB1),                       // STG-07（单流）
+    (0xB830, 0xF2, 0x70), (0xB851, 0xF2, 0x70), (0xB86D, 0xF2, 0x70), (0xB889, 0xFB, 0x81), // STG-08
+];
+
+/// 装载波次流登记（WAVE_FLAGS 灌入游标 waves——CA 判定链数据面）。
 pub fn register_wave_flags(cursor: &mut ScriptCursor) {
     for w in &mut cursor.waves {
-        if let Some(&(_, c9, ca)) = STG01_WAVES.iter().find(|(a, _, _)| *a == w.addr) {
+        if let Some(&(_, c9, ca)) = WAVE_FLAGS.iter().find(|(a, _, _)| *a == w.addr) {
             w.c9 = c9;
             w.ca = ca;
         }
