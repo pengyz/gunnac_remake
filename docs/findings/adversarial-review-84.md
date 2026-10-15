@@ -56,3 +56,66 @@ tick 口径自算复现：首记录 `tick=delay+1`（流头 delay=0x00 → tick=
 ### A.5 本段结论
 **43 记录 golden 三方全等成立**（含自环与 +1 quirk 累计口径）；记录文法的 listing 落点与其余锚定
 分别在段 B/C 收口。段 A 单独不足以判 pass——verdict 于段 C 给出。
+
+---
+
+## 段 B：6502 落点核 + 两时序域红线 + 三证伪靶 mutation 实测
+
+### B.1 记录机语义 listing 落点核（seed 868B-87F1 逐条）——**全部吻合** ✅
+
+| 被审声明 | listing 落点 | 裁定 |
+|---|---|---|
+| 首记录 +1 quirk（`$51:=(@0)+1`） | `86A4 LDA ($4F),Y / 86A6 CLC / 86A7 ADC #1 / 86A9 STA $51` | ✅ |
+| 后续 delay 1:1（无移位无 +1） | `86BD LDA ($14),Y / 86BF STA $51` | ✅ |
+| pair/ctrl 分界 = type≥$10 | `86D2 CMP #$10 / 86D4 BCC loc_86FC`（< $10 走 ctrl 跳表） | ✅（哨兵⑤分界=硬件真值） |
+| pair 双写 `$400+槽:=type、$470+槽:=param` | `86E6 STA $400,X / 86EB STA $470,X`（86E4 `LDA $13`=type） | ✅ |
+| ctrl0=记录分隔 | `86FD ASL A / 86FE BEQ locret_86CD`（0→RTS，下字节=新 delay） | ✅ |
+| ctrl3..9 只改流指针 | `8795-87A3`：2B→`$14/$15`，无槽写 | ✅（ItemEffect::NoWrite ✓） |
+| ctrl1/2/11/12→`$2E/$2F/$2C/$2D` | `8738/8776/872F/877F LDA #imm`（跳表 870E ctrl1..14 全命中） | ✅ |
+| 四参写链 args→`$518/$630/$534/$470` | `874C-8760`：`STA $518,X / $630,X / $534,X / $470,X` 顺序装载 | ✅ |
+| step 判据=**type&1**（非 ctrl 判据） | `8763 LDA $13 / 8766 AND #1 / 8768 BEQ`（$13=8743/8786 写入的 leader_type） | ✅（但测试面盲区见 B.4-M4） |
+| ctrl2/12 附加码流读 `($3E),0→$48C+槽` | `8783-878E`：`STA $400,Y / STA $13 / LDA ($3E),Y / STA $48C,X`；ctrl1/11 BCC→8743 不走此段 | ✅ |
+| ctrl10 双写+**无条件** step | `87A4-87CA`：`$400,X/$470,X/$48C,X` 三写 + `87C4 INC $3E`（无 AND#1 测试） | ✅ |
+| ctrl13/14 透传 `$E63D(Y=0,1/4,5)` | `87CD-87E2`（Y=0,1）+ `87EA-87F1`（Y=4 起）JSR $E63D | ✅ |
+| 未证 ctrl fail-closed | 跳表仅 14 项（ctrl1..14）；ctrl≥15 越表=硬件未定义 ⇒ 软件 fail-closed 正确 | ✅ |
+
+**段 A 的记录文法由此升 A 级**（字节文法与 handler 语义互证）。
+
+### B.2 两时序域红线实现落点核
+- **tick 域**：`SchedRecord.delay` 文档="上一记录触发至本记录触发的 gap tick"；累计=86A0+1 quirk/86BD 1:1（B.1 ✓）；
+- **帧域**：`member_schedule`/`GroupRelease.interval_frames` 直接以帧兑现、无 ×8/÷8 换算（实测 M1 突变必红）；
+  文档 5 处显式红线措辞（模块 doc「禁止换算常数跨关复用」、`stg01_tick_to_frame`「⚠ 禁止跨关复用」、
+  `member_schedule`「勿乘 tick 换算」等）；
+- **隔离性**：`stg01_tick_to_frame` 全仓调用点 = 0（grep `--include=*.rs` 除 wave 自身）⇒ 当前树**无误用面**；
+  `$534` 不经该函数（fn doc 显式标注）✓；
+- Wt-1 换算式（tick≤17→1193；18+k→1221+8k）与 7 锚的内部自洽已核（段 A.A.3）；绝对帧锚定留段 C。
+
+### B.3 三证伪靶 mutation 实测（改错→红→还原，正本 sha 复验）
+
+| # | 靶 | 突变 | 预期 | 实测 |
+|---|---|---|---|---|
+| M1 | ①tick→帧误用 | `interval_frames` 消费处 ×8（member_schedule 与 GroupRelease 双点） | 节律测红 | ✅ **2 测红**（⑦golden+⑧哨兵①"15 帧整非 120"） |
+| M2 | ②$630 首现 | `first_seen = count - 1` → `count` | 首现测红 | ✅ **1 测红**（⑧ `assert_eq!(first,5)`+`assert_ne!(first,6)`） |
+| M3 | ③未证 fail-closed | `Unproven` 分支→伪出参 `PairWrite` | 出参测红 | ✅ **1 测红**（⑥ 末断言） |
+| M5 | （我加）pair/ctrl 分界 | `v>=0x10` → `v>=0x20` | 哨兵⑤红 | ✅ **1 测红** |
+| M4 | （我加）step 判据盲区探测 | `type_&1` → `ctrl==2\|\|ctrl==12` | —— | ⚠️ **9 测全绿**（见 B.4） |
+
+全部突变已 `git checkout` 还原，`cargo test --test wave_sched` **9/9 复绿**、`git status crates/game-core/src/wave.rs` 干净。
+
+### B.4 发现 F-B4（哨兵检测面盲区，必修小项）
+**"step 判据=type&1（非 ctrl 判据）"无测试可咬**：解码器保证 type↔ctrl 恒映射（1→$2E/2→$2F/11→$2C/12→$2D），
+type&1 与 ctrl∈{2,12} 在全部可达输入上**等价** ⇒ M4 突变全绿。listing 事实（8763 `LDA $13`/`AND #1`）不受影响，
+但"负向哨兵锁死口径"的覆盖面声明**高估一格**。
+**修正建议**：哨兵④/⑤旁增合成用例 `item_effect(&Spawn{ctrl:1, type_:0x2F, ..})` 断言 `code_stream_step==true`
+（type 奇=step，与 ctrl 无关），使该判据可被 mutation 咬合。
+
+### B.5 fail-closed 全路径试调（靶③补充）
+`item_effect` 六分支试调全覆盖：PairWrite ✓（⑥）/QuadWrite ctrl1,2,11,12 ✓（⑤）/SetTypeWrite ✓（⑥）/
+RegWrite ctrl13 ✓（⑥；ctrl14 同臂未单列——琐碎，建议补一行）/NoWrite(jump) ✓（⑥）/Unproven ✓（⑥+M3 咬合）；
+decode 侧：ctrl0 分隔 ✓（哨兵⑤第 2 条）/ctrl10,13,14,pair,jmp 实流 ✓（A2A7/A26D/A2E1/A397 golden）/
+未知 ctrl ✓（哨兵④+M3 语义）；`count==0`/`interval==0` → `None` ✓（⑧）。**结论：fail-closed 真闭合**（除 B.4 盲区）。
+
+### B.6 工作区并发登记（诚实）
+复核期间 `crates/game-core/src/shot.rs`（+163 行）与 `tests/stage_content.rs`（+111 行）存在**他人未提交改动**
+（port-engineer 批次 3 在途）——本段全部测试均在 wave 面（`--test wave_sched`），不受影响；
+段 C 的 cargo 全量复跑将注明树态。
