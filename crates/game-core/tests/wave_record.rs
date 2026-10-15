@@ -8,9 +8,11 @@
 use game_core::wave_record::*;
 
 /// 八关 17 条 op5 波次流 (C9, CA) 全谱 golden（wave_stream_decode 实测）。
+/// 口径注（test-runner 复核）：此为**姿态 1/2**（模板变体），非"流1/流2 成对"——
+/// STG-8 实际 3×姿态1+1×姿态2（非成对）；C9 bit0↔CA bit0 全耦合 17/17。
 const CA_GOLDEN: [(u8, u8); 17] = [
-    (0xF2, 0x00), // S1 $A3CD 流1
-    (0xFB, 0x05), // S1 $A3E4 流2
+    (0xF2, 0x00), // S1 $A3CD 姿态1
+    (0xFB, 0x05), // S1 $A3E4 姿态2
     (0xF2, 0x00), // S2 $B1CE
     (0xFB, 0x31), // S2 $B1E5
     (0xF2, 0x70), // S3 $A5BF
@@ -25,7 +27,7 @@ const CA_GOLDEN: [(u8, u8); 17] = [
     (0xF2, 0x70), // S8 $B830
     (0xF2, 0x70), // S8 $B851
     (0xF2, 0x70), // S8 $B86D
-    (0xFB, 0x81), // S8 $B889
+    (0xFB, 0x81), // S8 $B889（姿态2；S8=3×姿态1+1×姿态2）
 ];
 
 /// ① CA 八位判定 golden（逐位语义表 §2）：代表性值全字段断言。
@@ -74,6 +76,28 @@ fn ca_judgment_golden_representative() {
         (j.arm_stage_end_gate, j.write_table1_dispatch, j.write_table2, j.speed_restore),
         (false, false, false, true)
     );
+    // (C9=$E2, CA=$00)（S4/S6 姿态1）——C9 bit4=0 变体全字段（盲区补位：判据不消费
+    // bit4 亦须出参一致；将来 bit4 接判据时此对即哨兵）
+    let j = ca_judgment(0xE2, 0x00, 0x00, 0x00, 0x00);
+    assert_eq!(
+        j,
+        CaJudgment {
+            arm_stage_end_gate: false,
+            d1_clear: false,
+            aux_ed56_pending: false,
+            speed_restore: true,
+            restore_scroll_pair: false,
+            force_c8_6_request: false,
+            bail_rts: false,
+            write_table1_dispatch: false,
+            write_table1_exec: false,
+            write_table2: false,
+        },
+        "C9=$E2（bit4=0 变体）出参全字段锁定"
+    );
+    // $E2 的 aux 派生也覆盖：sub_8dbd($E2)=假（bit0|3 清）⇒ aux 不出
+    assert!(!sub_8dbd_sec(0xE2));
+    assert!(!ca_judgment(0xE2, 0x00, 0x00, 0x00, 0x00).aux_ed56_pending);
 }
 
 /// ② 17/17 全谱不变量（§3 相关性表）+ aux 派生式。
