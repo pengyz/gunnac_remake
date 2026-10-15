@@ -478,7 +478,7 @@ fn eee5_accumulator_and_settle_chain() {
     assert_eq!(
         &A325_WEIGHTS[..],
         &rom[0x4335..0x4335 + 18],
-        "file 0x4325 PRG 偏移（+0x10 头）字节精确"
+        "file 0x4335（PRG 0x4325+0x10 头）字节精确"
     );
 }
 
