@@ -93,3 +93,19 @@ ending `0x2CEA-0x2EC1`、credits `0x1801-0x1A4B`（含 16B 头；cpu=offset+0x7F
 | `$33/$34/$3C` 武器/连射字段 | zp 变化帧 f1940/f2175 恰在拾取帧 | **B 级成立**（语义名待逐字段对齐 t12 $25/$26 族） |
 | 文本记录制/双族/ASCII 恒等/2 精灵字/8 行 quirk | 已由我方 A 级独立证明 | 互证 ✓（无需再核） |
 | `$E0-$E6` 模型（隐含） | unpacked BCD 每字节单数字，4/4 精确对照 | **口径钉死**（N-0203，防 10× 误读） |
+
+## 7. 全资产吸收记录（2026-10-15，见 community-absorption-audit.md）
+
+> 全量过筛（tools 25/config 4/translation 4/docs 7+杂项）裁定表、缺口 1-6 结论、A 级字节复证、
+> 假设区与收益总结见 [community-absorption-audit.md](community-absorption-audit.md)。本节记 N 系台账增补：
+
+| # | 吸收结论 | 复证 | 台账动作 |
+|---|---|---|---|
+| N-0207 | **隐藏选项定谳**：$FFF9\|$F2 门控设置屏 3 隐藏行 = WEAPON-#（$01B6，'1'+值→PPU $22CD）/ BOMBER-#（$01B7，$95F5[值]→$230D，$95F5=`F B T W`）/ DEATH·NON DEATH（$01BE 二选一记录 $9597/$95AB）；行标签 $9519 记录=row22/24；E-R03/H-04 销案 | **A**（bank00 $9460-$94C1 逐指令 + 表/记录字节，审计 §12.1） | 已 dated 注 spec E-R03 |
+| N-0208 | **E-R05"4 号价目缺失=截断"证伪**：4 号=退出项无价（结构完整 FF 收尾；JP text.csv `4. 나가기`=EXIT）；品名 tile ID 四组固定（BD BE BF/93 94 95/F9 FA FB/DB DC） | **A**（形态字节）+B（品目语义 JP 对照） | 已 dated 更正 spec E-R05 |
+| N-0209 | **N-0202 errata "−20"备选解释钉住**：verify_shop_runtime purchase 场景=两次武器升级各 −10、合计断言 `start_money-20` ⇒ "两连购合计"口径成立 | B（社区场景级；建议我方 shop trace 双击购买一次升 A） | errata 收窄（原"备选待查"关闭） |
+| N-0210 | **H7/JIUBAN 水印面收窄**：text.csv credits 43 行（x 位）↔CN 流 43 条逐行归属（JP 原/US 改/九班插），例 JP `C++ 없인 못 사는 TAKA`↔`SIIPU.RA.SU. TAKA`、JP `TONKIN HOUSE STAFF`↔`TOKYO SHOSEKI STAFF`、JP 尾 logo 行↔`@2011 JIUBAN` | B（对账面成立，逐行可半自动） | E-R12 注记增补 |
+| N-0211 | **注入点≠原版址更正**：其 $A97D/$AA00/$AB20/$AB90/$ACD8/$AE60/$97F1=补丁注入落点（回收 JP 故事文本/字幕数据区）；原版钩子仅 $D772/$E256/$A790/$A6A2+$FFF9/$FFF8——对照我方反汇编只用钩子类 | A（其 build_* 断言 before-bytes + w-p1 反例 1 同址） | 前 §2.2 表口径更正 |
+| N-0212 | **R-E2 重定标**："IRQ 延迟 16px"=其卡下移布局补偿（注入 $ACD8：latch $0408\|默认 $78→STA $C000，高卡 ADC #$10），非原版常数；原版待证项=IRQ 分割机制数值 | A（钩点字节+其代码自述） | R-E2 定义更正（A3 残项表） |
+| — | 音频：全仓零音频资产（audit_public 明令封禁 wav/mp3/nsf） | 事实 | **D1 全新疆土维持** |
+| — | reference_build.json=其 KO 产物锚（不适用）；rom.json JP 五指纹=我方 reference/jp 同源（A 级） | A | 三锚对账通过（审计 §8） |
