@@ -181,6 +181,21 @@ fn c9_bit5_dead_branch_quirk_zero_effect() {
         let b = ca_judgment(c9 ^ 0x20, ca, 0x11, 0x02, 0x06);
         assert_eq!(a, b, "bit5 翻转零效果（C9={c9:#X} CA={ca:#X}）");
     }
+    // F-C88 必修（#88 段C）：bit1=0 ∧ bit5 判别合成对——全谱 C9 bit1 恒 1 ⇒
+    // bit5→bit1 通道泄漏（`c9&0x02`→`c9&0x22`）在 17 对下不可咬；合成 0x00/0x20 对补位。
+    for &(c9, ca) in &[(0x00u8, 0x00u8), (0x00, 0x70), (0x08, 0x01)] {
+        let a = ca_judgment(c9, ca, 0x11, 0x02, 0x06);
+        let b = ca_judgment(c9 ^ 0x20, ca, 0x11, 0x02, 0x06);
+        assert_eq!(a, b, "bit5 翻转零效果（bit1=0 合成 C9={c9:#X}）");
+    }
+    // bit1=0 时 speed_restore 只看 CA bit7（bit5 泄漏进判据必红）
+    assert_eq!(
+        ca_judgment(0x20, 0x00, 0, 0, 0).speed_restore,
+        ca_judgment(0x00, 0x00, 0, 0, 0).speed_restore,
+        "bit5 不得经 bit1 通道影响 speed_restore"
+    );
+    assert!(!ca_judgment(0x20, 0x00, 0, 0, 0).speed_restore, "bit1=0+CA b7=0 ⇒ 不恢复");
+    assert!(ca_judgment(0x20, 0x80, 0, 0, 0).speed_restore, "bit1=0+CA b7=1 ⇒ 恢复（b7≠b1）");
 }
 
 /// ⑥ $D86B 状态转移表：字节精确（LDA $D86B,idx 读值）+ 锚点 + 表尾注。

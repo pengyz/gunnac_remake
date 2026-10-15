@@ -40,12 +40,24 @@ fn type_signature_registry() {
         assert_eq!(s[0].beh_ptr, 0x00DC);
         assert_eq!(s[0].spawn, None, "成员坐标摆动不登记恒定值");
     }
-    // $07 双行为指针（底部固定 $A631 / 尾段流 $AB30）——同型多指针按观测对登记
+    // $07 三行为指针（底部点 $A631 / 尾段流 $AB30 / $AAD9）——同型多指针按观测对登记
     let s = type_signatures(0x07);
     let ptrs: Vec<u16> = s.iter().map(|x| x.beh_ptr).collect();
-    assert_eq!(ptrs, vec![0xA631, 0xAB30], "同型两指针均登记（勿 1:1 强绑）");
+    assert_eq!(ptrs, vec![0xA631, 0xAB30, 0xAAD9], "同型多指针均登记（勿 1:1 强绑）");
     // $02 编队：$AB74（5 槽同帧 216f 轮）
     assert_eq!(type_signatures(0x02)[0].beh_ptr, 0xAB74);
+    // 扩表观测对（trace spawns 全量）：$2A→$9079、$2B→$0079、$05→$B011
+    assert!(type_signatures(0x2A).iter().any(|s| s.beh_ptr == 0x9079));
+    assert!(type_signatures(0x2B).iter().any(|s| s.beh_ptr == 0x0079));
+    assert_eq!(type_signatures(0x05)[0].beh_ptr, 0xB011);
+    // 恒定坐标仅 2 例（$2F/$2A 主指针）；其余 None
+    for s in type_signatures(0x07) {
+        assert_eq!(s.spawn, None, "$07 坐标不恒定不登记");
+    }
+    // beh=$0000 暂态**不登记**（非行为指针——登记即发明必红）
+    for sig in TYPE_SIGNATURES {
+        assert_ne!(sig.beh_ptr, 0x0000, "$0000 装载暂态禁入签名表");
+    }
     // $2E 组长族：行为指针未观测 ⇒ 空（不发明必红）
     assert!(type_signatures(0x2E).is_empty(), "$2E beh 未观测不发明");
     // 未登记型值 ⇒ 空
