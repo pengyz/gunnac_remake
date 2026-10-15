@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""tools/replay_stg0304_frames.py —— STG-03/04 段实帧回填一键重放（lead 裁定 b 案：事件帧同域）。
+"""【已退役归档 2026-10-16】本脚本随终跑退役（port 台账直出同步路径替代；f==0 防双写护栏=设计行为）。
+tools/replay_stg0304_frames.py —— STG-03/04 段实帧回填一键重放（lead 裁定 b 案：事件帧同域）。
 
 前置条件（port 契约共演落地后方可实放）：l5_s5 双契约已同域化
   ①l5_legality 帧序：实帧行适用单调性、f=0 占位行显式豁免类
