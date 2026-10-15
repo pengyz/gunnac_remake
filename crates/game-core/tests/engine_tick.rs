@@ -468,3 +468,22 @@ fn stg05_natural_run_to_stage_gate() {
     let fx2 = stage_tick(&mut st, &TickInputs::default());
     assert!(fx2.stage_clear_requested);
 }
+
+/// STG-06 自然跑判据（七关推平）。
+#[test]
+fn stg06_natural_run_to_stage_gate() {
+    use game_core::engine::{register_wave_flags, ScriptCursor, STG06_SCRIPT};
+    let mut st = StageState { script: ScriptCursor::from_records(&STG06_SCRIPT), ..Default::default() };
+    let mut fx = StageEffects::default();
+    for t in 0..=0x0412u32 {
+        let mut cur = core::mem::take(&mut st.script);
+        cur.step_to(t, &mut st, &mut fx);
+        register_wave_flags(&mut cur);
+        cur.process_waves(&mut st, &mut fx);
+        st.script = cur;
+    }
+    assert_ne!(st.wave.flags_26 & 0x10, 0, "STG-06 关末门臂（tick 0x0412）");
+    assert!(!st.script.waves.is_empty(), "op5 流已装");
+    let fx2 = stage_tick(&mut st, &TickInputs::default());
+    assert!(fx2.stage_clear_requested);
+}
