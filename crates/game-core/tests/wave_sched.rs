@@ -447,3 +447,101 @@ fn spawn_timing_two_domains() {
     assert_eq!(spawn_count_bump(0xFF), 0xFF, "饱和不回绕 0（回绕必红）");
     assert_ne!(spawn_count_bump(0xFF), 0x00);
 }
+
+// ===== 批次4e：S4b-6/7——$EEE5 累加器/清算链/双分配器 =====
+
+/// ⑭ $EEE5 累加器 + $4B 清算链 + $A325 表字节精确。
+#[test]
+fn eee5_accumulator_and_settle_chain() {
+    use game_core::wave::{
+        eee5_accumulate, pair_item_accumulate, pair_settle, settle_weight, A325_WEIGHTS,
+    };
+    // 累加：无进位
+    assert_eq!(eee5_accumulate(0x00, 0x00, 8), (0x08, 0x00, false));
+    // 进位 ⇒ $49 INC
+    assert_eq!(eee5_accumulate(0xF8, 0x05, 8), (0x00, 0x06, true));
+    // $49 饱和不回 0（INC/BNE/DEC）
+    let (_, hi, c) = eee5_accumulate(0xFF, 0xFF, 0x10);
+    assert_eq!((hi, c), (0xFF, true), "$49 饱和 $FF（回绕 0 必红）");
+    assert_ne!(hi, 0x00);
+    // pair 权重恒 8（LDA #8）
+    assert_eq!(pair_item_accumulate(0x00, 0x00), (0x08, 0x00, false));
+    // $4B 清算链：count→$A325 权重→累加
+    assert_eq!(settle_weight(0x00), 0x4C, "表首项");
+    assert_eq!(settle_weight(0x11), 0xD1, "表末项（18B）");
+    assert_eq!(settle_weight(0x12), 0x01, "越界取 1（CPY #$12）");
+    assert_eq!(settle_weight(0xFF), 0x01);
+    let (lo, hi, w) = pair_settle(0x00, 0x00, 0x02);
+    assert_eq!((lo, hi, w), (0xE6, 0x00, 0xE6), "清算灌入 $A325[2]=$E6");
+    // 表 18B 字节精确 vs ROM（bank02 $A325=file 0x4325）
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    assert_eq!(
+        &A325_WEIGHTS[..],
+        &rom[0x4335..0x4335 + 18],
+        "file 0x4325 PRG 偏移（+0x10 头）字节精确"
+    );
+}
+
+/// ⑮ 双分配器差异（S4b-7）：槽序分歧=保真面（D4）+ 三级回退 + 槽域 8..27。
+#[test]
+fn dual_object_allocators_c304_vs_c2c6() {
+    use game_core::wave::{alloc_c2c6, alloc_c304, AllocOutcome, SlotView, SLOT_RANGE};
+    let empty = SlotView { type_: 0, flags_668: 0, vec_41c: 0 };
+    let mut slots = [empty; 28];
+    // **D4 保真哨兵**：槽 8 与 27 皆空——pair 顺序取 8、ctrl 逆序取 27（槽序分歧必红）
+    assert_eq!(alloc_c304(&slots), Some(8), "pair 单遍顺序 first-fit");
+    assert_eq!(alloc_c2c6(&slots), AllocOutcome::Empty { slot: 27 }, "ctrl 首级逆序");
+    // 槽域 8..=27：0..7 HUD 保留不分配
+    for s in slots.iter_mut().take(8) {
+        s.type_ = 0xFF;
+    }
+    assert_eq!(alloc_c304(&slots), Some(8), "0..7 占满不影响");
+    assert_eq!(SLOT_RANGE, 8..=0x1B);
+    // 三级回退②：无空槽 + type∈[$20,$28) 重指派窗（顺序首命中）
+    for s in slots.iter_mut() {
+        s.type_ = 0x30;
+    }
+    slots[10].type_ = 0x25;
+    slots[20].type_ = 0x20;
+    assert_eq!(
+        alloc_c2c6(&slots),
+        AllocOutcome::Reassign { slot: 10 },
+        "顺序首命中 $20 窗"
+    );
+    assert_eq!(alloc_c304(&slots), None, "pair 无空槽即失败（无回退）");
+    // 三级回退③：回收候选（$668 bit7=0 ∧ $41C≠0，逆序）
+    for s in slots.iter_mut() {
+        s.type_ = 0x30; // 无空槽无窗值
+    }
+    slots[9].flags_668 = 0x00;
+    slots[9].vec_41c = 0x89;
+    slots[25].flags_668 = 0x00;
+    slots[25].vec_41c = 0x90;
+    assert_eq!(
+        alloc_c2c6(&slots),
+        AllocOutcome::Recycle { slot: 25 },
+        "逆序回收取 25"
+    );
+    // ③ 判据哨兵：bit7=1 不可回收；vec=0 不可回收
+    slots[25].flags_668 = 0x80;
+    assert_eq!(alloc_c2c6(&slots), AllocOutcome::Recycle { slot: 9 });
+    slots[25].flags_668 = 0x00;
+    slots[25].vec_41c = 0;
+    slots[9].vec_41c = 0;
+    assert_eq!(alloc_c2c6(&slots), AllocOutcome::Full, "无候选 ⇒ SEC");
+    // ② 窗边界哨兵（半开区间 [$20,$28)）：无空槽基底下 0x1F/0x28 不入窗 ⇒ Full
+    for s in slots.iter_mut() {
+        s.type_ = 0x30;
+    }
+    slots[8].type_ = 0x1F;
+    slots[9].type_ = 0x28;
+    assert_eq!(
+        alloc_c2c6(&slots),
+        AllocOutcome::Full,
+        "0x1F/0x28 不入窗（半开区间）"
+    );
+    assert_eq!(alloc_c304(&slots), None, "无空槽 pair 即失败");
+    // 对侧：0x20 入窗（边界内侧）
+    slots[9].type_ = 0x20;
+    assert_eq!(alloc_c2c6(&slots), AllocOutcome::Reassign { slot: 9 }, "0x20 入窗");
+}
