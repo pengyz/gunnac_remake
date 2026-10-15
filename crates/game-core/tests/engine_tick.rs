@@ -795,7 +795,12 @@ fn emit_probe5() {
             (7116, "Shop", Some("stg04-shop")),         // 台账：$0400:=0 商店 init
             (7404, "Transition", None),                 // 台账：出店转场尾完成帧（+34f 三证）
             (7500, "StageStart", Some("stg04-start")),  // 台账：关始采样帧（+96f 于出店）
-            (9000, "Combat", Some("stg04-combat")),     // 台账：战斗段采样帧（$ADCE 流段）
+            (9000, "Combat", Some("stg04-combat")),     // 台账：战斗段采样帧（$ADCE 流段）——注：>stg04-clear 8501 倒挂疑（stg03 教训口径），decomp 重锚候审
+            (8501, "StageClear", Some("stg04-clear")),  // stg05 §7：poke f8500 块入场（poke+1 模式）
+            (9214, "Shop", Some("stg05-shop")),         // stg05 §7：入店锚
+            (9504, "Transition", None),                 // stg05 §7：出店转场尾完成帧（+34f 四证）
+            (9600, "StageStart", Some("stg05-start")),  // 关始采样 +96f 模式（stg03/04 同型 B 级）
+            // stg05-combat：战斗段采样帧待 decomp 选样（须 < stg05-clear 入场——教训口径）
         ];
         let mut out = String::new();
         for (f, mode, cp) in rows {
@@ -938,4 +943,28 @@ fn tail_distribution_fade_cadence() {
     assert_eq!(levels, vec![77, 53, 24, 23, 20, 17, 4, 0], "7 档步进序（含终点 0）");
     assert!(t.done);
     assert_eq!(t.tick_frame(), None, "完成后 None（段 3 重置批到点）");
+}
+
+/// ㉗ S5-2 ② $18 门控两层模型（ff561bc）：相位未完不派发+按下保持门。
+#[test]
+fn menu_input_gate_two_layers() {
+    use game_core::engine::{input_bits, MenuInputGate};
+    // 层 2：相位未完 ⇒ 一律不派发
+    let mut g = MenuInputGate::default();
+    assert_eq!(g.dispatch(input_bits::START), None, "层 2 锁（相位未完）");
+    // 解锁后：按下边沿派发
+    g.phase_unlocked = true;
+    assert_eq!(g.dispatch(input_bits::START), Some(input_bits::START), "边沿派发");
+    // 层 1：保持中 ⇒ 早退作废
+    assert_eq!(g.dispatch(input_bits::START), None, "按住保持作废");
+    assert_eq!(g.dispatch(input_bits::START), None);
+    // 释放后再按 ⇒ 重新派发
+    assert_eq!(g.dispatch(0), None);
+    assert_eq!(g.dispatch(input_bits::A), Some(input_bits::A), "新边沿");
+    // 复合键边沿
+    assert_eq!(g.dispatch(0), None);
+    assert_eq!(
+        g.dispatch(input_bits::B | input_bits::START),
+        Some(input_bits::B | input_bits::START)
+    );
 }
