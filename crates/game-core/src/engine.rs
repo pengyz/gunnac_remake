@@ -119,7 +119,13 @@ pub fn behavior_frame(state: &mut StageState, fx: &mut StageEffects) {
                 }
             }
             DispatchMode::TableDispatch => {
-                // 表分发（$80CE/$7FFF[Y]，Y=type）——表查接线未落 ⇒ fail-closed 空转
+                // 表分发（decomp f06a376 接线律）：hi=$80CE+type/lo=$7FFF+type → handler；
+                // type≥$30 前置 MMC3 切 bank（调用环面 type_bank_switch 同律）
+                let d = crate::enemy::TYPE_DISPATCH[type_ as usize];
+                let r = run_handler(&mut state.grid.slots[idx as usize], d.target, &mut state.rng);
+                if r == HandlerResult::Recycle {
+                    state.grid.slots[idx as usize] = ObjectSlot::default();
+                }
             }
         }
     }
@@ -266,6 +272,16 @@ pub struct ObjectSlot {
     pub drip_cd: u8,
     /// 首员待发（`GroupRelease::load` 发射语义：装载即发、不递减 `$630`）。
     pub first_pending: bool,
+    /// `$5DC+槽` 三角计数（Wt-6/$84D1 共享相位计数）。
+    pub f5dc: u8,
+    /// `$5A4+槽` 速度四元组一员（$90AB 清态面）。
+    pub f5a4: u8,
+    /// `$550+槽` 速度四元组一员。
+    pub f550: u8,
+    /// `$56C+槽` 速度四元组一员。
+    pub f56c: u8,
+    /// `$5C0+槽` 倒计时簇（$90AB 清态面）。
+    pub f5c0: u8,
 }
 
 /// 对象网格（28 槽，槽 0..7 与 8..27 分区——分配域 8..=27）。
@@ -433,6 +449,23 @@ pub fn run_handler(
             slot.beh_hi = hi;
             HandlerResult::Continue
         }
-        _ => HandlerResult::Unproven, // 未分析 handler（$9120 族等）fail-closed
+        0x90AB => {
+            // $2B 成员链首（decomp f06a376 §2.3）：改写→$9120 + 清态
+            //（$5DC 三角计数归零+$5A4/$550/$56C/$5C0）
+            let (lo, hi) = chain_rewrite(0x9120);
+            slot.beh_lo = lo;
+            slot.beh_hi = hi;
+            slot.f5dc = 0;
+            slot.f5a4 = 0;
+            slot.f550 = 0;
+            slot.f56c = 0;
+            slot.f5c0 = 0;
+            HandlerResult::Continue
+        }
+        0x9120 => {
+            // $CD63 登记 + $5DC BMI 相位支 + $CD9D(A=$30,Y=4)——内核 S4b-9b 未证 ⇒ fail-closed
+            HandlerResult::Unproven
+        }
+        _ => HandlerResult::Unproven, // 未分析 handler fail-closed
     }
 }

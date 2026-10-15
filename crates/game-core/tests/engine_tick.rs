@@ -248,3 +248,25 @@ fn drip_handler_cadence() {
     assert_eq!((8..28).filter(|&i| st.grid.slots[i].type_ == 0x2B).count(), 2, "10f 节律");
     assert_eq!(st.grid.slots[li].f630, 4, "滴灌递减");
 }
+
+/// ⑪ 表分发接线（decomp f06a376）：table 模式经 TYPE_DISPATCH 落 handler（$2B→$90AB）。
+#[test]
+fn table_dispatch_wiring_live() {
+    // $2B 成员槽（beh_hi=0 表模式）：behavior_frame → $90AB → 续链 $9120+清态
+    let mut st = StageState::default();
+    let slot = 8usize;
+    st.grid.slots[slot] = ObjectSlot {
+        type_: 0x2B,
+        f5dc: 0x22,
+        f5c0: 0x11,
+        ..Default::default()
+    };
+    behavior_frame(&mut st, &mut StageEffects::default());
+    let s = st.grid.slots[slot];
+    assert_eq!((s.beh_hi, s.beh_lo), (0x91, 0x20), "续链 $9120");
+    assert_eq!((s.f5dc, s.f5c0), (0, 0), "$90AB 清态");
+    // $9120 内核未证 fail-closed：下一帧字段不动
+    let before = st.grid.slots[slot];
+    behavior_frame(&mut st, &mut StageEffects::default());
+    assert_eq!(st.grid.slots[slot], before, "$9120 fail-closed");
+}

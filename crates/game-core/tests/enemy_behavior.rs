@@ -546,3 +546,25 @@ fn shape_box_fetch() {
     assert_eq!(fetch_shape_boxes(&two, 100, 100, false, false).len(), 2);
     assert_eq!(fetch_shape_boxes(&two[..6], 100, 100, false, false).len(), 1, "流不足截断");
 }
+
+/// ㉒ 表分发全表嵌码（decomp f06a376 接线律）。
+#[test]
+fn type_dispatch_table_wiring() {
+    use game_core::enemy::{type_bank_switch, TypeDispatch, TYPE_DISPATCH};
+    // 验证 4/4 对（f06a376）：$2B→$90AB、$38→bank3:$B4A3、$51→bank4:$B00A、$56→bank4:$B289
+    assert_eq!(TYPE_DISPATCH[0x2B].target, 0x90AB, "$2B→$90AB→$9120（trace 吻合）");
+    assert_eq!(TYPE_DISPATCH[0x38].target, 0xB4A3);
+    assert_eq!(TYPE_DISPATCH[0x51].target, 0xB00A);
+    assert_eq!(TYPE_DISPATCH[0x56].target, 0xB289);
+    // type<$30 不切 bank；type≥$30 带 bank_switch
+    assert_eq!(TYPE_DISPATCH[0x2B].bank_switch, None, "<$30 不切");
+    assert_eq!(TYPE_DISPATCH[0x38].bank_switch, Some(3), "$38→bank3");
+    assert_eq!(TYPE_DISPATCH[0x51].bank_switch, Some(4));
+    assert_eq!(TYPE_DISPATCH[0x56].bank_switch, Some(4));
+    // type_bank_switch 消费律：$38 当前 bank≠3 ⇒ Some(3)；==3 ⇒ None（防重写）
+    let tbl: Vec<u8> = (0..=0x38u8).map(|i| if i == 0x38 { 3 } else { 0 }).collect();
+    assert_eq!(type_bank_switch(0x38, 7, &tbl), Some(3));
+    assert_eq!(type_bank_switch(0x38, 3, &tbl), None, "同值防重写");
+    // 全表完整性：非登记型值目标=0（fail-closed 空转面）
+    let _ = TypeDispatch { target: 0, bank_switch: None };
+}
