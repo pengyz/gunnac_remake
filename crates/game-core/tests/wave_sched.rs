@@ -354,3 +354,58 @@ fn step_criterion_is_type_bit_not_ctrl_synthetic() {
         "type 偶 ⇒ 不 step"
     );
 }
+
+// ===== 组员节律帧锚对拍面（lead 待料指令：stg0X 各关锚 vs GroupRelease 出参）=====
+
+/// ⑫ 跨关节律帧锚对拍（stg02 §3.3 双关四例 + B1 §2.3 三簇）：
+/// member_schedule 出参须**覆盖**实测锚；两 API（schedule/GroupRelease）出参自洽。
+#[test]
+fn member_rhythm_cross_stage_anchors() {
+    use game_core::wave::GroupRelease;
+    // 锚表：(组员type,数,间隔f, 参数, leader_frame, 实测帧锚子集)
+    let anchors: [([u8; 4], u32, &[u32]); 4] = [
+        // STG-01 rec@A275 (2B,6,0A,20)：f1341-1391 六连 +10f（B1 §2.3）
+        ([0x2B, 6, 0x0A, 0x20], 1341, &[1341, 1351, 1361, 1371, 1381, 1391]),
+        // STG-01 rec@A27C (2B,6,0A,C0)：f1469-1519 六连 +10f
+        ([0x2B, 6, 0x0A, 0xC0], 1469, &[1469, 1479, 1489, 1499, 1509, 1519]),
+        // STG-02 rec@AEEA (2B,6,0A,30)：f3580-3630 六连 +10f（stg02 §3.3）
+        ([0x2B, 6, 0x0A, 0x30], 3580, &[3580, 3590, 3600, 3610, 3620, 3630]),
+        // STG-02 rec@AEF1 (56,08,1E,00)：f3806/3836/3866/3896/3926 = 30f=$1E
+        //（实测子集 k=1..5；首员=组长帧 f3776 同帧模型，观测 0→非0 口径见注）
+        ([0x56, 8, 0x1E, 0x00], 3776, &[3806, 3836, 3866, 3896, 3926]),
+    ];
+    for (args, leader_frame, observed) in anchors {
+        let [_, count, interval, _] = args;
+        let sched = member_schedule(count, interval, leader_frame).expect("合法四参");
+        for &f in observed {
+            assert!(
+                sched.contains(&f),
+                "锚 f{f} 必须 ∈ 出参（args={args:?} leader={leader_frame}）"
+            );
+        }
+        // 出参=等差帧序列（间隔=间隔字节**直接兑现**）
+        for w in sched.windows(2) {
+            assert_eq!(w[1] - w[0], u32::from(interval), "帧域直接兑现（args={args:?}）");
+        }
+        assert_eq!(sched.len(), usize::from(count), "员数=组员数");
+        assert_eq!(sched[0], leader_frame, "首员与组长同帧（B1 §2.3 双证）");
+        // 两 API 自洽：GroupRelease 逐步出帧 == member_schedule 全序列
+        let (mut g, first) = GroupRelease::load(count, interval).expect("合法");
+        assert_eq!(first, count - 1, "$630 首现=数−1");
+        let mut released = vec![leader_frame];
+        for k in 1..u32::from(count) * u32::from(interval) {
+            if g.tick_frame() {
+                released.push(leader_frame + k);
+            }
+        }
+        assert_eq!(released, sched, "GroupRelease 与 member_schedule 出参自洽");
+    }
+    // 负向哨兵：间隔是帧非 tick（×8 必红）——锚 30f 若 ×8=240f 锚全失
+    let bad = member_schedule(8, 30 * 8, 3776).unwrap();
+    for &f in &[3806u32, 3836, 3866, 3896, 3926] {
+        assert!(!bad.contains(&f), "×8 换算必红（f{f} 不得出现在换算序列）");
+    }
+    // STG-03 帧锚未采（S3-2 挂账）——只证值域形状不证帧
+    let s3 = member_schedule(4, 0x0F, 0).unwrap();
+    assert_eq!(s3, vec![0, 15, 30, 45], "STG-03 主导 15f 形状（帧锚待采不作锚断言）");
+}
