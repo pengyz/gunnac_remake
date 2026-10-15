@@ -236,3 +236,32 @@ fn motion_phase_bit0_and_field_reuse() {
         "迁移序 $2B→$12→$4E（A 级时间线，F-D90 更正帧 1592 逐帧直读）"
     );
 }
+
+/// ⑭ 派发双模式判据（bank02:82F8 bit7 分派，t59 双模式面）。
+#[test]
+fn dispatch_mode_bit7_gate() {
+    use game_core::enemy::{dispatch_mode, DispatchMode, TYPE_SIGNATURES};
+    // bit7 边界：0x7F 表分发 / 0x80 自向量
+    assert_eq!(dispatch_mode(0x7F), DispatchMode::TableDispatch);
+    assert_eq!(dispatch_mode(0x80), DispatchMode::SelfVector);
+    // 已知指针归类：$89DF/$89E4/$9010/$A631/$B011/$AE6B/$B3B9/$B04C（hi≥$80=自向量）
+    for ptr in [0x89DFu16, 0x89E4, 0x9010, 0xA631, 0xB011, 0xAE6B, 0xB3B9, 0xB04C] {
+        assert_eq!(
+            dispatch_mode((ptr >> 8) as u8),
+            DispatchMode::SelfVector,
+            "{ptr:#X} hi bit7=1 ⇒ 自向量"
+        );
+    }
+    // $00DC/$00F8 等 hi bit7=0 ⇒ 表分发（跳转目标语义待裁定——只判模式）
+    for ptr in [0x00DCu16, 0x00F8, 0x00AC, 0x004C] {
+        assert_eq!(
+            dispatch_mode((ptr >> 8) as u8),
+            DispatchMode::TableDispatch,
+            "{ptr:#X} hi bit7=0 ⇒ 表分发（值语义挂账中）"
+        );
+    }
+    // 登记表一致性：全部登记对按判据归类不 panic（两模式均合法登记面）
+    for sig in TYPE_SIGNATURES {
+        let _ = dispatch_mode((sig.beh_ptr >> 8) as u8);
+    }
+}
