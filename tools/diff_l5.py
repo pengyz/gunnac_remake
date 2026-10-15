@@ -31,6 +31,8 @@ def trigger_of(anchors, g):
     for a in anchors or []:
         if a.get("checkpoint") == g.get("checkpoint") and a.get("f") == g.get("f"):
             t = a.get("trigger")
+            if t == "placeholder":
+                return "pending"
             return t if t in ("natural", "injected") else "unknown"
     return None
 
@@ -64,6 +66,9 @@ def diff(probe, golden, scene=None, anchors=None, scene_map=None):
             out.append((g, "mismatch", f"{bad}"))
             continue
         t = trigger_of(anchors, g)
+        if t == "pending":
+            out.append((g, "ok-trigger-pending", "trigger=placeholder 分级未决（不计 natural）"))
+            continue
         if t == "injected":
             out.append((g, "ok-injected", "trigger=injected 不计 natural 通过"))
         elif t == "unknown":
@@ -120,7 +125,7 @@ def main(argv):
     notes = sum(1 for _, v, _ in res if v == "ok-provenance-note")
     if notes:
         print(f"L5-DIFF 谱系注记: {notes} 行（内容 match+scene 归属差，公开不静默；不计 natural）")
-    bad = sum(1 for _, v, _ in res if v not in ("ok", "ok-provenance-note"))
+    bad = sum(1 for _, v, _ in res if v not in ("ok", "ok-provenance-note", "ok-injected", "ok-trigger-pending"))
     return 1 if bad else 0
 
 

@@ -58,3 +58,13 @@ pgrep 清孤儿 Mesen（此时存活者必为孤儿，不影响他人持锁运�
 > `shop-in`→`stg01-shop`、`combat`→`stg01-combat`——命名权威=l5-all-clear §段表（stgN-shop/stgN-combat），
 > s5-all-clear.anchors.jsonl 现行口径为标准族（两 golden 互不一致时以 s5 族为准，port 证据）。
 > 性质=命名对齐 spec 的更正（"golden 只升不降"红线内，非内容回退）。
+
+> 【2026-10-16 预备注（STG-03/04 段实帧回填——待 l5_s5 契约共演后 dated 重放）】回填方案已
+> 实测验证但**打破 l5_s5 双契约**（①l5_legality 帧序：实帧→f=0 占位倒退必检出 ②s5_chain_run
+> 0 容差对拍：引擎 run 事件期待占位帧）——已回退保树绿，共演需求路由 port。届时重放内容：
+> s5-chain 前 10 行 f=0→实帧（stg02-clear@4600/injected、stg03-shop@5314、Transition@**5570**
+> （port 统一公式尾起点=出店−34，修正 5571）、stg03-start@5604、stg03-combat@5844（**B 级** 240f
+> intro 推断，实帧异即钉正）、stg03-clear@6400/injected、stg04-shop@7116、Transition@7370、
+> stg04-start@7404、stg04-combat@7644（**B 级**））+ anchors 同步 f/trigger（stg02-clear/
+> stg03-clear=injected，余 8 行 placeholder=分级未决不冒充）。diff_l5 侧 ok-trigger-pending
+> 显式类已备（trigger 分级红线：placeholder 不计 natural）。
