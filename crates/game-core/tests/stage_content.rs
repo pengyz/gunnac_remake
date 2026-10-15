@@ -333,3 +333,21 @@ fn hitbox_register_and_damage_golden() {
     assert_ne!(damage_apply(14, false, 30), 12, "物撞按 −2 误算必红");
     assert_eq!(damage_apply(1, true, 30), 0, "下溢饱和 0 不回绕");
 }
+
+/// ㉘ 商店主面板项数随关卡变（stg08 run#1 新语义）：「退」=末项非固定 3。
+#[test]
+fn shop_menu_items_stage_varying() {
+    use game_core::ui::{ShopPurchasePhase, ShopPurchaseState};
+    let mk = |items| ShopPurchaseState {
+        phase: ShopPurchasePhase::MainRing,
+        menu_items: items,
+        ..Default::default()
+    };
+    // stg01-07：4 项 ⇒ 「退」=光标 3（旧行为兼容）
+    assert_eq!(mk(4).menu_exit_cursor(), 3);
+    // stg07→08：≥5 项 ⇒ 「退」=末项（run#1 负结果：3×down 落购买项）
+    assert_eq!(mk(5).menu_exit_cursor(), 4);
+    assert_eq!(mk(6).menu_exit_cursor(), 5);
+    // fail-closed：0 项防下溢
+    assert_eq!(mk(0).menu_exit_cursor(), 0);
+}

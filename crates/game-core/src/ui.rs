@@ -274,8 +274,14 @@ pub struct ShopPurchaseState {
     pub prompt: Option<ShopPrompt>,
     /// 消息返回目标。
     pub msg_back: ShopMsgReturn,
-    /// `$0400` shop_slot_cursor（N-0002）：主面板 0..3。
+    /// `$0400` shop_slot_cursor（N-0002）。
+    /// 【stg08 run#1 dated】~~主面板 0..3 固定 4 项~~ ——**主面板项数随关卡变**：
+    /// stg01-07 过渡=4 项（光标 3=「退」）/ stg07→08 过渡=**≥5 项**（「退」=**末项**
+    /// 非固定 3；3×down 落购买项 A 触发 `$32` 40→60=购买态变化实证）。精确项数
+    /// 未钉（≥5——run #2 6×down 钳位末项中）⇒ `menu_items` 参数化 fail-closed。
     pub cursor: u8,
+    /// 主面板项数（随关卡变——stg01-07=4/stg07→08=≥5 精确值待 run #2）。
+    pub menu_items: u8,
     /// `$0401` ui_select_cursor（N-0003）：武器 [0..5] / 槽 [stage..7] / 弹种 [0..3]。
     pub item_cursor: u8,
     /// `$0402` 槽光标下界（进发货菜单同写，bank00:$9F22；= `$0180`）。
@@ -291,6 +297,7 @@ pub struct ShopPurchaseState {
     /// `$33`/`$34`/`$018F`（`weapons::WeaponState`）。
     pub weapon: crate::weapons::WeaponState,
     /// `$018C`/`$018A`/`$32`（`weapons::PickupContext`；`flags`= `$32`，bit7=翼已购〔本线置位点
+    /// 【stg08 run#1 dated】$32 另证=**购买态字段**（A 触发 40→60 变化观测点）——
     /// bank00:$9E0E `ORA #$80`〕）。AD65-3 互注：bit7 另一真读者=kernel 门
     /// （`weapons.rs` bank02:$922B dispatch）——同一 RAM 位两处真读者，改语义须双向对账；
     /// bit5=退出隐藏门写（bank01:$A039，登记不解释）。
@@ -590,4 +597,11 @@ fn step_message(st: &mut ShopPurchaseState, buttons: u8) -> ShopFx {
 /// 进位即封顶 `$FF`）。**触发时机未接线**（谁在何时 +3 未证）——此处只接 RAM 写效果。
 pub fn shop_money_credit(st: &mut ShopPurchaseState) {
     st.money = crate::l2ports::shop_money_earn(st.money);
+}
+
+impl ShopPurchaseState {
+    /// 「退」入口光标=**末项**（`menu_items-1`——stg08 run#1 dated：非固定 3）。
+    pub fn menu_exit_cursor(&self) -> u8 {
+        self.menu_items.saturating_sub(1)
+    }
 }
