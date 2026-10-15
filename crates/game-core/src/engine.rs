@@ -49,6 +49,8 @@ pub struct StageState {
     pub rng: RngState,
     /// zp `$54`（调用环分组判据输入——运行期来源 S4b 挂账，字段不发明）。
     pub zp_54: u8,
+    /// 脚本游标（脚本解释器 thr 推进——子面⑦）。
+    pub script: ScriptCursor,
     /// 弹网格 SoA（批次3 六数组面——自机/敌弹共用）。
     pub bullets: crate::shot::BulletGrid,
     /// 框形流数据（地址→流字节——game-core 纯态由装载侧喂入）。
@@ -94,10 +96,26 @@ pub fn stage_tick(state: &mut StageState, inputs: &TickInputs) -> StageEffects {
 /// tick 域推进（Wt-2：tick=16px 滚动进度——**滚动停 ⇒ tick 冻结**，
 /// 关1 实测冻结 824/stg02 冻结 $006C=108 双证）。
 pub fn wave_tick(state: &mut StageState, scroll_delta: u16, fx: &mut StageEffects) {
+    let prev_tick = state.wave.tick;
     state.wave.scroll_progress = state.wave.scroll_progress.saturating_add(scroll_delta);
     state.wave.tick = state.wave.scroll_progress / 16;
-    // 调度游标按 tick 对点推进（到点记录项分流——两时序域红线）
-    state.sched.step_to(u32::from(state.wave.tick), fx);
+    // **逐 tick 中间步进**（$84 逐拍 INC——脚本 thr 精确相等不跳拍；调度游标对点）
+    for t in u32::from(prev_tick)..u32::from(state.wave.tick) {
+        state.sched.step_to(t, fx);
+        let mut cursor = core::mem::take(&mut state.script);
+        cursor.step_to(t, state, fx);
+        register_wave_flags(&mut cursor);
+        cursor.process_waves(state, fx);
+        state.script = cursor;
+    }
+    // 末 tick 同样步进一拍（含）
+    let t = u32::from(state.wave.tick);
+    state.sched.step_to(t, fx);
+    let mut cursor = core::mem::take(&mut state.script);
+    cursor.step_to(t, state, fx);
+    register_wave_flags(&mut cursor);
+    cursor.process_waves(state, fx);
+    state.script = cursor;
 }
 
 /// 帧域行为步（子面④）：调用环双序逐槽分发（`$82F8` 双模式）+ `$89DF` 滴灌 handler。
@@ -548,5 +566,147 @@ pub fn run_handler(
             HandlerResult::Unproven
         }
         _ => HandlerResult::Unproven, // 未分析 handler fail-closed
+    }
+}
+
+// ===== 子面⑦：脚本解释器+波次记录机效果——关末门判据（合流自然跑）=====
+
+use crate::wave_record::{ca_judgment, far_call_fires, op7_action, Op7Action};
+
+/// 脚本记录（脚本解释器 `bank00:8185-82FA` 消费；thr=**本记录触发 tick**=前一记录
+/// 尾 thr 字段——dropper §2 口径）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptRecord {
+    /// 触发 tick（16 位精确相等）。
+    pub thr: u16,
+    /// op 码（0=setspeed/1=evt-gen/2=sched/4=set-tbl/5=wavestream/7=jump/9=set-9）。
+    pub op: u8,
+    /// op5 装载的波次流址；其他 op ⇒ None。
+    pub wave: Option<u16>,
+    /// op7 目标；其他 ⇒ None。
+    pub target: Option<u16>,
+}
+
+/// 波次流激活态（op5 `$CC/$CD` 装载 → 记录机效果面）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WaveStream {
+    /// 流址。
+    pub addr: u16,
+    /// 记录 C9 标志。
+    pub c9: u8,
+    /// 记录 CA 标志。
+    pub ca: u8,
+    /// 已处理（效果已落地）。
+    pub processed: bool,
+}
+
+/// 脚本游标（thr 精确相等推进；op5 装载波次流；op7 按 $C8 分支）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ScriptCursor {
+    pub records: Vec<ScriptRecord>,
+    pub next: usize,
+    /// 已装载波次流（op5）。
+    pub waves: Vec<WaveStream>,
+    /// `$C8` 波次机忙标志（op5 置 1；op7 分支判据）。
+    pub c8: u8,
+    /// `$86/$87` 当前阈值（尾 thr 传递：处理记录后 := 该记录尾 thr——精确相等匹配）。
+    pub threshold: u16,
+}
+
+impl ScriptCursor {
+    /// STG-01 脚本装载（`wave_timeline.py script 1` golden——14 记录）。
+    pub fn stg01() -> Self {
+        use ScriptRecord as R;
+        ScriptCursor {
+            records: vec![
+                R { thr: 0x0000, op: 1, wave: None, target: None },
+                R { thr: 0x0000, op: 0, wave: None, target: None },
+                R { thr: 0x0000, op: 4, wave: None, target: None },
+                R { thr: 0x0000, op: 2, wave: None, target: None }, // sched=$A26D
+                R { thr: 0x00C0, op: 9, wave: None, target: None },
+                R { thr: 0x00D8, op: 0, wave: None, target: None },
+                R { thr: 0x0120, op: 9, wave: None, target: None },
+                R { thr: 0x0330, op: 0, wave: None, target: None },
+                R { thr: 0x04C8, op: 5, wave: Some(0xA3CD), target: None },
+                R { thr: 0x04D0, op: 4, wave: None, target: None },
+                R { thr: 0x04DA, op: 5, wave: Some(0xA3E4), target: None },
+                R { thr: 0x04E8, op: 0, wave: None, target: None },
+                R { thr: 0x0000, op: 4, wave: None, target: None },
+                R { thr: 0x2718, op: 7, wave: None, target: Some(0x080F) },
+            ],
+            next: 0,
+            waves: Vec::new(),
+            c8: 0,
+            threshold: 0, // 头 2B T0=$0000
+        }
+    }
+
+    /// 逐 tick 推进（`$81A3` **精确相等**匹配 `threshold==tick`，同 tick 连锁（尾 thr
+    /// 传递后仍相等则继续处理下一记录——82EF 回 81A3 环）。返回触发的记录数。
+    pub fn step_to(&mut self, tick: u32, _state: &mut StageState, fx: &mut StageEffects) -> usize {
+        let mut fired = 0;
+        while self.next < self.records.len() && u32::from(self.threshold) == tick {
+            let rec = &self.records[self.next].clone();
+            self.threshold = rec.thr; // 尾 thr → $86/$87
+            match rec.op {
+                5 => {
+                    // op5 set-wavestream：$C8:=1 + 装流 → 记录机效果（CA/C9）
+                    self.c8 = 1;
+                    let addr = rec.wave.unwrap();
+                    self.waves.push(WaveStream {
+                        addr,
+                        c9: 0,
+                        ca: 0,
+                        processed: false,
+                    });
+                }
+                7 => {
+                    // op7 jump-if-wave-busy（$C8≠0 ⇒ 跳转/重基；=0 ⇒ 跳过 2B）
+                    match op7_action(self.c8, rec.target.unwrap_or(0)) {
+                        Op7Action::JumpRebase { .. } | Op7Action::Skip2B => {}
+                    }
+                }
+                _ => {} // 其余 op 效果面（速度/表/evt-gen）消费侧另面——fail-closed
+            }
+            self.next += 1;
+            fired += 1;
+        }
+        let _ = fx;
+        fired
+    }
+
+    /// 波次流记录机效果落地（CA/C9 判定链——处理时相未证 S3-2，**装载即处理**口径
+    /// 挂账 W-PHASE）：arm 关末门/far-call 请求。返回落地流数。
+    pub fn process_waves(&mut self, state: &mut StageState, fx: &mut StageEffects) -> usize {
+        let mut n = 0;
+        for w in &mut self.waves {
+            if w.processed {
+                continue;
+            }
+            let j = ca_judgment(w.c9, w.ca, state.wave.flags_26, 0, 0);
+            if j.arm_stage_end_gate {
+                state.wave.flags_26 |= 0x10;
+            }
+            if far_call_fires(w.c9, state.wave.flags_26) {
+                fx.far_call_requests.push(w.addr as u8);
+            }
+            w.processed = true;
+            n += 1;
+        }
+        n
+    }
+}
+
+/// 波次流登记（STG-01 两条 op5 流——`wave_stream_decode` golden：$A3CD CA=$00、
+/// $A3E4 CA=$05 bit0=关末门源）。
+pub const STG01_WAVES: [(u16, u8, u8); 2] = [(0xA3CD, 0xF2, 0x00), (0xA3E4, 0xFB, 0x05)];
+
+/// 装载波次流登记（把 STG01_WAVES 的 C9/CA 灌入游标 waves——CA 判定链数据面）。
+pub fn register_wave_flags(cursor: &mut ScriptCursor) {
+    for w in &mut cursor.waves {
+        if let Some(&(_, c9, ca)) = STG01_WAVES.iter().find(|(a, _, _)| *a == w.addr) {
+            w.c9 = c9;
+            w.ca = ca;
+        }
     }
 }
