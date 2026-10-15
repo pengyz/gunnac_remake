@@ -328,3 +328,61 @@ pub fn dispatch_mode(vec_hi: u8) -> DispatchMode {
         DispatchMode::TableDispatch
     }
 }
+
+// ===== 批次4f：t59 行为 VM 相位 handler（behavior-vm-scripts §3/§5，A 级）=====
+//
+// threaded-code 状态机的确定性引擎原语。轨迹族↔handler 配对=B 级待 S4b-2 相位
+// 实测（不入行为断言）；$83xx handler 全集=S4b-9 待枚举（本文 6 样本面）。
+
+/// `$836E` 恒速下沉 handler（族②/④引擎核）：`LDA #1/CLC/ADC $4FC,X` —— y+1/帧，
+/// **溢出（y=$FF）即终止**（`BCS → $D10C`）；续行 `LDA #$40 / JMP $83DE`
+/// （A:=`$40` 交参数化 handler）。返回 None=终止（槽回收）。
+pub fn handler_const_descent(y: u8) -> Option<u8> {
+    let (y_next, carry) = y.overflowing_add(1);
+    if carry {
+        None // BCS → $D10C（终止即回收）
+    } else {
+        Some(y_next)
+    }
+}
+
+/// `$8314` duration 倒数 handler（行为终止条件①）：`DEC $438,X / BEQ` ——
+/// 倒数归零 ⇒ None（`JMP $D10C`）；否则 Some(倒数值)（`RTS` 续行）。
+/// `$438` 字段三义之一（直跳 lo/duration/表模式无效——按模式分支勿混，D4 保真）。
+pub fn handler_duration_tick(duration_438: u8) -> Option<u8> {
+    let d = duration_438.wrapping_sub(1);
+    if d == 0 {
+        None
+    } else {
+        Some(d)
+    }
+}
+
+/// `$83DE` 参数化 handler 参数表（bank02 `$8406`——`$518,X := $8406+Y`，$0A/$0B/$0C 族）。
+pub const PARAM_TABLE_518: [u8; 5] = [0x0A, 0x0B, 0x0C, 0x0C, 0x0C];
+
+/// `$83DE` 参数表（bank02 `$840B`——`$684,X := $840B+Y`，$5F/$61/$63/$65/$67 族）。
+pub const PARAM_TABLE_684: [u8; 5] = [0x5F, 0x61, 0x63, 0x65, 0x67];
+
+/// `$8341` RNG jitter 原语（摆动候选族引擎核）：`JSR $EC12/TAY` 后双向抖动——
+/// x 侧 `AND #$0F/SBC #7/ADC $4E0,X`、y 侧 `TYA/LSR×4/SBC #7/ADC $4FC,X`。
+/// **carry 语义**：SBC/ADC 链逐位依赖进位——x 侧进位=$EC12 返回 carry（S4b-9 挂账
+/// 未证）；y 侧进位=LSR 链末位（rng bit3，确定性）。返回 (dx, dy) 有符号偏移。
+pub fn rng_jitter_offsets(rng: u8, carry_after_rng: bool) -> (i8, i8) {
+    // x 侧：A=rng&$0F，SBC #7（borrow=1−C），ADC 尾步与 $4E0 合成偏移 = (A−7−!C)+C_after_sbc
+    let a_x = rng & 0x0F;
+    let (sub_x, borrow_x) = a_x.overflowing_sub(7 + if carry_after_rng { 0 } else { 1 });
+    let c_after_sbc_x = !borrow_x;
+    let dx = (i16::from(sub_x) + i16::from(c_after_sbc_x as u8)) as i8;
+    // y 侧：A=rng>>4，进位=rng bit3（LSR×4 末移出位）
+    let a_y = rng >> 4;
+    let carry_y = rng & 0x08 != 0;
+    let (sub_y, borrow_y) = a_y.overflowing_sub(7 + if carry_y { 0 } else { 1 });
+    let c_after_sbc_y = !borrow_y;
+    let dy = (i16::from(sub_y) + i16::from(c_after_sbc_y as u8)) as i8;
+    (dx, dy)
+}
+
+/// `$D10C` = 槽回收/终止**唯一出口**（行为机与分配器②③路径共用——回收即终止，
+/// 终止即回收）。枚举仅登记语义归属，调用侧负责槽字段清写（CB42-CBA1 初始化段）。
+pub const TERMINATE_RECYCLE_EXIT: u16 = 0xD10C;
