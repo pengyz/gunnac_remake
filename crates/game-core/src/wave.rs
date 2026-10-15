@@ -437,3 +437,119 @@ pub fn spawn_timing(item: &SchedItem) -> Option<SpawnTiming> {
 pub fn spawn_count_bump(counter: u8) -> u8 {
     counter.saturating_add(1)
 }
+
+// ===== 批次4e：S4b-6/7 闭合面（enemy-item-scheduling.md §6，A 级）=====
+//
+// $EEE5 累加器加权进位派发 + $4B 清算链 + 双分配器差异。深层派发义（$EF49 表/
+// 关号钳制/权重数值义）= S4b-6c 留白不发明。
+
+/// `$A325` 权重表（bank02 `$A325`，file 0x4325，18B 字节精确）：
+/// **表区与代码混排**（含 `JMP $E63D`/`JMP $D10C` 指令字节）——权重数值义未证（S4b-6c），
+/// 仅登记字节。
+pub const A325_WEIGHTS: [u8; 18] = [
+    0x4C, 0x3D, 0xE6, 0x00, 0x00, 0x00, 0x80, 0xC0, 0x40, 0x00, 0x00, 0x00, 0x40, 0xC0, 0x80,
+    0x4C, 0x0C, 0xD1,
+];
+
+/// `$4B` 清算权重（`bank02:8663-8675`：`CPY #$12 / < $12 ⇒ LDA $A325,Y / else LDA #1`）。
+pub fn settle_weight(count_4b: u8) -> u8 {
+    if (count_4b as usize) < A325_WEIGHTS.len() {
+        A325_WEIGHTS[count_4b as usize]
+    } else {
+        1
+    }
+}
+
+/// `$EEE5` 累加器加权进位（`bank15:EEE5-EF1E`，A 级字节）：
+/// `CLC/ADC $48/STA $48`（`$48 += weight`）⇒ 无进位返回；有进位 `INC $49`（**饱和不回 0**）。
+/// 返回 `(lo, hi, carried)`。其后高半字节门/派发表/关号钳制 = S4b-6c 留白。
+pub fn eee5_accumulate(acc_lo: u8, acc_hi: u8, weight: u8) -> (u8, u8, bool) {
+    let sum = u16::from(acc_lo) + u16::from(weight); // CLC/ADC
+    let lo = (sum & 0xFF) as u8;
+    let carried = sum > 0xFF;
+    if carried {
+        // INC $49 / BNE / DEC $49——$FF 不回 0（饱和）
+        (lo, acc_hi.saturating_add(1), true)
+    } else {
+        (lo, acc_hi, false)
+    }
+}
+
+/// pair 项逐项累加（`86EE LDA #8 / JSR $EEE5`——**pair 权重恒 8**；三组长/set10 不调）。
+pub fn pair_item_accumulate(acc_lo: u8, acc_hi: u8) -> (u8, u8, bool) {
+    eee5_accumulate(acc_lo, acc_hi, 8)
+}
+
+/// `$4B` 清算链（pair 项 → `$4B` 计数（`spawn_count_bump`）→ `$A325` 权重 → `$EEE5` 累加器）：
+/// `bank02:8663` 查权重灌入累加器后 `$4B:=0`。返回 (新 lo, 新 hi, 权重)。
+pub fn pair_settle(acc_lo: u8, acc_hi: u8, count_4b: u8) -> (u8, u8, u8) {
+    let weight = settle_weight(count_4b);
+    let (lo, hi, _) = eee5_accumulate(acc_lo, acc_hi, weight);
+    (lo, hi, weight)
+}
+
+/// 对象网格槽视图（28 槽系统，分配器判据三元组；槽 0..7 = HUD 保留区不扫描）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SlotView {
+    /// `$400+槽` 型/状态（0=空槽）。
+    pub type_: u8,
+    /// `$668+槽` 标志（回收判据 bit7）。
+    pub flags_668: u8,
+    /// `$41C+槽` 行为指针 hi（回收判据 ≠0）。
+    pub vec_41c: u8,
+}
+
+/// 槽域：对象网格 28 槽系统的可分配段 **8..=27**（0..7=HUD 保留，N-0120 分区）。
+pub const SLOT_RANGE: core::ops::RangeInclusive<u8> = 8..=0x1B;
+
+/// pair 项分配器（`$C304`，S4b-7）：**单遍顺序 first-fit**（Y=8→$1B），空槽判
+/// `$400+槽==0`，**零副作用**。失败 ⇒ None（SEC）。
+pub fn alloc_c304(slots: &[SlotView; 28]) -> Option<u8> {
+    for slot in SLOT_RANGE {
+        if slots[slot as usize].type_ == 0 {
+            return Some(slot);
+        }
+    }
+    None
+}
+
+/// ctrl/set10 分配器出参（`$C2C6` 三级回退，S4b-7）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AllocOutcome {
+    /// ①逆序空槽命中（零副作用）。
+    Empty { slot: u8 },
+    /// ②顺序重指派窗命中（type∈[$20,$28)）——命中走初始化（`$CBAF/$D10C`，调用方执行）。
+    Reassign { slot: u8 },
+    /// ③逆序回收候选命中（`$668 bit7=0 ∧ $41C≠0`）——同上初始化副作用。
+    Recycle { slot: u8 },
+    /// SEC 失败。
+    Full,
+}
+
+/// ctrl/set10 分配器（`$C2C6`，S4b-7）：**三级回退**——
+/// ①逆序 Y=$1B→8 空槽（零副作用）→ ②顺序 Y=8→$1B `type∈[$20,$28)` 重指派窗
+/// → ③逆序回收候选（`$668+槽 bit7=0 ∧ $41C+槽≠0`）→ SEC。
+/// ②/③ 命中附带槽初始化副作用（`JSR $CBAF/JSR $D10C`——本函数只出判定，初始化由调用方）。
+/// **保真面（D4）**：与 `alloc_c304` 槽序不同（顺序 vs 逆序首级）——同负载轨迹可分歧。
+pub fn alloc_c2c6(slots: &[SlotView; 28]) -> AllocOutcome {
+    // ① 逆序空槽
+    for slot in SLOT_RANGE.rev() {
+        if slots[slot as usize].type_ == 0 {
+            return AllocOutcome::Empty { slot };
+        }
+    }
+    // ② 顺序重指派窗 [$20,$28)
+    for slot in SLOT_RANGE {
+        if (0x20..0x28).contains(&slots[slot as usize].type_) {
+            return AllocOutcome::Reassign { slot };
+        }
+    }
+    // ③ 逆序回收候选
+    for slot in SLOT_RANGE.rev() {
+        let s = &slots[slot as usize];
+        if s.flags_668 & 0x80 == 0 && s.vec_41c != 0 {
+            return AllocOutcome::Recycle { slot };
+        }
+    }
+    AllocOutcome::Full
+}
