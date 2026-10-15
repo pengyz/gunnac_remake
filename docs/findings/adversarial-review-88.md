@@ -101,3 +101,50 @@ mutation 实测：
 ④表 256/256+6 锚 ✓、⑤真值表 ✓、②分派≠执行 ✓、①组合判哨兵 ✓ 全部成立；**实现零翻案点**。
 必修仅 **F-C88**（bit1=0 合成对 1 行级）——修后 `cargo test --test wave_record` 复绿 + M3 复咬即可改 pass。
 顺带核：#87 advisory 已清（shot.rs §1.4/§2.1 映射注释在案 ✓）；92c932f 双清（bit4 盲区补位+姿态口径命名）✓ 均验讫。
+
+---
+
+## 段 D：批次 4b（3564d5c）五靶复核（并入 #88，lead 照准）
+
+### D.1 ① spawn 三写字序（bank00:$8B89-$8B95 逐指令）——**成立** ✅
+
+```
+8B89  LDA #$19 / 8B8B STA $400,Y   ; type→$400+槽
+8B8E  LDA #$B0 / 8B90 STA $438,Y   ; ★$438=lo（$B0=低字节）
+8B93  LDA #$8D / 8B95 STA $41C,Y   ; ★$41C=hi（$8D=高字节）
+```
+
+实例 $8DB0：lo=$B0→$438、hi=$8D→$41C ✓✓ 与 `spawn_triple_write(beh_ptr)`（hi=>>8, lo=&0xFF）同构。
+**M4b1 交换 mutation → 3 测红**（golden+交换哨兵咬住）✓。
+
+### D.2 ② $2E beh 空不发明（登记面无填充）——**成立**（mutation 归因见 D.5 注）
+`TYPE_SIGNATURES` 表内**无 0x2E 项**（代码面直核 ✓）、`type_signatures(0x2E).is_empty()` 断言在案、
+附 `$66` 清单型值不命名断言 ✓——**登记面无填充、不发明** 成立。
+**M4b2 伪登记 mutation → 1 测红**（`$2E` 不发明断言咬住；初跑被并发 TDD-RED 先行断言遮蔽，port-engineer 实现上树转绿后**逆串还原法**复验归因干净：红→还原 5/5 绿）✓。
+
+### D.3 ③ HP 链饱和不回绕——**成立** ✅
+`take_damage`：`hp==0` 早退（已死不重复致死）+ `damage_apply`（内部 saturating_sub/min(0xFF)）
+⇒ 饱和不回绕；致死判定=`hp==0 且此前>0`（hit_shot/hit_body 返回）✓。
+**M4b3 回绕化 mutation → +1 测红**（致死判定咬住）✓。
+
+### D.4 ④ $630 首现=数−1 复验——**成立** ✅
+`leader_family_spawn` 委托 `wave::GroupRelease::load`（批次 2 已验的 count−1 语义），
+integration 断言 first_seen ✓；**M4b4 首现=数 mutation → +1 测红**（#84 M2 同款在集成面复咬）✓。
+
+### D.5 工作区并发登记 + mutation 归因方法
+复核窗口内 port-engineer 对 `tests/enemy_behavior.rs` 的 TDD 扩表（$07 三指针等，实现未跟上）
+使 `type_signature_registry` **基线红**（1 红，非我方所为）。M4b1/M4b3/M4b4 均按**红基线差分归因**
+（+3/+1/+1 净增红）；M4b2 初跑被遮蔽，port-engineer 实现上树转绿后以**逆串还原法**（不 git checkout，保他人未提交改动）复验：1 红→还原 5/5 绿，归因干净 ✓。
+我方突变全部 `git checkout` 还原（tests/enemy_behavior.rs 属他人在途，未动）。
+
+### D.6 4b 对拍（⑤）
+`cargo 168 / l2 121/121 / gates 12`——段 C.3 已实跑记账（157+6+5=168 平账）✓。
+（注：该 168 含 port-engineer 在途扩表前的 5 测；扩表落地后计数将再变，届时随其批次复核。）
+
+### D.7 4b Verdict：**pass**（附 1 项补验承诺）
+①③④ listing×mutation 双核成立、②登记面无填充成立（mutation 归因受并发遮蔽，逻辑断言在案）、
+⑤对拍平账。实现零翻案点，五 mutation 全咬（M4b1×3/M4b2×1/M4b3×1/M4b4×1）。
+
+## 总裁定（4a+4b 合并）
+**4a：needs_revision（限定）**——必修 F-C88（bit1=0 合成对 1 行级）；**4b：pass**（附 D.5 补验）。
+合并出口径：F-C88 修复落地后，#88 整体可改判 pass（4b 侧已全数收口）。
