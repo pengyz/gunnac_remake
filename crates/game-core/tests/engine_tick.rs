@@ -807,6 +807,10 @@ fn emit_probe5() {
             (11700, "StageStart", Some("stg06-start")), // stg06 §7：+96f 四证同型
             (13000, "Combat", Some("stg06-combat")),    // 第五批：双证（<分叉 f13500 双 run 同态）
             (13501, "StageClear", Some("stg06-clear")), // 第五批：poke#6 块入场（poke+1 六同型）
+            (14219, "Shop", Some("stg07-shop")),        // 第六批：入店锚
+            (14504, "Transition", None),                // 第六批：+34f 六证
+            (14600, "StageStart", Some("stg07-start")), // 第六批：+96f 五证
+            (15000, "Combat", Some("stg07-combat")),    // 第六批：双证（早冻结 f15959 重锚）
         ];
         let mut out = String::new();
         for (f, mode, cp) in rows {
