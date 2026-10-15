@@ -1,0 +1,51 @@
+# 场景：STG-02 敌波时间线取证（B2/stg02-timeline 证据源 run）
+# 战役文档：docs/findings/stg02-timeline.md（帧锚表 + 逐记录解码对账）
+#
+# 链来源 = gs5-stg01-clear-anchor 同源输入前缀（确定性复现已证：C1/C2 链帧一致，
+# gs5-6-dynamic-replay.md §2.3）：gameplay-stage1 前缀 → f2400 注入关末门
+# （trigger=injected，门位 $26 bit4）→ 关末链 → 商店 → 出店 → f3404 起 STG-02。
+# ★注入点在 STG-01 关末门；**STG-02 战斗段（f3404+）为引擎自然执行**，波次数据未触碰。
+# 与 gs5-stg01-clear-anchor 的差异仅：frames 延长 + watch 换全量 zp/iram（波次取证面）。
+name stg02-timeline
+frames 19000
+press_len 4
+
+# ===== 输入前缀（gameplay-stage1 / gs5-stg01-clear-anchor 同源；勿改）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+press_every 12 1250-2350 a
+hold 1300-1450 right
+hold 1470-1620 left
+hold 1650-1800 right
+hold 1830-1950 down
+hold 1980-2100 up
+hold 2130-2280 right
+press 1500 b
+
+# ===== 触发注入（G-S5-6；trigger=injected，$26 bit4）=====
+poke 2400 0026 10
+
+# ===== 商店出店导航（主菜单：1.武器 → 3×down → 4.退 + A）=====
+press 3250 down
+press 3290 down
+press 3330 down
+press 3370 a
+
+# ===== 采集面（波次取证：zp 调度器状态 + iram 对象槽全量）=====
+capture_every 300 probe
+capture 3404 stg02-start-intro
+capture 3450 stg02-start
+capture 3900 stg02-combat
+capture 5400 stg02-mid
+capture 7500 stg02-late
+
+watch_range 0000-00ff zp
+watch_range 0300-07ff iram
