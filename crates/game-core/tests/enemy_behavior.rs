@@ -147,3 +147,67 @@ fn enemy_behavior_negative_sentinels() {
     assert_eq!(t.type_code, 0x44);
     assert_eq!((t.beh_hi, t.beh_lo), (0x00, 0xDC), "$00DC ⇒ hi:00 lo:DC");
 }
+
+// ===== 批次4c：组员族运动机（enemy-motion-kinematics §2-3）=====
+
+/// ⑫ 运动机三表字节精确（bank05:$AC5F/$AC67/$AC6F）+ mod-8 步进 golden。
+#[test]
+fn motion_tables_byte_exact_and_step() {
+    use game_core::enemy::{motion_step, TRI_WAVE_518, TRI_WAVE_534, TRI_WAVE_684};
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM 可读");
+    for (addr, tbl, name) in [
+        (0xAC5Fusize, &TRI_WAVE_684[..], "684"),
+        (0xAC67, &TRI_WAVE_534[..], "534"),
+        (0xAC6F, &TRI_WAVE_518[..], "518"),
+    ] {
+        let off = 0x10 + 5 * 0x2000 + (addr & 0x1FFF);
+        assert_eq!(tbl, &rom[off..off + 8], "{name} 表 8B 字节精确");
+    }
+    // $684=对称三角波（B1 §3 复核 #76 F2 真值）
+    assert_eq!(TRI_WAVE_684, [0xD3, 0xD7, 0xDB, 0xDF, 0xE3, 0xDF, 0xDB, 0xD7]);
+    // 步进 golden：INC→mod8 索引三表写
+    let o = motion_step(0x00, 0x00);
+    assert_eq!(o.counter_next, 0x01);
+    assert_eq!((o.v684, o.v534, o.v518), (0xD7, 0x43, 0x24), "idx=1 三表");
+    // mod-8 回绕：counter=7→next=8→idx=0
+    let o = motion_step(0x07, 0x00);
+    assert_eq!(o.counter_next, 0x08);
+    assert_eq!(o.v684, 0xD3, "idx=8&7=0 回绕首项");
+    // counter 8-bit 回绕（INC 全字节）：next=0 ⇒ idx=0 ⇒ 首项
+    let o = motion_step(0xFF, 0x00);
+    assert_eq!(o.counter_next, 0x00);
+    assert_eq!(o.v684, 0xD3, "idx=0&7=0 ⇒ 表首项");
+}
+
+/// ⑬ 相位 EOR 只吃 bit0（$2B&1——全字节 EOR 必红）+ 字段复用两段生命周期。
+#[test]
+fn motion_phase_bit0_and_field_reuse() {
+    use game_core::enemy::motion_step;
+    // bit0 判据：$2B=0x02 与 $2B=0x00 同出参（全字节 EOR 必红）
+    for c in 0..8u8 {
+        assert_eq!(
+            motion_step(c, 0x00),
+            motion_step(c, 0x02),
+            "仅 bit0 入 EOR（counter={c}）"
+        );
+        assert_eq!(
+            motion_step(c, 0xFF),
+            motion_step(c, 0x01),
+            "高位全忽略"
+        );
+    }
+    // bit0=1 ⇒ $534 翻转（EOR 语义）
+    let a = motion_step(0x00, 0x00);
+    let b = motion_step(0x00, 0x01);
+    assert_eq!(b.v534, a.v534 ^ 0x01, "EOR 逐位：bit0 翻转");
+    // 字段复用（enemy-motion §3.2）：运动机重写 $518/$534——与四参链同字段两段生命周期
+    //（投放控制期=四参；运动期=速度分量）。断言=运动步出参占用这两字段名（接口面锁死）。
+    let o = motion_step(0x03, 0x00);
+    assert_ne!(o.v518, o.v534, "两字段独立进给");
+    // 型值迁移登记（Wt-5 时间线实证：$2B→$12→$4E 同槽三段）
+    assert_eq!(
+        TYPE_MIGRATION_SLOT09,
+        [(1479, 0x2B), (1595, 0x12), (1627, 0x4E)],
+        "迁移序 $2B→$12→$4E（A 级时间线）"
+    );
+}
