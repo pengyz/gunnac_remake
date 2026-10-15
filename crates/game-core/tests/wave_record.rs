@@ -292,3 +292,28 @@ fn far_call_double_gate() {
         );
     }
 }
+
+/// ⑩ restore_scroll_pair 合成哨兵（自查第 4 例盲区：全谱 17 CA 值 bit1 恒 0——
+/// true 路零覆盖，"丢 speed_restore 合取/丢 bit1 判据"皆不可咬）。
+#[test]
+fn restore_scroll_pair_synthetic_gate() {
+    // bit1 置 + 恢复段内（CA b7=0≠C9 b1=1 ⇒ speed_restore）⇒ 真
+    let j = ca_judgment(0xF2, 0x02, 0, 0, 0);
+    assert!(j.speed_restore && j.restore_scroll_pair, "bit1 置且段内 ⇒ 恢复滚动对");
+    // bit1 置但**段外**（CA b7=1==C9 b1=1 ⇒ 无恢复段）⇒ **假**——"仅恢复段内有效"门
+    let j = ca_judgment(0xF2, 0x82, 0, 0, 0);
+    assert!(!j.speed_restore && !j.restore_scroll_pair, "段外 bit1 置也不恢复（丢合取必红）");
+    // bit1 清段内 ⇒ 假（丢 bit1 判据必红）
+    let j = ca_judgment(0xF2, 0x70, 0, 0, 0);
+    assert!(j.speed_restore && !j.restore_scroll_pair, "段内但 bit1 清 ⇒ 不恢复");
+    // XOR 双向对称：C9 b1=0 时 CA b7=0 相等 ⇒ 段外
+    let j = ca_judgment(0xF0, 0x02, 0, 0, 0);
+    assert!(!j.speed_restore, "b7==b1 相等 ⇒ 不恢复（XOR 双向）");
+    assert!(!j.restore_scroll_pair, "段外不恢复滚动对");
+    // C9 b1=0 + CA b7=1：不等 ⇒ 段内；bit1 清 ⇒ 滚动对仍假（仅恢复主体 $80/$81/$7F）
+    let j = ca_judgment(0xF0, 0x80, 0, 0, 0);
+    assert!(
+        j.speed_restore && !j.restore_scroll_pair,
+        "段内 bit1 清 ⇒ 只走主体恢复不带滚动对"
+    );
+}
