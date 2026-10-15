@@ -741,6 +741,36 @@ fn emit_probe5() {
             st.checkpoint = None;
         }
         std::fs::write("../../analysis/traces/gameplay-stage1.probe5.jsonl", &rows).expect("写 gameplay probe5");
+    }
+    // respawn-window 场景（trace 实帧锚 1260/1350/1400——respawn probe 面 3 行）
+    {
+        use game_core::engine::{flow_timeline_step, FLOW_TIMELINE_RESPAWN};
+        let mut st = StageState {
+            script: ScriptCursor::stg01(),
+            scene: "respawn-window".to_string(),
+            ..Default::default()
+        };
+        let mut rows = String::new();
+        for f in 0..0x0700u32 {
+            st.wave.tick = f as u16;
+            st.frame = f;
+            let mut fx = StageEffects::default();
+            let mut cur = core::mem::take(&mut st.script);
+            cur.step_to(f, &mut st, &mut fx);
+            register_wave_flags(&mut cur);
+            cur.process_waves(&mut st, &mut fx);
+            st.script = cur;
+            flow_timeline_step(&mut st, f, FLOW_TIMELINE_RESPAWN);
+            let p = stage_probe(&st);
+            rows.push_str(&format!(
+                "{{\"scene\": \"respawn-window\", \"f\": {}, \"tick\": {}, \"scroll\": {}, \"flags_26\": {}, \"waves\": {}, \"script_recs\": {}, \"sched_recs\": {}, \"slot_types\": {:?}, \"live_shots\": {}, \"mode\": \"{}\", \"checkpoint\": {}}}\n",
+                p.f, p.tick, p.scroll, p.flags_26, p.waves, p.script_recs, p.sched_recs,
+                p.slot_types, p.live_shots, p.mode,
+                match &p.checkpoint { Some(c) => format!("\"{}\"", c), None => "null".to_string() },
+            ));
+            st.checkpoint = None;
+        }
+        std::fs::write("../../analysis/traces/respawn-window.probe5.jsonl", &rows).expect("写 respawn probe5");
         let _ = WAVE_FLAGS; // 17 流登记面（对拍参考）
     }
 }
