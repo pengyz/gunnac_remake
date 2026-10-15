@@ -10,6 +10,10 @@ python3 tools/diff_subroutines.py        # subroutine-diff 门禁入口（薄封
 cargo test -p game-oracle --test l2_cases  # 同一差分引擎（rust-tests 门禁内）
 ```
 
+> **ROM 绑定（硬）**：JP 集必须配 `--rom reference/jp/gunnac_jp.nes` + `l2_cases_jp.jsonl`；
+> CN 集跑 JP ROM（或反之）= **26 条 entry 地址偏移假红**（95/121，例：`bcd_sub_ammo` JP=$ED0D +0x0A）。
+> 双版各自 121/121 才是绿；勿把跨版误配的红读作回退。
+
 ## case 格式（JSONL，一行一条）
 
 ```json
