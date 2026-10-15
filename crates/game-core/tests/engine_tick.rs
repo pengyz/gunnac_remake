@@ -335,3 +335,60 @@ fn combat_frame_hit_chain() {
     assert_eq!(st3.grid.slots[si].f630, 14, "属性不交零伤（团队过滤）");
     assert_eq!(st3.bullets.state[0x80], 1, "未命中弹不回收");
 }
+
+// ===== 子面⑦：关末门判据（STG-01 自然跑完成判据）=====
+
+use game_core::engine::{register_wave_flags, ScriptCursor};
+
+/// ⑬ STG-01 自然跑：滚动推进至 op5 装载 tick ⇒ $A3E4 CA bit0 臂 $26 bit4 关末门。
+#[test]
+fn stg01_natural_run_to_stage_gate() {
+    let mut st = StageState {
+        script: ScriptCursor::stg01(),
+        ..Default::default()
+    };
+    let mut fx = StageEffects::default();
+    // 逐 tick 驱动（精确相等匹配）：t=0..=$330 ⇒ rec9 装 $A3CD（CA=$00 不臂门）
+    for t in 0..=0x0330u32 {
+        let mut cur = core::mem::take(&mut st.script);
+        cur.step_to(t, &mut st, &mut fx);
+        register_wave_flags(&mut cur);
+        cur.process_waves(&mut st, &mut fx);
+        st.script = cur;
+    }
+    assert_eq!(st.script.waves.len(), 1, "流 $A3CD 装载（tick $0330）");
+    assert_eq!(st.wave.flags_26 & 0x10, 0, "CA=$00 不臂门");
+    // t=$331..=$4D0 ⇒ rec11 装 $A3E4（CA=$05 bit0）⇒ 臂门
+    for t in 0x0331..=0x04D0u32 {
+        let mut cur = core::mem::take(&mut st.script);
+        cur.step_to(t, &mut st, &mut fx);
+        register_wave_flags(&mut cur);
+        cur.process_waves(&mut st, &mut fx);
+        st.script = cur;
+    }
+    assert_eq!(st.script.waves.len(), 2, "流 $A3E4 装载（tick $04D0）");
+    assert_ne!(st.wave.flags_26 & 0x10, 0, "**$26 bit4 关末门臂——完成判据达成**");
+    // far-call 双门：C9=$FB bit0 + $26 bit3=0 ⇒ 请求
+    assert!(!fx.far_call_requests.is_empty(), "far-call 请求登记");
+    // stage_tick 主循环消费关末门
+    let fx2 = stage_tick(&mut st, &TickInputs::default());
+    assert!(fx2.stage_clear_requested, "flow 侧消费 $26 bit4");
+    // 幂等：重复处理不重臂
+    let mut cur = core::mem::take(&mut st.script);
+    assert_eq!(cur.process_waves(&mut st, &mut fx), 0);
+    st.script = cur;
+}
+
+/// ⑭ 全链驱动面（stage_tick 挂接）：滚动驱动 tick→脚本 thr→op5→臂门。
+#[test]
+fn stage_tick_drives_script_to_gate() {
+    let mut st = StageState {
+        script: ScriptCursor::stg01(),
+        ..Default::default()
+    };
+    // 一次大滚动跨过 $04D0（tick=0x04D0 ⇒ scroll=0x04D0×16）
+    let fx = stage_tick(&mut st, &TickInputs { scroll_delta: 0x04D0 * 16 });
+    assert_eq!(st.wave.tick, 0x04D0);
+    assert_ne!(st.wave.flags_26 & 0x10, 0, "stage_tick 全链臂门");
+    assert!(fx.stage_clear_requested);
+}
