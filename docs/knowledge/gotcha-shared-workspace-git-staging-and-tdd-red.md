@@ -24,6 +24,9 @@ RED 态测试文件（编译不过）落在共享工作树 ⇒ cargo test 全仓
 （实例：port-engineer enemy_behavior 半成品被 mutation 归零覆盖）。**预防**：WIP 即做即 commit
 （同回合 RED→GREEN→commit）；mutation 还原只还原自己本回合改动的文件（还原前 diff 确认属主）。
 
+## 坑 1 补充：replace 静默未中根治配方（2026-10-15 第 3-6 次实例）
+同一 replace 连续 3 次静默未中（全角冒号/反引号截串/漏 \$）后根治：**①hexdump 直读目标行真字节**（不猜字符形态）②断言式替换（`assert s.count(old)==1`）③改后 grep 复验。链条：猜形态→未中→grep 0→断言拦→hexdump→真形态→断言过→grep 1。教训：中文全角标点（：efbc9a）/反引号/转义是最常见三坑。
+
 ## 关联
 - 修复验证：git diff 复核+暂存纯度表列；门禁恢复后重提
 - 参考：adversarial-review 系列"声称已修原地未动"教训同族（改动面必须机器核对）
