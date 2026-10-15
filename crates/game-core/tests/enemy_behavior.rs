@@ -58,8 +58,19 @@ fn type_signature_registry() {
     for sig in TYPE_SIGNATURES {
         assert_ne!(sig.beh_ptr, 0x0000, "$0000 装载暂态禁入签名表");
     }
-    // $2E 组长族：行为指针未观测 ⇒ 空（不发明必红）
-    assert!(type_signatures(0x2E).is_empty(), "$2E beh 未观测不发明");
+    // $2E 组长族：【2026-10-15 补】$89E4@(128,8) 五点实测（stg02 §4.4 帧锚 run 补证）
+    // ——原"未观测不发明"缺口收口，dated 注留痕
+    let s = type_signatures(0x2E);
+    assert_eq!(s.len(), 1, "$2E 登记观测对（原空缺口已由 run 补上）");
+    assert_eq!((s[0].beh_ptr, s[0].spawn), (0x89E4, Some((128, 8))));
+    // run 新增自向量对（hi bit7=1）
+    assert!(type_signatures(0x58).iter().any(|x| x.beh_ptr == 0xB3B9));
+    assert!(type_signatures(0x51).iter().any(|x| x.beh_ptr == 0xB04C));
+    assert!(type_signatures(0x05).iter().any(|x| x.beh_ptr == 0xAE6B));
+    // 自向量指针判别面：登记对 hi bit7=1（表分发模式值非指针——语义挂账注见敌型登记头）
+    for sig in TYPE_SIGNATURES {
+        assert_ne!(sig.beh_ptr, 0x0000);
+    }
     // 未登记型值 ⇒ 空
     assert!(type_signatures(0x66).is_empty(), "清单型值 $66 不命名不发明");
 }
