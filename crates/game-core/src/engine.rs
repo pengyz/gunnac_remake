@@ -43,6 +43,12 @@ pub struct StageState {
     pub wave: WaveTickState,
     /// 调度流游标（STG-01 数据装载面——`SchedCursor::load` 装入）。
     pub sched: SchedCursor,
+    /// 对象网格（spawn 写链落地面）。
+    pub grid: ObjectGrid,
+    /// RNG 状态（$EC12 LFSR）。
+    pub rng: RngState,
+    /// zp `$54`（调用环分组判据输入——运行期来源 S4b 挂账，字段不发明）。
+    pub zp_54: u8,
 }
 
 /// 帧输入（无 I/O 数据面）。
@@ -90,8 +96,71 @@ pub fn wave_tick(state: &mut StageState, scroll_delta: u16, fx: &mut StageEffect
     state.sched.step_to(u32::from(state.wave.tick), fx);
 }
 
-/// 帧域行为步（行为 VM 分发调用环+运动机+滴灌 handler——子面接续；未证 fail-closed）。
-pub fn behavior_frame(_state: &mut StageState, _fx: &mut StageEffects) {}
+/// 帧域行为步（子面④）：调用环双序逐槽分发（`$82F8` 双模式）+ `$89DF` 滴灌 handler。
+/// 已证 handler 执行（`run_handler`）；未分析 ⇒ fail-closed 空转+挂账。
+pub fn behavior_frame(state: &mut StageState, fx: &mut StageEffects) {
+    let group = state.zp_54 & state.rng.z2b & 0x02 != 0;
+    let order: Vec<u8> = call_loop_round1()
+        .into_iter()
+        .chain(call_loop_slots(group))
+        .collect();
+    for idx in order {
+        let type_ = state.grid.slots[idx as usize].type_;
+        if type_ == 0 {
+            continue;
+        }
+        let beh_hi = state.grid.slots[idx as usize].beh_hi;
+        match dispatch_mode(beh_hi) {
+            DispatchMode::SelfVector => {
+                let target = u16::from(beh_hi) << 8 | u16::from(state.grid.slots[idx as usize].beh_lo);
+                let r = run_handler(&mut state.grid.slots[idx as usize], target, &mut state.rng);
+                if r == HandlerResult::Recycle {
+                    state.grid.slots[idx as usize] = ObjectSlot::default();
+                }
+            }
+            DispatchMode::TableDispatch => {
+                // 表分发（$80CE/$7FFF[Y]，Y=type）——表查接线未落 ⇒ fail-closed 空转
+            }
+        }
+    }
+    drip_step(state, fx);
+}
+
+/// `$89DF` 滴灌 handler（四参消费端）：组长槽（beh=$89DF/$89E4）按 `$534` 帧间隔
+/// 逐员落地（首员=装载帧同帧）；`$630` 剩余数递减（首现=数−1 口径在 land_leader）。
+pub fn drip_step(state: &mut StageState, _fx: &mut StageEffects) {
+    for i in 8..28usize {
+        let s = state.grid.slots[i];
+        if s.type_ == 0 {
+            continue;
+        }
+        let is_leader = (s.beh_hi, s.beh_lo) == (0x89, 0xDF) || (s.beh_hi, s.beh_lo) == (0x89, 0xE4);
+        if !is_leader {
+            continue;
+        }
+        let (member_type, member_param, interval) =
+            (state.grid.slots[i].f518, state.grid.slots[i].f470, state.grid.slots[i].f534);
+        // 首员（load 发射：同帧落地、**不递减 $630**——GroupRelease::load 语义）
+        if state.grid.slots[i].first_pending {
+            if land_pair(&mut state.grid, member_type, member_param).is_some() {
+                state.grid.slots[i].first_pending = false;
+                state.grid.slots[i].drip_cd = interval;
+            }
+            continue;
+        }
+        // 滴灌倒数=GroupRelease::tick_frame 语义（**递减归零帧发射**）
+        if state.grid.slots[i].drip_cd > 0 {
+            state.grid.slots[i].drip_cd -= 1;
+            if state.grid.slots[i].drip_cd == 0
+                && state.grid.slots[i].f630 > 0
+                && land_pair(&mut state.grid, member_type, member_param).is_some()
+            {
+                state.grid.slots[i].f630 -= 1;
+                state.grid.slots[i].drip_cd = interval;
+            }
+        }
+    }
+}
 
 /// 帧域战斗步（弹网格 SoA+命中框 7×10+伤害公式——批次3 面接入点）。
 pub fn combat_frame(_state: &mut StageState, _fx: &mut StageEffects) {}
@@ -189,6 +258,14 @@ pub struct ObjectSlot {
     pub beh_lo: u8,
     /// `$48C+槽` 码流附加参（ctrl2/12/set10）。
     pub f48c: u8,
+    /// `$04E0+槽` x 坐标。
+    pub x: u8,
+    /// `$04FC+槽` y 坐标。
+    pub y: u8,
+    /// 组员滴灌倒数（帧域——`$89DF` 滴灌 handler 状态面）。
+    pub drip_cd: u8,
+    /// 首员待发（`GroupRelease::load` 发射语义：装载即发、不递减 `$630`）。
+    pub first_pending: bool,
 }
 
 /// 对象网格（28 槽，槽 0..7 与 8..27 分区——分配域 8..=27）。
@@ -247,7 +324,9 @@ pub fn land_leader(
         AllocOutcome::Empty { slot } | AllocOutcome::Reassign { slot } | AllocOutcome::Recycle { slot } => slot,
         AllocOutcome::Full => return None,
     };
-    let [f518, f630, f534, f470] = args;
+    let [f518, f630_raw, f534, f470] = args;
+    // `$630` 首现=数−1（**装载后先递减一次**——B1 §3 trace 三签名口径）
+    let f630 = f630_raw.saturating_sub(1);
     let sig = type_signatures(type_)
         .into_iter()
         .find_map(|s| match s.beh {
@@ -261,6 +340,7 @@ pub fn land_leader(
     s.f534 = f534;
     s.f470 = f470;
     s.f48c = code_stream.unwrap_or(0);
+    s.first_pending = true; // 首员=装载帧同帧（load 发射，不递减 $630）
     let beh_registered = match sig {
         Some(p) => {
             s.beh_hi = (p >> 8) as u8;
@@ -270,4 +350,89 @@ pub fn land_leader(
         None => false,
     };
     Some(LandResult { slot, beh_registered })
+}
+
+// ===== 子面④：behavior_frame 行为 VM 调用环（合流裁定逐段跑通）=====
+
+use crate::enemy::{
+    call_loop_round1, call_loop_slots, chain_rewrite, dispatch_mode, handler_const_descent,
+    handler_duration_tick, rng_jitter_offsets, DispatchMode,
+};
+
+/// RNG 状态（`$2C/$2D/$2B` zp——`$EC12` LFSR 字面体）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RngState {
+    /// `$2C`。
+    pub z2c: u8,
+    /// `$2D`（INC 自增）。
+    pub z2d: u8,
+    /// `$2B`（EOR 源/相位位）。
+    pub z2b: u8,
+}
+
+/// `$EC12` RNG 体（字面逐指令：`LDA $2C/ADC $2D/ADC #$01/EOR $2B/STA $2C/INC $2D`）。
+/// 返回 (A=新 RNG 字节, carry=两 ADC 进位链出口——**状态依赖**，jitter x 侧用）。
+pub fn rng_ec12(st: &mut RngState) -> (u8, bool) {
+    let (s1, c1) = st.z2c.overflowing_add(st.z2d);
+    let (s2, c2) = s1.overflowing_add(1);
+    let carry = c1 | c2;
+    let a = s2 ^ st.z2b;
+    st.z2c = a;
+    st.z2d = st.z2d.wrapping_add(1);
+    (a, carry)
+}
+
+/// 行为 handler 执行结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HandlerResult {
+    /// 续行（字段已更新）。
+    Continue,
+    /// `$D10C` 终止（槽回收）。
+    Recycle,
+    /// 未分析 handler（fail-closed：字段不动+挂账）。
+    Unproven,
+}
+
+/// 已证 handler 执行（自向量目标→字面语义；其余 fail-closed）。
+/// `target`=自向量地址；`rng` 供 jitter；`zp_2b` 供相位翻转。
+pub fn run_handler(
+    slot: &mut ObjectSlot,
+    target: u16,
+    rng: &mut RngState,
+) -> HandlerResult {
+    match target {
+        0x836E => {
+            // 恒速下沉（y+1/溢出终止）→尾 $83DE 参数化（$CD9D 内核未证 ⇒ 链停在此）
+            match handler_const_descent(slot.y) {
+                Some(y) => {
+                    slot.y = y;
+                    HandlerResult::Continue
+                }
+                None => HandlerResult::Recycle,
+            }
+        }
+        0x8314 => {
+            // duration 倒数（$438=倒数——表模式字段复用三义面）
+            match handler_duration_tick(slot.beh_lo) {
+                Some(d) => {
+                    slot.beh_lo = d;
+                    HandlerResult::Continue
+                }
+                None => HandlerResult::Recycle,
+            }
+        }
+        0x8334 | 0x837E | 0x8403 => HandlerResult::Recycle, // 终止直通
+        0x8337 => {
+            // RNG jitter + 续链改写 → $836E
+            let (a, carry) = rng_ec12(rng);
+            let (dx, dy) = rng_jitter_offsets(a, carry);
+            slot.x = slot.x.wrapping_add(dx as u8);
+            slot.y = slot.y.wrapping_add(dy as u8);
+            let (lo, hi) = chain_rewrite(0x836E);
+            slot.beh_lo = lo;
+            slot.beh_hi = hi;
+            HandlerResult::Continue
+        }
+        _ => HandlerResult::Unproven, // 未分析 handler（$9120 族等）fail-closed
+    }
 }
