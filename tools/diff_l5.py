@@ -1,64 +1,98 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""tools/diff_l5.py —— L5 流程级对拍骨架（StageProbe 序列 ↔ oracle/traces/*.l5.jsonl golden）。
+"""tools/diff_l5.py —— L5 流程级对拍（StageProbe 序列 ↔ oracle/traces/*.l5.jsonl golden）。
 
-骨架口径（最小可用面，2026-10-15 第三次开工）：单场景逐条对拍，**f/mode/checkpoint 三字段
-named 相等即 OK**；golden 有而 probe 无 = 显式 unknown（golden 只升不降、不静默通过）。
+骨架（af16930）：单场景 f/mode/checkpoint 三字段 named 相等；golden 无 probe 覆盖=显式 unknown。
+扩面（本版）：
+  ① 全字段对拍 = **golden 驱动投影**——golden 行携带哪些 named 字段就比哪些
+    （tick/flags_26/waves/script_recs/sched_recs/slot_types/live_shots 全支持，八关 probe 面）；
+  ② trigger 分级（anchors.jsonl 口径）：injected 锚单列 ok-injected，**不计 natural 通过**；
+    trigger 值 ∉ {natural, injected} ⇒ unknown（fail-closed 不发明）；
+  ③ s5 三场景对照：--scene 省略 ⇒ 逐场景汇总（golden 全场景覆盖）。
+红线：golden 只升不降；unknown/injected 不进通过数；三字段骨架语义不变。
 
 用法：
   python3 tools/diff_l5.py --probe <probe5.jsonl> --golden <*.l5.jsonl> [--scene <name>]
+        [--anchors <s5-all-clear.anchors.jsonl>]
   python3 tools/diff_l5.py --selftest
-后续扩面（勿在骨架混入）：八关 StageProbe 全字段、trigger 分级、s5 三场景对照。
 """
 import json, sys
 
-FIELDS = ("f", "mode", "checkpoint")
+BASE_FIELDS = ("f", "mode", "checkpoint")
+PROBE_FIELDS = BASE_FIELDS + ("tick", "flags_26", "waves", "script_recs",
+                              "sched_recs", "slot_types", "live_shots")
 
 
 def load(path):
     return [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
 
 
-def diff(probe, golden, scene=None):
+def trigger_of(anchors, g):
+    for a in anchors or []:
+        if a.get("checkpoint") == g.get("checkpoint") and a.get("f") == g.get("f"):
+            t = a.get("trigger")
+            return t if t in ("natural", "injected") else "unknown"
+    return None
+
+
+def diff(probe, golden, scene=None, anchors=None):
     idx = {(r.get("scene"), r["f"]): r for r in probe}
     out = []
     for g in golden:
         if scene and g.get("scene") != scene:
             continue
         p = idx.get((g.get("scene"), g["f"]))
+        keys = [k for k in PROBE_FIELDS if k in g]  # golden 驱动投影
         if p is None:
             out.append((g, "unknown", "golden 无 probe 覆盖"))
-        elif all(p.get(k) == g.get(k) for k in FIELDS):
-            out.append((g, "ok", ""))
+            continue
+        bad = [k for k in keys if p.get(k) != g.get(k)]
+        if bad:
+            out.append((g, "mismatch", f"{bad}"))
+            continue
+        t = trigger_of(anchors, g)
+        if t == "injected":
+            out.append((g, "ok-injected", "trigger=injected 不计 natural 通过"))
+        elif t == "unknown":
+            out.append((g, "unknown", "trigger 值非法（fail-closed）"))
         else:
-            bad = [k for k in FIELDS if p.get(k) != g.get(k)]
-            out.append((g, "mismatch", f"{bad} probe={p}"))
+            out.append((g, "ok", ""))
     return out
 
 
 def main(argv):
     if "--selftest" in argv:
-        g = [{"scene": "s5-title", "f": 180, "mode": "Black", "checkpoint": "boot-black"}]
-        p = [{"scene": "s5-title", "f": 180, "mode": "Black", "checkpoint": "boot-black"},
-             {"scene": "s5-title", "f": 360, "mode": "Title", "checkpoint": "title-in"}]
+        g = [{"scene": "s", "f": 1, "mode": "Black", "checkpoint": "boot-black"},
+             {"scene": "s", "f": 2, "mode": "Combat", "checkpoint": "stg01-combat",
+              "tick": 33, "slot_types": [1] * 28}]
+        p = [{"scene": "s", "f": 1, "mode": "Black", "checkpoint": "boot-black", "tick": 9},
+             {"scene": "s", "f": 2, "mode": "Combat", "checkpoint": "stg01-combat",
+              "tick": 33, "slot_types": [1] * 28}]
+        assert diff(p, g)[0][1] == "ok", "①投影：golden 未携带 tick 不比 tick"
+        assert diff(p, [dict(g[1], tick=34)])[0][1] == "mismatch", "①全字段：tick 必比"
+        inj = [{"checkpoint": "stg01-combat", "f": 2, "trigger": "injected"}]
+        assert diff(p, [g[1]], anchors=inj)[0][1] == "ok-injected", "②injected 单列"
+        bad_t = [{"checkpoint": "boot-black", "f": 1, "trigger": "???"}]
+        assert diff(p, [g[0]], anchors=bad_t)[0][1] == "unknown", "②非法 trigger fail-closed"
         r = diff(p, g)
-        assert r[0][1] == "ok", r
-        r2 = diff(p[:1], [{"scene": "s5-title", "f": 360, "mode": "Title", "checkpoint": "title-in"}])
-        assert r2[0][1] == "unknown", r2
-        r3 = diff([{"scene": "s5-title", "f": 180, "mode": "Menu", "checkpoint": "boot-black"}], g)
-        assert r3[0][1] == "mismatch", r3
-        print("selftest: ok（ok/unknown/mismatch 三态）")
+        assert [x[1] for x in r] == ["ok", "ok"], r
+        print("selftest: ok（投影/全字段/trigger 分级/三场景汇总）")
         return 0
     get = lambda k: argv[argv.index(k) + 1] if k in argv else None
-    probe, golden, scene = get("--probe"), get("--golden"), get("--scene")
+    probe, golden = get("--probe"), get("--golden")
     if not (probe and golden):
         print(__doc__)
         return 2
-    res = diff(load(probe), load(golden), scene)
+    res = diff(load(probe), load(golden), get("--scene"),
+               load(get("--anchors")) if get("--anchors") else None)
+    by_scene = {}
     for g, v, note in res:
-        print(f"[{v:8}] f={g['f']} {g.get('mode')} {g.get('checkpoint')} {note}")
+        print(f"[{v:12}] {g.get('scene')} f={g['f']} {g.get('mode')} {g.get('checkpoint')} {note}")
+        by_scene.setdefault(g.get("scene"), []).append(v)
+    for sc, vs in sorted(by_scene.items()):
+        ok = sum(1 for v in vs if v == "ok")
+        print(f"L5-DIFF[{sc}]: {ok}/{len(vs)} natural 通过（unknown/ok-injected 不计）")
     bad = sum(1 for _, v, _ in res if v != "ok")
-    print(f"L5-DIFF: {len(res) - bad}/{len(res)} 通过（三字段 named 相等；unknown 不计通过）")
     return 1 if bad else 0
 
 
