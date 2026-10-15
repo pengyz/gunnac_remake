@@ -797,3 +797,22 @@ pub const STG05_SCRIPT: [(u16, u8, Option<u16>, Option<u16>); 14] = [
     (0xFFFF, 0, None, None),
     (0x3C2C, 7, None, Some(0x1C0F)),
 ];
+
+/// STG-06 脚本 15 记录（`wave_timeline.py script 6` golden——thr=记录尾字段）。
+pub const STG06_SCRIPT: [(u16, u8, Option<u16>, Option<u16>); 15] = [
+    (0x0000, 1, None, None),
+    (0x0000, 0, None, None),
+    (0x0000, 4, None, None),
+    (0x0000, 2, None, None),
+    (0x0020, 9, None, None),
+    (0x0030, 0, None, None),
+    (0x0080, 0, None, None),
+    (0x0110, 0, None, None),
+    (0x0120, 9, None, None),
+    (0x02D8, 0, None, None),
+    (0x02D8, 9, None, None),
+    (0x0412, 5, Some(0xA5D9), None),
+    (0x0420, 5, Some(0xA5F0), None),
+    (0xFFFF, 0, None, None),
+    (0x2717, 7, None, Some(0x070F)),
+];
