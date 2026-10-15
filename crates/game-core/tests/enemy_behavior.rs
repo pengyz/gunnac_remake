@@ -598,3 +598,36 @@ fn phase_chain_assertion_face() {
     assert_eq!(inner, vec![0x14, 0x15, 0x17], "$84D1 相位机=内态族");
     assert!(DRIVER_ASSIGNMENTS.iter().any(|d| d.type_code == 0x2B && d.driver.contains("9120")));
 }
+
+/// ㉔ 运动更新真身（099c510 ①：亚像素对积分+出屏门）。
+#[test]
+fn motion_update_subpixel_integration() {
+    use game_core::engine::{motion_update, phase_counter_bump, MotionOutcome, ObjectSlot};
+    // y 线性（vy=$00:$90 恒定 → y+=1、亚像素+=0x90/帧）
+    let mut s = ObjectSlot { y: 0x40, f588: 0x90, f5a4: 0x00, ..Default::default() };
+    let r = motion_update(&mut s);
+    assert_eq!(s.f48c, 0x90, "亚像素累加");
+    assert_eq!(s.y, 0x40, "未进位 y 不动");
+    assert!(matches!(r, MotionOutcome::Continue { .. }));
+    for _ in 0..2 {
+        motion_update(&mut s);
+    }
+    assert_eq!(s.y, 0x41, "0x90×3=0x1B0 ⇒ y+1 亚像素 0xB0（mod256 回绕）");
+    assert_eq!(s.f48c, 0xB0);
+    // x 对称（vx_lo/vx_hi）
+    let mut s = ObjectSlot { x: 0x20, f470: 0xFF, f550: 0x01, f56c: 0x00, ..Default::default() };
+    let r = motion_update(&mut s);
+    assert_eq!(s.f470, 0x00, "亚像素回绕");
+    assert_eq!(s.x, 0x21, "亚像素进位入坐标");
+    assert_eq!(r, MotionOutcome::Continue { subpixel_carry_x: true, subpixel_carry_y: false });
+    // 出屏：y≥$F0
+    let mut s = ObjectSlot { y: 0xEF, f588: 0x00, f5a4: 0x01, ..Default::default() };
+    assert_eq!(motion_update(&mut s), MotionOutcome::Offscreen, "y≥$F0 出屏");
+    // 出屏：坐标溢出
+    let mut s = ObjectSlot { y: 0xFF, f588: 0x00, f5a4: 0x01, ..Default::default() };
+    assert_eq!(motion_update(&mut s), MotionOutcome::Offscreen, "坐标溢出出屏");
+    // $5C0→$5DC 连接件
+    let mut s = ObjectSlot { f5dc: 5, ..Default::default() };
+    phase_counter_bump(&mut s);
+    assert_eq!(s.f5dc, 6);
+}

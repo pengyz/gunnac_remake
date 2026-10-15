@@ -379,8 +379,10 @@ pub struct ObjectSlot {
     pub f5a4: u8,
     /// `$550+槽` 速度四元组一员。
     pub f550: u8,
-    /// `$56C+槽` 速度四元组一员。
+    /// `$56C+槽` 速度四元组一员（x 速度 hi）。
     pub f56c: u8,
+    /// `$588+槽` 速度四元组一员（y 速度 lo）。
+    pub f588: u8,
     /// `$5C0+槽` 倒计时簇（$90AB 清态面）。
     pub f5c0: u8,
     /// `$04C4+槽` 属性掩码（命中框注册 `& $F0`——团队过滤面）。
@@ -917,4 +919,46 @@ pub fn stage_probe(state: &StageState) -> StageProbe {
         slot_types: core::array::from_fn(|i| state.grid.slots[i].type_),
         live_shots,
     }
+}
+
+/// 运动更新（bank14:$CCD3/$CD08 亚像素对，099c510 ①定谳）：
+/// y：`$048C+=vy_lo($588)` → `$04FC+=vy_hi($5A4)+carry`；x 同构（`$0470/$04E0`
+/// ← `$550/$56C`）；亚像素 mod256 回绕（trace 实证）。出屏（坐标溢出或 y≥`$F0`）
+/// ⇒ `Offscreen`——`$534` bit4 门二择（SEC-only/`$D10C` 回收）**极性待证 W-GATE**，
+/// 回收决定留给调用方。`$5C0` 亚像素溢出→`INC $5DC`（相位计数增量源——连接件
+/// 接线在 `MotionOutcome` 进位位）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MotionOutcome {
+    /// 续行（含亚像素进位位——$5C0/$5DC 连接件接线面）。
+    Continue { subpixel_carry_x: bool, subpixel_carry_y: bool },
+    /// 出屏（坐标溢出或 y≥$F0）——$534 bit4 门二择（W-GATE 极性待证）。
+    Offscreen,
+}
+
+/// 运动步（$0470/$048C 亚像素、$04E0/$04FC 坐标、$550/$56C/$588/$5A4 速度对）。
+pub fn motion_update(slot: &mut ObjectSlot) -> MotionOutcome {
+    // x：sub += vx_lo → coord += vx_hi + carry
+    let (xsub, cx) = slot.f470.overflowing_add(slot.f550);
+    slot.f470 = xsub;
+    let (x1, cxa) = slot.x.overflowing_add(slot.f56c);
+    let (x2, cxb) = x1.overflowing_add(u8::from(cx));
+    slot.x = x2;
+    // y：sub += vy_lo → coord += vy_hi + carry
+    let (ysub, cy) = slot.f48c.overflowing_add(slot.f588);
+    slot.f48c = ysub;
+    let (y1, cya) = slot.y.overflowing_add(slot.f5a4);
+    let (y2, cyb) = y1.overflowing_add(u8::from(cy));
+    slot.y = y2;
+    if cxa || cxb || cya || cyb || slot.y >= 0xF0 {
+        return MotionOutcome::Offscreen;
+    }
+    MotionOutcome::Continue {
+        subpixel_carry_x: cx,
+        subpixel_carry_y: cy,
+    }
+}
+
+/// `$5C0` 亚像素溢出→`INC $5DC`（相位计数增量源，099c510 ②连接件）。
+pub fn phase_counter_bump(slot: &mut ObjectSlot) {
+    slot.f5dc = slot.f5dc.wrapping_add(1);
 }
