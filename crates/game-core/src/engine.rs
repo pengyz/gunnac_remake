@@ -49,6 +49,10 @@ pub struct StageState {
     pub rng: RngState,
     /// zp `$54`（调用环分组判据输入——运行期来源 S4b 挂账，字段不发明）。
     pub zp_54: u8,
+    /// 弹网格 SoA（批次3 六数组面——自机/敌弹共用）。
+    pub bullets: crate::shot::BulletGrid,
+    /// 框形流数据（地址→流字节——game-core 纯态由装载侧喂入）。
+    pub shape_data: Vec<(u16, Vec<u8>)>,
 }
 
 /// 帧输入（无 I/O 数据面）。
@@ -168,8 +172,83 @@ pub fn drip_step(state: &mut StageState, _fx: &mut StageEffects) {
     }
 }
 
-/// 帧域战斗步（弹网格 SoA+命中框 7×10+伤害公式——批次3 面接入点）。
-pub fn combat_frame(_state: &mut StageState, _fx: &mut StageEffects) {}
+/// 帧域战斗步（子面⑥组装）：弹推进（LUT 运动机）→ 7×10 注册 → 敌框形取框 →
+/// 命中判定（4 边+属性相交）→ 伤害（弹 −2）→ HP 归 0 回收（$D616 死亡门语义）。
+pub fn combat_frame(state: &mut StageState, _fx: &mut StageEffects) {
+    use crate::enemy::{fetch_shape_boxes, shape_stream_addr};
+    use crate::shot::{
+        damage_apply, hit_resolves, lut_accumulate_axis, shot_hitbox_register, HitBoxEntry, LUT_X,
+        LUT_Y,
+    };
+    // 弹推进（motion_code 驱动 LUT——shot 运动机）
+    for y in 0..0x100usize {
+        if state.bullets.state[y] == 0 {
+            continue;
+        }
+        let mc = state.bullets.motion[y];
+        state.bullets.x[y] = lut_accumulate_axis(state.bullets.x[y], mc, &LUT_X)
+            .unwrap_or(state.bullets.x[y]);
+        state.bullets.y[y] = lut_accumulate_axis(state.bullets.y[y], mc, &LUT_Y)
+            .unwrap_or(state.bullets.y[y]);
+    }
+    // 弹注册（7×10 + attr $30）
+    let mut shot_boxes: Vec<(usize, HitBoxEntry)> = Vec::new();
+    for y in 0..0x100usize {
+        if state.bullets.state[y] == 0 {
+            continue;
+        }
+        let e = shot_hitbox_register(state.bullets.x[y], state.bullets.y[y], y as u8);
+        shot_boxes.push((y, e));
+    }
+    // 敌框形取框+命中判定+伤害
+    for si in 8..28usize {
+        let slot = state.grid.slots[si];
+        if slot.type_ == 0 {
+            continue;
+        }
+        let (flip_x, flip_y) = (slot.f534 & 0x40 != 0, slot.f534 & 0x80 != 0);
+        let stream_addr = match shape_stream_addr(slot.f518) {
+            Some(a) => a,
+            None => continue,
+        };
+        let stream: &[u8] = state
+            .shape_data
+            .iter()
+            .find(|(a, _)| *a == stream_addr)
+            .map(|(_, v)| v.as_slice())
+            .unwrap_or(&[]);
+        let rects = fetch_shape_boxes(stream, slot.x, slot.y, flip_x, flip_y);
+        let enemy_attr = slot.f4c4 & 0xF0;
+        for (l, r, t, b) in rects {
+            let enemy = HitBoxEntry {
+                left: l,
+                right: r,
+                top: t,
+                bottom: b,
+                owner: si as u8,
+                attr: enemy_attr,
+            };
+            for (bi, sb) in &mut shot_boxes {
+                if state.bullets.state[*bi] == 0 {
+                    continue; // 已回收
+                }
+                if hit_resolves(sb, &enemy) {
+                    // 弹命中：敌 HP−2（$D688 弹路）；弹回收（$87FD）；一框一伤
+                    let hp = state.grid.slots[si].f630;
+                    let new_hp = damage_apply(hp, true, 0);
+                    state.grid.slots[si].f630 = new_hp;
+                    state.bullets.release(*bi as u8);
+                    *sb = crate::shot::clear_hit_entry(sb);
+                    if new_hp == 0 {
+                        // $D616 死亡门：槽回收（爆炸/释放链未证 fail-closed）
+                        state.grid.slots[si] = ObjectSlot::default();
+                    }
+                    break;
+                }
+            }
+        }
+    }
+}
 
 /// 主环收尾步（scroll 确认+flow 消费 `$26` bit4 关末门）。
 pub fn main_loop_step(state: &StageState, fx: &mut StageEffects) {
@@ -282,6 +361,8 @@ pub struct ObjectSlot {
     pub f56c: u8,
     /// `$5C0+槽` 倒计时簇（$90AB 清态面）。
     pub f5c0: u8,
+    /// `$04C4+槽` 属性掩码（命中框注册 `& $F0`——团队过滤面）。
+    pub f4c4: u8,
 }
 
 /// 对象网格（28 槽，槽 0..7 与 8..27 分区——分配域 8..=27）。
