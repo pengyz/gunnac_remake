@@ -58,6 +58,11 @@ GEN_DIR = ROOT / "analysis" / "_gen"
 
 BUTTONS = {"a", "b", "start", "select", "up", "down", "left", "right"}
 PRESS_LEN_DEFAULT = 2
+# B2 v4 bot 闭环（tools/tas_bot.lua 决策器）：策略白名单 fail-closed（未知策略拒绝）。
+# bot 场景 = 实时决策（读 RAM→按键）+ 逐帧按键录制（inputs.jsonl）→ tas_gen record-to-scenario
+# 转写开环轨回放复核（闭环两遍一致）。**bot 场景禁 poke**（无写注入——通关必须自然）。
+BOT_POLICIES = {"stg01-clear"}
+BOT_LUA = ROOT / "tools" / "tas_bot.lua"
 
 
 class ScenarioError(Exception):
@@ -110,6 +115,7 @@ def parse_scenario(path: Path) -> dict:
         "ramframe": False,
         "probe_mem": [],
         "pokes": [],
+        "bot": None,
     }
     for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         line = raw.split("#", 1)[0].strip()
@@ -227,6 +233,16 @@ def parse_scenario(path: Path) -> dict:
             if len(args) != 1 or args[0] not in ("on", "off"):
                 raise err("ramframe 用法: ramframe on|off")
             plan["ramframe"] = args[0] == "on"
+        elif op == "bot":
+            # B2 v4：bot <policy> from <帧> —— 实时决策器从帧 N 接管输入（录制逐帧按键 →
+            # record-to-scenario 闭环）。策略白名单 fail-closed（tools/tas_bot.lua）。
+            if len(args) != 3 or args[1] != "from" or not args[2].isdigit():
+                raise err("bot 用法: bot <policy> from <帧>")
+            if args[0] not in BOT_POLICIES:
+                raise err(f"未知 bot 策略 {args[0]!r}（白名单 {sorted(BOT_POLICIES)}）")
+            if plan["bot"] is not None:
+                raise err("bot 指令重复")
+            plan["bot"] = {"policy": args[0], "from": int(args[2])}
         else:
             raise err(f"未知 DSL 指令 {op!r}")
 
@@ -250,6 +266,14 @@ def parse_scenario(path: Path) -> dict:
     for e in plan["pokes"]:
         if not 1 <= e["frame"] <= frames:
             raise ScenarioError(f"{path}: poke 帧 {e['frame']} 超出 1..{frames}")
+    if plan["bot"] is not None:
+        # 纪律锁：bot 场景禁 poke（决策器无写注入能力；通关必须自然，README 写注入纪律）
+        if plan["pokes"]:
+            raise ScenarioError(f"{path}: bot 场景禁 poke（无写注入——$26 bit4 必须自然置位）")
+        if not 1 <= plan["bot"]["from"] <= frames:
+            raise ScenarioError(f"{path}: bot 起始帧 {plan['bot']['from']} 超出 1..{frames}")
+        if not BOT_LUA.is_file():
+            raise ScenarioError(f"{path}: bot 策略文件缺失 {BOT_LUA}")
     return plan
 
 
@@ -261,6 +285,8 @@ def lua_str(s: str) -> str:
 
 
 def to_lua(v) -> str:
+    if v is None:
+        return "nil"   # PLAN.bot 缺省（B2 v4）：Lua nil 语义
     if isinstance(v, bool):
         return "true" if v else "false"
     if isinstance(v, int):
@@ -277,13 +303,21 @@ def to_lua(v) -> str:
 def generate_lua(plan: dict, scenario_path: Path) -> tuple[str, str]:
     """返回 (lua 源码, lua sha256)。PLAN 前置 + 执行器整拼（无 dofile 依赖）。"""
     plan_lua = dict(plan)
+    if plan_lua.get("bot") is None:
+        plan_lua.pop("bot", None)   # 无 bot 的场景 PLAN 字节不变（历史 lua sha 锁不受影响）
     plan_lua["out_dir"] = str((TRACES_DIR).resolve())
     plan_lua["shots_dir"] = str((SHOTS_DIR).resolve())
     harness = HARNESS.read_text(encoding="utf-8")
+    bot_src = ""
+    if plan.get("bot"):
+        # B2 v4：决策器源码整拼（无 dofile 依赖；PLAN 后、执行器前）
+        bot_src = "\n-- ===== bot 决策器（tools/tas_bot.lua，policy=%s）=====\n" % plan["bot"]["policy"] \
+            + BOT_LUA.read_text(encoding="utf-8")
     src = (
         f"-- 生成文件：勿手改。来源 {relp(scenario_path)}"
         f"（由 tools/scenario_run.py 生成）\n"
         f"local PLAN = {to_lua(plan_lua)}\n"
+        + bot_src
         + harness
     )
     return src, hashlib.sha256(src.encode("utf-8")).hexdigest()
@@ -307,7 +341,8 @@ def archive_existing(name: str) -> str | None:
     dst = TRACES_DIR / ".archive" / f"{name}-{stamp}"
     moved = False
     for pat in (f"{name}.frames.jsonl", f"{name}.captures.jsonl", f"{name}.done",
-                f"{name}.run.json", f"{name}.lua.log", f"{name}.mesen.log"):
+                f"{name}.run.json", f"{name}.lua.log", f"{name}.mesen.log",
+                f"{name}.inputs.jsonl", f"{name}.events.jsonl"):
         src = TRACES_DIR / pat
         if src.exists():
             dst.mkdir(parents=True, exist_ok=True)
@@ -509,6 +544,8 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
             "captures": f"analysis/traces/{name}.captures.jsonl",
             "shots": shots,
             "ram_dumps": rams,
+            **({"bot_inputs": f"analysis/traces/{name}.inputs.jsonl",
+                "bot_events": f"analysis/traces/{name}.events.jsonl"} if plan.get("bot") else {}),
         },
     }
     mpath = TRACES_DIR / f"{name}.run.json"

@@ -155,8 +155,18 @@ end
 
 emu.addEventCallback(function()
   frame = frame + 1
-  local btn = schedule[frame] or {}
+  -- B2 v4 bot 闭环：帧 ≥ PLAN.bot.from 起由决策器（tools/tas_bot.lua）实时决策按键；
+  -- 前缀帧沿用 schedule。逐帧按键录制（inputs.jsonl）→ tas_gen record-to-scenario 开环回放。
+  local btn
+  if PLAN.bot and BOT and frame >= PLAN.bot.from then
+    btn = BOT.decide(frame, readByte) or {}
+  else
+    btn = schedule[frame] or {}
+  end
   pcall(emu.setInput, btn, 0)
+  if PLAN.bot and BOT and BOT.record_input then
+    BOT.record_input(frame, btn)
+  end
   local pk = pokeAt[frame]
   if pk then
     for _, p in ipairs(pk) do
@@ -199,18 +209,25 @@ emu.addEventCallback(function()
     capF:flush()
   end
 
+  -- B2 v4：逐发归因观察钩子（只读：弹出生/消失 × 框相交 × HP 差分）
+  if PLAN.bot and BOT and BOT.on_frame then
+    BOT.on_frame(frame, readByte)
+  end
+
   if frame % 120 == 0 then traceF:flush() end
 
-  if frame == frames then
+  -- bot 提前收机（GAME OVER 后 300f / done 相位后 900f）：DONE 以实际帧落
+  local bot_stop = PLAN.bot and BOT and BOT.wants_stop and BOT.wants_stop(frame)
+  if frame == frames or bot_stop then
     traceF:flush() traceF:close()
     capF:flush() capF:close()
     local d = io.open(donePath, "w")
     if d then
-      d:write(string.format('{"frames":%d,"trace_lines":%d,"captures":%d,"shots":%d}\n',
-        frames, nTrace, nCap, nShot))
+      d:write(string.format('{"frames":%d,"trace_lines":%d,"captures":%d,"shots":%d,"bot_stop":%s}\n',
+        frame, nTrace, nCap, nShot, bot_stop and "true" or "false"))
       d:close()
     end
-    log("scenario done at frame " .. frame)
+    log("scenario done at frame " .. frame .. (bot_stop and " (bot stop)" or ""))
     pcall(emu.stop)
   end
 end, "endFrame")

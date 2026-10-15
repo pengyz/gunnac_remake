@@ -1,0 +1,63 @@
+# B2 v4 bot 闭环 —— 关 1 自然通关（stg01-clear 策略）
+# 判据：docs/findings/arena-midboss.md §5（瞄准/伤害预算/复活重定位/避让）；
+#       决策器 tools/tas_bot.lua（只读 RAM→按键，**无 poke 无写注入**——README 写注入纪律）。
+# 闭环：本场景跑（实时决策）→ tools/tas_bot.py closure 录制 inputs.jsonl →
+#       tas_gen record-to-scenario 转写纯 press/hold 开环轨 → 回放 → 逐帧状态对拍（两遍一致才算）。
+# 通关判定 = $26 bit4 **自然置位**（bank00:8CFC 记录边界消费 $CA bit0，A 级）；
+# 本场景禁止 poke（scenario_run.py 解析期 fail-closed）。
+# 前缀 = gameplay-stage1 同源（f1..1200，确定性对账勿改）；bot 自 f1250 接管。
+name tas-stg01-bot1
+frames 30000
+press_len 4
+
+# ===== 同源前缀（gameplay-stage1，确定性对账：勿改）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+
+# ===== bot 接管（实时决策 → 逐帧录制）=====
+bot stg01-clear from 1250
+
+# ===== watch（闭环对拍面 + 关末/商店判定 + 第四候选探针字段）=====
+watch 0180 stage_no
+watch 0026 flags26
+watch 0027 flags27
+watch 002f countdown2f
+watch 002b rng_2b
+watch 002c rng_2c
+watch 002d rng_2d
+watch 0084 tick_lo
+watch 0085 tick_hi
+watch 0300 gate300
+watch 0400 pstate
+watch 04e0 player_x
+watch 04fc player_y
+watch 018d lives
+watch 018e money
+watch 018f bomb_ammo
+watch 0018 held
+watch 041b boss_type
+watch 04fb boss_x
+watch 0517 boss_y
+watch 064b boss_hp
+watch 0533 boss_form
+watch 05f7 boss_hitctr
+watch 0188 intro_ctr
+watch 041c vec41c
+watch 0438 vec438
+watch 0189 w0189
+watch 0190 w0190
+
+# ===== 第四候选探针（W-tas-1R/2R/W18：$05DC 写点=受击冷却候选、$064B 写点=伤害写 PC）=====
+probe_mem 05dc 05dc
+probe_mem 064b 064b
+
+capture_every 300 probe
+capture 1260 combat-start
