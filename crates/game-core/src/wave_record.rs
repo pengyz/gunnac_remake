@@ -179,10 +179,18 @@ pub struct DropperInstance {
 }
 
 /// 已证实例（clean 模板对）：S1 `[01][$5F]`、S8 `[01][$CA]`。
-/// S4 流2 `[02][$87,$87]`（CA=$01）为**多体例外**不入登记；
-/// ⚠ 文档矛盾挂账：dropper §4 称该例"无 far-call"，stg04 §2 解码 C9=$FB（bit0→far-call）
-/// ——待 decomp-analyst 裁定，此处不采信任何一侧。
+/// S4 流2 `[02][$87,$87]`（CA=$01）为**多体例外**不入登记。
+/// 【2026-01-15 矛盾裁定（412f96b）】far-call 门在 **C9**（`C9 bit0 ∧ $26 bit3=0`），
+/// 与 CA 位无关——S4 流2 `C9=$FB` ⇒ far-call 照常条件触发（原"无 far-call"表述作废）。
 pub const TERMINAL_DROPPERS: &[DropperInstance] = &[
     DropperInstance { stage: 1, stream: 0xA3E4, count: 1, types: &[0x5F], c9: 0xFB, ca: 0x05 },
     DropperInstance { stage: 8, stream: 0xB889, count: 1, types: &[0xCA], c9: 0xFB, ca: 0x81 },
 ];
+
+/// far-call 触发门（`bank00:89C9-89D3`，2026-01-15 矛盾裁定 A 级）：
+/// `C9 bit0==1 ∧ ($26 & $08)==0` → `JSR $E649` 内联 `0B 0C 12 80`（bank11:$8012）。
+/// 第三门 `$26` bit3 = 运行期抑制（语义未名 S4b-8）——本函数为**静态门判定**，
+/// 调用方传入运行期 `$26` 值。
+pub fn far_call_fires(c9: u8, flags_26: u8) -> bool {
+    c9 & 0x01 != 0 && flags_26 & 0x08 == 0
+}
