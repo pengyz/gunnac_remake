@@ -569,3 +569,30 @@ fn stage_probe_determinism_and_bridge() {
     // 初始帧面
     assert_eq!(a[0].slot_types, [0u8; 28], "空网格起始");
 }
+
+/// ⑰ F-B93 快进环哨兵（值域族第 5 例）：crafted tick=1+2 合成对——
+/// "每迭代=1 全链 tick"（Wt-1）；step_by(2) 跳偶拍 ⇒ tick=2 漏发必红。
+#[test]
+fn fast_forward_ring_per_tick_sentinel() {
+    use game_core::wave::SchedRecord;
+    let mut cursor = SchedCursor {
+        records: vec![
+            SchedRecord { addr: 0x1000, delay: 0, items: vec![], tick: 1 },
+            SchedRecord { addr: 0x1010, delay: 1, items: vec![], tick: 2 },
+        ],
+        next: 0,
+    };
+    let mut fx = StageEffects::default();
+    fast_forward_ring(&mut cursor, 2, &mut fx);
+    assert_eq!(cursor.next, 2, "tick=1+2 双发（跳偶拍必漏 tick=2）");
+    // 反向：环长 1 只发 tick=1（tick=2 未到）
+    let mut cursor2 = SchedCursor {
+        records: vec![
+            SchedRecord { addr: 0x1000, delay: 0, items: vec![], tick: 1 },
+            SchedRecord { addr: 0x1010, delay: 1, items: vec![], tick: 2 },
+        ],
+        next: 0,
+    };
+    fast_forward_ring(&mut cursor2, 1, &mut fx);
+    assert_eq!(cursor2.next, 1, "17-型环界（1 迭代=1 tick）");
+}
