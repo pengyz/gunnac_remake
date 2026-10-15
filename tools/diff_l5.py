@@ -35,8 +35,9 @@ def trigger_of(anchors, g):
     return None
 
 
-def diff(probe, golden, scene=None, anchors=None):
-    idx = {(r.get("scene"), r["f"]): r for r in probe}
+def diff(probe, golden, scene=None, anchors=None, scene_map=None):
+    smap = scene_map or {}
+    idx = {(smap.get(r.get("scene"), r.get("scene")), r["f"]): r for r in probe}
     out = []
     for g in golden:
         if scene and g.get("scene") != scene:
@@ -45,6 +46,10 @@ def diff(probe, golden, scene=None, anchors=None):
         keys = [k for k in PROBE_FIELDS if k in g]  # golden 驱动投影
         if p is None:
             out.append((g, "unknown", "golden 无 probe 覆盖"))
+            continue
+        absent = [k for k in keys if k not in p]  # probe 无字段面 ⇒ 不可裁（fail-closed）
+        if absent:
+            out.append((g, "unknown", f"probe 无字段面: {absent}"))
             continue
         bad = [k for k in keys if p.get(k) != g.get(k)]
         if bad:
@@ -70,21 +75,30 @@ def main(argv):
               "tick": 33, "slot_types": [1] * 28}]
         assert diff(p, g)[0][1] == "ok", "①投影：golden 未携带 tick 不比 tick"
         assert diff(p, [dict(g[1], tick=34)])[0][1] == "mismatch", "①全字段：tick 必比"
+        assert diff([{"scene": "s", "f": 9}], [{"scene": "s", "f": 9, "mode": "Black", "checkpoint": "c"}])[0][1] == "unknown", "⑤probe 缺字段面=unknown 非 mismatch"
         inj = [{"checkpoint": "stg01-combat", "f": 2, "trigger": "injected"}]
         assert diff(p, [g[1]], anchors=inj)[0][1] == "ok-injected", "②injected 单列"
         bad_t = [{"checkpoint": "boot-black", "f": 1, "trigger": "???"}]
         assert diff(p, [g[0]], anchors=bad_t)[0][1] == "unknown", "②非法 trigger fail-closed"
         r = diff(p, g)
         assert [x[1] for x in r] == ["ok", "ok"], r
-        print("selftest: ok（投影/全字段/trigger 分级/三场景汇总）")
+        assert diff([{"scene": "stg02", "f": 1, "mode": "StageStart", "checkpoint": "stg02-start"}],
+                    [{"scene": "stg02-08-chain", "f": 1, "mode": "StageStart", "checkpoint": "stg02-start"}],
+                    scene_map={"stg02": "stg02-08-chain"})[0][1] == "ok", "④场景映射"
+        print("selftest: ok（投影/全字段/trigger 分级/三场景汇总/场景映射）")
         return 0
     get = lambda k: argv[argv.index(k) + 1] if k in argv else None
     probe, golden = get("--probe"), get("--golden")
     if not (probe and golden):
         print(__doc__)
         return 2
+    smap = {}
+    if get("--scene-map"):
+        for pair in get("--scene-map").split(","):
+            a, _, b = pair.partition("=")
+            smap[a] = b
     res = diff(load(probe), load(golden), get("--scene"),
-               load(get("--anchors")) if get("--anchors") else None)
+               load(get("--anchors")) if get("--anchors") else None, smap)
     by_scene = {}
     for g, v, note in res:
         print(f"[{v:12}] {g.get('scene')} f={g['f']} {g.get('mode')} {g.get('checkpoint')} {note}")
