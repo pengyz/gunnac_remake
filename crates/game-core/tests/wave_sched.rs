@@ -10,7 +10,7 @@
 
 use game_core::wave::*;
 
-/// bank8 = $8000 窗 → file 0x10+8×0x2000（同 tests/stage_content.rs 口径）。
+/// bank8 = $A000 数据窗 → file 0x10+8×0x2000（数据 bank 映射 CPU $A000-$BFFF；同 stage_content.rs 口径）。
 fn bank8_window() -> Vec<u8> {
     let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM 可读");
     rom[0x10 + 8 * 0x2000..0x10 + 9 * 0x2000].to_vec()
@@ -316,4 +316,41 @@ fn trace_tick_accounting_rule() {
     let s = decode_sched(&w, 0xA26D, 64);
     assert_eq!(s.records[1].tick, 33);
     assert_eq!(s.records[1].tick - 1, 32, "$84 口径 = tick−1");
+}
+
+/// ⑩ F-B4 合成交叉哨兵（#84 必修）：step 判据=**type&1**（8763-876E `LDA $13/AND #1`），
+/// 非 ctrl 判据——可达输入中 ctrl1↔$2E(偶)/ctrl2↔$2F(奇) 恒等价（decode 内绑定），
+/// 合成 `ctrl:1 + type_:0x2F` 交叉对打破等价：type&1 ⇒ step=true，ctrl 判据 ⇒ false。
+#[test]
+fn step_criterion_is_type_bit_not_ctrl_synthetic() {
+    // 合成交叉（decode 不可达，仅证判据字节语义）：ctrl=1 但 type=$2F 奇数
+    let e = item_effect(
+        &SchedItem::Spawn { ctrl: 1, type_: 0x2F, args: [1, 2, 3, 4] },
+        0,
+    );
+    assert_eq!(
+        e,
+        ItemEffect::QuadWrite {
+            leader_type: 0x2F,
+            args: [1, 2, 3, 4],
+            write_48c: None,
+            code_stream_step: true,
+        },
+        "step 判据=type&1（$2F 奇 ⇒ true）"
+    );
+    // 反向合成：ctrl=2 但 type=$2E 偶数 ⇒ step=false（ctrl 判据必红）
+    let e2 = item_effect(
+        &SchedItem::Spawn { ctrl: 2, type_: 0x2E, args: [1, 2, 3, 4] },
+        0x55,
+    );
+    assert_eq!(
+        e2,
+        ItemEffect::QuadWrite {
+            leader_type: 0x2E,
+            args: [1, 2, 3, 4],
+            write_48c: Some(0x55), // ctrl2 读码流判据仍是 ctrl（8783-8793 附加支入口）
+            code_stream_step: false,
+        },
+        "type 偶 ⇒ 不 step"
+    );
 }
