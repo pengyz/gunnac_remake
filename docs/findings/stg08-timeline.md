@@ -34,3 +34,44 @@ python3 tools/wave_stream_decode.py wave 8   # 4 流全表
 python3 tools/wave_stream_decode.py spawner 8
 python3 tools/wave_stream_decode.py evt 8
 ```
+
+
+## 7. 链终局记录（2026-10-16；stg08 run #1-#5 五连取证——裁定①链局限收尾）
+
+> **链注记**（trigger=injected 逐项登记）：注入 #7（双 poke f15500，滚动活段（STG-07 冻结 f15959
+> 前，>15000 约束 ✓））→ f15501 \$27:=\$C0 倒数（\$2F=\$31 49 步型）→ f16221 商店 → **出店受阻**。
+> 已实测锚（入台账）：stg07-clear(15501)/stg08-shop(16221)；**stg08-exit/start/combat/clear+
+> Ending 五行 fail-closed 占位**（注因入台账 predicate）。
+
+### 7.1 出店 4 位菜单矩阵（五 run 证据矩阵，A 级）
+
+| 位 | run | 判定 |
+|---|---|---|
+| 0 | #4（A 直发） | **空按**（\$32 恒 40、无突发）——[退,买,买,买] 序证伪 |
+| 1 | #5（3×up+A） | **空按**（同上；up 回绕 0→3→2→1 ✓ 实测） |
+| 2 | #2（6×down 回绕+A） | **空按** |
+| 3 | #1（3×down+press）/#3（3×down+hold 30f） | **唯一出店动作位**：\$32 **40→60**（疑末关处理中旗）+ fade \$04:=\$4D 首档 → **step2 序列分叉**（非 77→53→24 标准，疑目标调色板差异）→ ~10f 转场突发 → **结构冻结**（\$27 不释/ptr 不切/无场景切换）至 run 尾——**确定性截断（三连）** |
+
+### 7.2 裁定①收尾（lead 2026-10-16 令）
+
+- **链局限注记**：链含 7 次注入（\$26 bit4+\$0400），末关出店截断**不可归因原版**——
+  stg08 段锚 fail-closed（五行占位注因，不发明帧号）。
+- **BUG 候选挂起**：OBS-1 入 [bug-ledger.md](../bug-ledger.md) **候选观察区（不立号）**；
+  立号条件=自然链（全通关 bot）复现。
+- 菜单语义附注（flow 面已锁）：菜单 4 项**带回绕**（0→1→2→3→0，up/down 双向）；
+  前六关「退」=位 3 且出店 +34f 全通——**末关同位动作截断=本批唯一未通面**。
+
+### 7.3 复现命令
+
+```bash
+# run #1-#5 负结果存档=oracle/scenarios/stg08-timeline.txt 场景注（run 间仅导航段不同）
+# 4 位矩阵判定（\$32/\$27/ptr 结构字段）
+PYTHONPATH=. python3 -c "
+import json
+for line in open('analysis/traces/stg08-timeline.frames.jsonl'):
+    d=json.loads(line); f=d['f']
+    if 16460<=f<=16520:
+        z=bytes.fromhex(d['w']['zp'])
+        print(f, z[0x32], z[0x27], z[0x4F], z[0x50])
+"
+```
