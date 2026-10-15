@@ -1,6 +1,8 @@
 # B2 TAS 输入生成计划 —— STG-01 战斗段（docs/spec/tas-input-dsl.md §1.2 DSL）
 # 数据源：B1 波次时间线（tools/wave_timeline.py sched 1 / spawns）+ 已证常量（R-tas-*）。
-# 语义：本文件是**生成期计划**；条件（when）在此求值后展开为纯 press/hold（生成物无条件指令）。
+# 语义：本文件是**生成期计划**；~~条件（when）在此求值后展开为纯 press/hold（生成物无条件指令）~~
+# 【2026-10-15 更正（复核 #78 F1）】when 展开=死语法已封：when 子句显式拒绝（exit=1 不落盘，
+#   见 spec §1.2 更正注）；条件相位切换用多段 band <起帧>（已验证路径）。生成物仍无条件指令。
 stage 1
 frames 13000
 prefix gameplay-stage1

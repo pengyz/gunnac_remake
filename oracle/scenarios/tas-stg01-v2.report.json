@@ -45959,10 +45959,13 @@
     }
   ],
   "assumptions": [
-    "W-tas-3: tick→帧按实测锚插值 + 尾段 16f/tick 外推（tick 频率随滚动变速，Wt-2 素材）",
+    "W-tas-3: tick→帧按实测锚插值 + 尾段 16f/tick 外推（tick558-815 实测 257 tick 全 16f；tick=16px 滚动进度已证=Wt-2 关闭，复核 #78 §4；外推仅覆盖 tick 816→1232 未实测尾段）",
     "R-tas-4 横扫为经验启发式（非已证弹道）",
     "R-tas-5 margin=16px 为包络候选+余量（W15 未定谳）",
     "Wt-6: 弹速表语义未闭环 → 不做弹道预测"
+  ],
+  "unimplemented_dsl": [
+    "when <pred> then <action>：生成期展开档位未建 → 显式拒绝（spec §1.2 更正注，复核 #78 F1）；条件相位切换由多段 band <起帧> 承担（已验证路径）"
   ],
   "no_poke": true
 }
