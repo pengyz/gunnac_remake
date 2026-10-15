@@ -454,12 +454,14 @@ fn t59_entry_and_segment_templates() {
     // A 段独有第三表（$534）；B 段空表=相位翻转支
     assert_eq!(PARAM_SEGMENTS[0].t534, &SEG_A_T534[..]);
     assert!(PARAM_SEGMENTS[1].t534.is_empty());
-    // Y 索引基数登记面（A=4/B=5/C=7/D=$0E/**E=None 调用者**/F=$0F）
+    // Y 索引基数登记面（A=4/B=5/C=7/D=$0E/**E=$0F**/F=$0F——decomp 补谳字节锚）
     assert_eq!(
         PARAM_SEGMENTS.map(|s| s.cd9d_y),
-        [Some(4), Some(5), Some(7), Some(0x0E), None, Some(0x0F)],
-        "E 段 $84C7 无字面量装载（JSR $CD9D 直入，字节直读）"
+        [Some(4), Some(5), Some(7), Some(0x0E), Some(0x0F), Some(0x0F)],
+        "E 段 $84C3 LDA #$50/LDY #$0F（ROM f=$44D3 直读）"
     );
+    assert_eq!(PARAM_SEGMENTS[4].entry, 0x84C3, "E 入口=$84C3（$84C7=JSR 子址）");
+    assert_eq!(PARAM_SEGMENTS[4].cd9d_a, Some(0x50));
     // B 段双入口（$83DC 装 A=$30 / $83DE 旁路=调用者 A=$40，$836E 尾带落点）
     assert_eq!(PARAM_SEGMENTS[1].bypass_entry, Some(0x83DE));
     assert_eq!(PARAM_SEGMENTS[1].cd9d_a, Some(0x30));
