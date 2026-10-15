@@ -365,7 +365,46 @@ fn t59_jitter_exhaustive_and_chain() {
         (-8i8..=-1).chain(1i8..=9).collect();
     assert_eq!(yvals, expect, "y 值域穷举真值");
     assert_eq!(rng_jitter_offsets(0x78, true).1, 1, "rng=$78（h=7,bit3=1）⇒ dy=+1 叉例");
+    // 分支公式锁（test-runner 独立复算背书）：dy(bit3=1,n)=n−7+[n≥7]、dy(bit3=0,n)=n−8+[n≥8]
+    for n in 0..=15u8 {
+        let e1 = n as i8 - 7 + i8::from(n >= 7);
+        let e0 = n as i8 - 8 + i8::from(n >= 8);
+        assert_eq!(rng_jitter_offsets((n << 4) | 0x08, true).1, e1, "bit3=1 n={n}");
+        assert_eq!(rng_jitter_offsets(n << 4, true).1, e0, "bit3=0 n={n}");
+    }
     // 续链写原语（8337 型：$438:=lo 先 / $41C:=hi 后——写序照 8B8E-8B95 同型）
     assert_eq!(chain_rewrite(0x836E), (0x6E, 0x83), "(lo, hi) 写序对");
     assert_eq!(chain_rewrite(0x838E), (0x8E, 0x83));
+}
+
+/// ⑱ 调用环双序轮转 + MMC3 按型切 bank（bank02:827D-82CD）。
+#[test]
+fn t59_call_loop_and_bank_switch() {
+    use game_core::enemy::{
+        call_loop_round1, call_loop_slots, type_bank_switch, CALL_LOOP_SLOT_TABLE,
+    };
+    // 首轮 0..7
+    assert_eq!(call_loop_round1(), [0, 1, 2, 3, 4, 5, 6, 7]);
+    // 次轮双序：flag=false 升序 8..27 / flag=true 降序 27..8（公平性交替面）
+    let asc = call_loop_slots(false);
+    let desc = call_loop_slots(true);
+    assert_eq!(asc, core::array::from_fn(|i| i as u8 + 8));
+    assert_eq!(desc, core::array::from_fn(|i| 27 - i as u8));
+    // 双序互逆（遍历同集）——同负载次序分歧=D4 保真
+    let mut a = asc.to_vec();
+    let mut d = desc.to_vec();
+    a.sort();
+    d.sort();
+    assert_eq!(a, d);
+    assert_ne!(asc.to_vec(), desc.to_vec(), "次序分歧必现（公平轮转）");
+    // 表 40B 字节精确 vs ROM（bank2 $82D0）
+    let rom = std::fs::read("../../rom/gunnac_cn.nes").expect("ROM");
+    let o = 0x10 + 2 * 0x2000 + (0x82D0 & 0x1FFF);
+    assert_eq!(&CALL_LOOP_SLOT_TABLE[..], &rom[o..o + 40], "$82D0 表字节精确");
+    // MMC3 切 bank 判据：type<$30 不切 / ≥$30 查表 / 同值跳过（CMP $01/BEQ）
+    let tbl = [0u8; 0x30].iter().copied().chain([7, 3, 7]).collect::<Vec<u8>>();
+    assert_eq!(type_bank_switch(0x2F, 0, &tbl), None, "<$30 不切");
+    assert_eq!(type_bank_switch(0x30, 0, &tbl), Some(7), "$816E+$30 表值");
+    assert_eq!(type_bank_switch(0x31, 0, &tbl), Some(3));
+    assert_eq!(type_bank_switch(0x30, 7, &tbl), None, "同值跳过（防重写）");
 }
