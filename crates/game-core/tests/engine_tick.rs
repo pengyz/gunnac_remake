@@ -795,12 +795,12 @@ fn emit_probe5() {
             (7116, "Shop", Some("stg04-shop")),         // 台账：$0400:=0 商店 init
             (7404, "Transition", None),                 // 台账：出店转场尾完成帧（+34f 三证）
             (7500, "StageStart", Some("stg04-start")),  // 台账：关始采样帧（+96f 于出店）
-            (9000, "Combat", Some("stg04-combat")),     // 台账：战斗段采样帧（$ADCE 流段）——注：>stg04-clear 8501 倒挂疑（stg03 教训口径），decomp 重锚候审
+            (8100, "Combat", Some("stg04-combat")),     // 裁定②：f8100 双 run 双证（f9000 跨 run 域混作废）
             (8501, "StageClear", Some("stg04-clear")),  // stg05 §7：poke f8500 块入场（poke+1 模式）
             (9214, "Shop", Some("stg05-shop")),         // stg05 §7：入店锚
             (9504, "Transition", None),                 // stg05 §7：出店转场尾完成帧（+34f 四证）
             (9600, "StageStart", Some("stg05-start")),  // 关始采样 +96f 模式（stg03/04 同型 B 级）
-            // stg05-combat：战斗段采样帧待 decomp 选样（须 < stg05-clear 入场——教训口径）
+            (10500, "Combat", Some("stg05-combat")), // 裁定②选样：f10500（$B674 真战斗窗；stg05-clear 须 >10500）
         ];
         let mut out = String::new();
         for (f, mode, cp) in rows {
