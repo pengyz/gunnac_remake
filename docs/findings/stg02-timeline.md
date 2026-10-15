@@ -267,13 +267,67 @@ PY
 
 ## 4. trace 帧锚表（§2.3 格式，待补）
 
-## 5. 波次记录流 $B1CE/$B1E5（§1.4 格式；工具可重导，语义注待补）
+## 5. 波次记录流 $B1CE/$B1E5（§1.4 格式）语义注（A 级字节 + A3/B1 双关同构对账）
+
+### 5.1 逐字段解码（`python3 tools/wave_stream_decode.py wave 2`，字段序钉死于读点源码）
+
+```
+-- 流 $B1CE（脚本 thr=$0350）--
+  @B1CE C9=$F2(bit1→速度快照) CA=$00(—)
+        速度字节=$07 $7F=$02 写表1=$0000 写表2=$0000
+        清单=$B1E3 count=1 types=[$62] $D2=$00 $D1=$0A/$14
+        ED3B=$0C/$0F/$00 DB4C=$0E ED6C=$0000/$0000 next=$6201（bit2=0 不跳转，链止）
+-- 流 $B1E5（脚本 thr=$035A）--
+  @B1E5 C9=$FB(bit0→far-call bank11:$8012 bit1→速度快照) CA=$31(bit0→$26|关末门)
+        速度字节=$07 $7F=$02 写表1=$B1FC 写表2=$0000
+        清单=$B1FA count=1 types=[$64] $D2=$00 $D1=$14/$1E
+        ED3B=$0C/$0F/$A5 DB4C=$10 ED6C=$0000/$0000 next=$6401（bit2=0 不跳转，链止）
+```
+
+字段语义 = B1 §1.4（读点 `bank00:897F-8D36`/`8A97-8B10` 逐字节钉死；清单 = `[count][type×count]`，
+`$C9 bit2=0 ⇒` 单记录一次性投放、链止——op5 两次装载各消费一条记录）。
+
+### 5.2 A3/B1 双关同构对照（流 1/流 2 姿态两关一致）
+
+| 字段 | 关1 流1 $A3CD@$04C8 | 关2 流1 $B1CE@$0350 | 关1 流2 $A3E4@$04DA | 关2 流2 $B1E5@$035A |
+|---|---|---|---|---|
+| C9 | $F2（bit1 速度快照） | $F2 ✓ 同 | $FB（bit0+bit1） | $FB ✓ 同 |
+| CA | $00（不臂门） | $00 ✓ 同 | $05（**bit0 关末门**+bit2 重指派） | $31（**bit0 关末门**，无 bit2） |
+| 速度字节/$7F | $08/$02 | $07/$02 | $07/$02 | $07/$02 |
+| 清单 | $A3E2 count=1 type=**$4A** | $B1E3 count=1 type=**$62** | $A3F9 count=1 type=**$5F** | $B1FA count=1 type=**$64** |
+| $D1 对 | $0A/$14 | $0A/$14 ✓ 同 | $14/$1E | $14/$1E ✓ 同 |
+| ED3B 三参 | $00/$00/$00 | $0C/$0F/$00 | $0C/$0F/$A5 | $0C/$0F/$A5 ✓ 同 |
+| 写表1 | $0000 | $0000 | $0000 | **$B1FC（关2 特有，§5.4）** |
+
+**同构结论（A 级字节）**：两关波次流为同一模板实例化——**流 1 = 速度重置 + 单体投放（不臂门），
+流 2 = 速度快照 + far-call + 臂关末门**（配对出现，两关各一对）；`$D1` 对与 ED3B 三参逐值相同。
+
+### 5.3 CA bit0=关末门臂 对账（A3/B1 链）
+
+B1 §5 消费链（A 级）：`$CA bit0 →（bank00:8CC9-8D0C 记录边界处理）→ $26 bit4 → bank15:E2F3 关末块`
+= **波次流走完 = 关末触发源**。STG-02 对账：$B1E5 `CA=$31 bit0=1` ⇒ **装载 $B1E5 后臂关末门**；
+脚本 rec11 = `op7 jump-if-wave-busy`（thr=$3B2B）与「波次机忙则挂起」语义相容（B 级注）。
+型值投放时点（tick $0350/$035A）落在 B1 §1.4「中 boss/boss 段」判定区间 ✓。
+
+### 5.4 差异与未证注
+
+| 项 | 内容 | 级 |
+|---|---|---|
+| 清单型值 $62/$64 | 对象类型表值（关 1 同族 $4A/$5F），**不命名**；语义待 §4 帧锚实测（S2-4） | A（字节）/C（语义） |
+| $B1E5 写表1=$B1FC 非零 | 关 1 流 2 为 $0000。$B1FC 起数据形态 = `05 6b 6c 6d 6e 6f 00 80` ×3 + `00 02 01 60 00 80…`（sub_8D8D 写表流）——**写表语义未证**（Wt 族挂账，S2-5） | A（字节）/C（语义） |
+| CA bit2 差异 | 关 1 流 2 有（清单 type 匹配重指派）、关 2 无 ⇒ 关 2 两流均走空槽分配路径 | A（字节）/B（路径推断） |
+| LUT 邻接 | STG-02 类型 LUT=$B1CA，流 1=$B1CE（+4B）；关 1 LUT=$A3C4 流 1=$A3CD（+9B）——LUT 宽/边界 Wt-3 未闭环 | A（地址）/C（结构） |
+
+### 5.5 复现
 
 ```bash
-python3 tools/wave_stream_decode.py wave 2    # 23B/记录字段解码（读点已钉：bank00:897F-8D36/8A97-8B10）
-python3 tools/wave_stream_decode.py spawner 2 # 生成器流（§1.5 loader B）
-python3 tools/wave_stream_decode.py evt 2     # 事件机流（loader A，t47 §3 链结构）
+python3 tools/wave_stream_decode.py wave 2     # §5.1 全字段（23B/记录，读点注在工具头）
+python3 tools/wave_stream_decode.py wave 1     # §5.2 关 1 对照
+python3 tools/wave_stream_decode.py spawner 2  # 生成器流（§1.5 loader B；A2 原料）
+python3 tools/wave_stream_decode.py evt 2      # 事件机流（loader A，t47 §3 链结构）
 ```
+
+
 
 ## 6. 交 porter 移植口径（待补）
 
