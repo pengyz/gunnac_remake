@@ -847,3 +847,43 @@ fn flow_response_timing_face() {
     assert_eq!(shop_nav_tick(0x00, true), 0x01);
     assert_eq!(shop_nav_tick(0x05, false), 0x05);
 }
+
+/// ㉕ 链面循环时序（c60be11 STG-03 锚）+ poll 滚动活段门。
+#[test]
+fn chain_cycle_timing_and_poll_gate() {
+    use game_core::engine::{
+        ChainCycle, ChainPhase, CLEAR_COUNTDOWN_STEP_FRAMES, CLEAR_COUNTDOWN_STEPS,
+        CLEAR_FLYOFF_FRAMES, SHOP_ENTER_FRAMES,
+    };
+    let mut c = ChainCycle::default();
+    // 400f 倒数（50×8f）
+    for _ in 0..CLEAR_COUNTDOWN_STEPS * CLEAR_COUNTDOWN_STEP_FRAMES - 1 {
+        assert_eq!(c.tick_frame(), None);
+    }
+    assert_eq!(c.tick_frame(), Some(ChainPhase::Flyoff), "400f 止 ⇒ 飞离段");
+    // 265f 飞离（止于 bit4 清）
+    for _ in 0..CLEAR_FLYOFF_FRAMES - 1 {
+        assert_eq!(c.tick_frame(), None);
+    }
+    assert_eq!(c.tick_frame(), Some(ChainPhase::Shop), "265f 止 ⇒ 商店");
+    // 48f 入店延迟后出店请求生效
+    for _ in 0..SHOP_ENTER_FRAMES {
+        assert_eq!(c.tick_frame(), None);
+    }
+    c.shop_exit_requested = true;
+    assert_eq!(c.tick_frame(), Some(ChainPhase::TransitionTail), "出店 ⇒ 转场尾");
+    // 33f 转场尾 ⇒ StageStart
+    for _ in 0..32 {
+        assert_eq!(c.tick_frame(), None);
+    }
+    assert_eq!(c.tick_frame(), Some(ChainPhase::StageStart), "33f 尾 ⇒ StageStart");
+    // poll 滚动活段门：scroll_active=false ⇒ 关末块不 poll
+    let mut st = StageState::default();
+    st.wave.flags_26 = 0x10;
+    st.grid.slots[0].type_ = 0x03;
+    let mut fx = StageEffects::default();
+    main_loop_step_with_scroll(&mut st, &mut fx, false);
+    assert!(!fx.stage_clear_requested, "冻结段不 poll（W-SCLEAR 同族）");
+    main_loop_step_with_scroll(&mut st, &mut fx, true);
+    assert!(fx.stage_clear_requested, "滚动活段 poll ⇒ 执行");
+}

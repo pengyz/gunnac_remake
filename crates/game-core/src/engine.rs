@@ -284,6 +284,19 @@ pub fn combat_frame(state: &mut StageState, _fx: &mut StageEffects) {
 
 /// 主环收尾步（scroll 确认+flow 消费 `$26` bit4 关末门）。
 pub fn main_loop_step(state: &mut StageState, fx: &mut StageEffects) {
+    main_loop_step_with_scroll(state, fx, true)
+}
+
+/// 主环收尾步（显式滚动活段门——**poll 仅滚动活段运行**（c60be11 三 run 定谳，
+/// W-SCLEAR 同族）：arena 冻结段不 poll 关末块）。
+pub fn main_loop_step_with_scroll(
+    state: &mut StageState,
+    fx: &mut StageEffects,
+    scroll_active: bool,
+) {
+    if !scroll_active {
+        return; // 滚动停 ⇒ poll 停（arena 冻结段现象）
+    }
     // 关末块（bank15:E2F3-E307，A 级对账）三条件：
     // ① $26 bit4 臂 ② LDY $0400/BEQ 跳过（slot0 类型非零门）③ $27 bit7 防重入
     let armed = state.wave.flags_26 & 0x10 != 0;
@@ -1096,5 +1109,98 @@ pub fn shop_nav_tick(cursor_0300: u8, down: bool) -> u8 {
         cursor_0300.wrapping_add(1)
     } else {
         cursor_0300
+    }
+}
+
+// ===== 链面循环时序（c60be11 STG-03 实测锚——s5-chain 33 行解）=====
+
+/// 关末倒数（`$2F`=**50 步×8f=400f**——c60be11 STG-03 f4601-5000 实测）。
+pub const CLEAR_COUNTDOWN_STEPS: u32 = 50;
+/// 倒数步长（f/步）。
+pub const CLEAR_COUNTDOWN_STEP_FRAMES: u32 = 8;
+/// 飞离段（倒数止→`$26` bit4 清，f5000→f5266 实测 265f——块内语义 W-SCLEAR 挂账，
+/// 常数=trace 锚登记）。
+pub const CLEAR_FLYOFF_FRAMES: u32 = 265;
+/// 商店入店延迟（bit4 清→Shop，f5266→f5314 实测 48f）。
+pub const SHOP_ENTER_FRAMES: u32 = 48;
+
+/// 链面相位。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChainPhase {
+    /// 关末倒数（400f）。
+    ClearCountdown,
+    /// 飞离段（265f，止于 $26 bit4 清）。
+    Flyoff,
+    /// 商店段（入店 48f 后开始；出店=响应层输入驱动）。
+    Shop,
+    /// 转场尾（33f——出店后统一常数）。
+    TransitionTail,
+    /// 关卡开始（下一段）。
+    StageStart,
+}
+
+/// 链面循环状态机（StageClear→Shop→Transition→StageStart）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChainCycle {
+    /// 当前相位。
+    pub phase: ChainPhase,
+    /// 相位内帧计数。
+    pub frames: u32,
+    /// `$2F` 倒数步。
+    pub countdown_steps: u32,
+    /// 商店出店请求（响应层输入驱动置位）。
+    pub shop_exit_requested: bool,
+}
+
+impl Default for ChainCycle {
+    fn default() -> Self {
+        ChainCycle {
+            phase: ChainPhase::ClearCountdown,
+            frames: 0,
+            countdown_steps: CLEAR_COUNTDOWN_STEPS,
+            shop_exit_requested: false,
+        }
+    }
+}
+
+impl ChainCycle {
+    /// 帧推进（返回相位变更事件：Some(新相位)=转场帧）。
+    pub fn tick_frame(&mut self) -> Option<ChainPhase> {
+        self.frames += 1;
+        match self.phase {
+            ChainPhase::ClearCountdown => {
+                // 50 步×8f=400f
+                if self.frames >= CLEAR_COUNTDOWN_STEPS * CLEAR_COUNTDOWN_STEP_FRAMES {
+                    self.phase = ChainPhase::Flyoff;
+                    self.frames = 0;
+                    return Some(self.phase);
+                }
+            }
+            ChainPhase::Flyoff => {
+                if self.frames >= CLEAR_FLYOFF_FRAMES {
+                    self.phase = ChainPhase::Shop;
+                    self.frames = 0;
+                    return Some(self.phase);
+                }
+            }
+            ChainPhase::Shop => {
+                // 入店延迟 48f 后可出店（响应层输入驱动）；出店 ⇒ 转场尾
+                if self.frames >= SHOP_ENTER_FRAMES && self.shop_exit_requested {
+                    self.phase = ChainPhase::TransitionTail;
+                    self.frames = 0;
+                    self.shop_exit_requested = false;
+                    return Some(self.phase);
+                }
+            }
+            ChainPhase::TransitionTail => {
+                if self.frames >= TRANSITION_TAIL_FRAMES as u32 {
+                    self.phase = ChainPhase::StageStart;
+                    self.frames = 0;
+                    return Some(self.phase);
+                }
+            }
+            ChainPhase::StageStart => {}
+        }
+        None
     }
 }
