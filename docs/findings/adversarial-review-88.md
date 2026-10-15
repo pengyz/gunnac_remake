@@ -56,3 +56,48 @@ arena-midboss §2.2 实测转移一致（锚点出处 B 级交叉，字节面 A 
   后者受 `$CB bit1` 门 ✓✓；实现 `write_table1_dispatch= combo`、`write_table1_exec= combo && cb&2` 同构 ✓；
 - **M-② 门关断 mutation**（exec 去门控）→ `ca_combined_dispatch_and_bit3_negatives`
   **红**（"$CB bit1=0 ⇒ 只分派不执行"断言咬住）✓。
+
+---
+
+## 段 C：①组合判 mutation + ③bit5 零效果锁死——**①咬合 / ③哨兵盲区实锤（F-C88）**
+
+### C.1 ① bit4&5 组合判（AND#$30==#$30≠OR）mutation 试咬
+
+listing 已核（段 B 8A82-8A86：`AND #$30 / CMP #$30 / BNE`——单 bit4(0x10)/单 bit5(0x20) 结果≠$30 必跳）。
+mutation 实测：
+
+| 突变 | 实测 | 裁定 |
+|---|---|---|
+| M1a 组合判→OR 语义（`ca&0x30 != 0`） | 1 测红（"$81 仅 bit4 ⇒ 组合判不成立"咬住） | ✅ 咬 |
+| M1b 组合判→单 bit5 规则（`ca&0x20 != 0`） | 1 测红（全谱 17 不变量咬住） | ✅ 咬 |
+
+**单 bit4/单 bit5 哨兵真咬** ✓——① 成立。
+
+### C.2 ③ bit5 零效果锁死——**哨兵盲区（F-C88 必修）**
+
+**实现正确性无疑**：`ca_judgment` 全文 c9 消费点仅 `c9&0x02`（speed_restore）与 `sub_8dbd_sec`（bit2/bit0/bit3），
+**无 bit5 依赖** ✓（BUG-021 死分支保真成立）。但"17 对锁死"的**判别力不足**：
+
+| 实验 | 结果 |
+|---|---|
+| M3 突变：`speed_restore` 的 `c9&0x02`→`c9&0x22`（向 bit1 通道注入 bit5 敏感化） | ⚠️ **6 测全绿**（⑤ 的 17 对零效果断言未咬） |
+| 根因 | CA_GOLDEN 17 对的 C9 全部 **bit1=1**（0xF2/0xFB/0xE2 均含 0x02）⇒ bit5 翻转在 `c9&0x22` 与 `c9&0x02` 下恒同值——bit1=0 ∧ bit5 判别模式**样本零覆盖** |
+| 92c932f 复验 | 该 commit 补的 (0xE2,0x00) 全字段断言针对 **bit4** 盲区（test-runner 报）；**bit1 通道盲区仍在**——M3 复跑仍全绿 |
+
+**F-C88（必修，1 行级）**：在⑤ 的 bit5 翻转循环补 **bit1=0 合成对**（如 `(0x00, 0x00)` 与
+`(0x20, 0x00)` 一并断言 `ca_judgment` 全构相等），使 bit5→bit1 通道泄漏可被咬合。
+（与 #84 F-B4 同类：哨兵声明覆盖面高估一格；实现无错，测试面补咬即可。）
+
+### C.3 4a 面对拍复跑（账目核清）
+
+| 项 | 实跑 | 对账 |
+|---|---|---|
+| `cargo test --workspace` | **168 passed / 0 failed** | 账平：157（#87 基线）+6（4a wave_record）+5（4b enemy_behavior 增量）=168 ✓（b1d96bf 的 163 系其时点数，4b 后 168 ✓ 双方口径都对） |
+| `diff_subroutines.py` | **121/121** | ✓ |
+| `gates/cli.py check` | **PASS=12** | ✓ |
+
+### C.4 4a Verdict：**needs_revision（限定修订）**
+
+④表 256/256+6 锚 ✓、⑤真值表 ✓、②分派≠执行 ✓、①组合判哨兵 ✓ 全部成立；**实现零翻案点**。
+必修仅 **F-C88**（bit1=0 合成对 1 行级）——修后 `cargo test --test wave_record` 复绿 + M3 复咬即可改 pass。
+顺带核：#87 advisory 已清（shot.rs §1.4/§2.1 映射注释在案 ✓）；92c932f 双清（bit4 盲区补位+姿态口径命名）✓ 均验讫。
