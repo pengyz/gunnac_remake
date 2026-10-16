@@ -1,0 +1,10 @@
+{"scene": "tas-clear-full-v5", "f": 28364, "mode": "StageClear", "checkpoint": "stg01-clear"}
+{"scene": "tas-clear-full-v5", "f": 29078, "mode": "Shop", "checkpoint": "stg02-shop"}
+{"scene": "tas-clear-full-v5", "f": 29478, "mode": "Combat", "checkpoint": "stg02-combat"}
+{"scene": "tas-clear-full-v5", "f": 51332, "mode": "StageClear", "checkpoint": "stg02-clear"}
+{"scene": "tas-clear-full-v5", "f": 52047, "mode": "Shop", "checkpoint": "stg03-shop"}
+{"scene": "tas-clear-full-v5", "f": 52447, "mode": "Combat", "checkpoint": "stg03-combat"}
+{"scene": "tas-clear-full-v5", "f": 72823, "mode": "StageClear", "checkpoint": "stg03-clear"}
+{"scene": "tas-clear-full-v5", "f": 73539, "mode": "Shop", "checkpoint": "stg04-shop"}
+{"scene": "tas-clear-full-v5", "f": 73939, "mode": "Combat", "checkpoint": "stg04-combat"}
+{"scene": "tas-stg07-relay", "f": 28683, "mode": "StageClear", "checkpoint": "stg07-clear"}
