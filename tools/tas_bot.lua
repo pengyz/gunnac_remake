@@ -1,4 +1,6 @@
--- tools/tas_bot.lua —— B2 v4 bot 决策器（策略 stg01-clear）——关 1 自然通关闭环
+-- tools/tas_bot.lua —— B2 v4 bot 决策器（策略 stage-clear(N)）——八关自然通关闭环
+-- 【2026-10-16 通关令步骤 1】八关参数化（CFG.stages_total）+相位循环（shop→下一关 combat）；
+-- boss 段=dodge+hold 通解（血 RAM 精化取证后置，规划=docs/findings/tas-bot-eight-stage-input-plan.md）。
 -- 由 tools/scenario_run.py 在场景含 `bot <policy> from <帧>` 时拼入生成 Lua（PLAN 前置后本文件
 -- 先于 tools/scenario_capture.lua 执行器）。DSL 语义只在 scenario_run.py 解析；本文件只实现
 -- **实时决策**（读 RAM → 按键）+ 逐帧按键录制（inputs.jsonl）+ 事件/逐发归因日志（events.jsonl）。
@@ -212,10 +214,18 @@ local function capture(read)
   return s
 end
 
+-- ---------------- 八关参数化（通关令步骤 1）
+local CFG = {
+  stages_total = 8,          -- 八关全程（stg01..stg08）；shop 域=关间 7 次（stg02..08-shop）
+  -- 商店 init 判定式泛化（AD65-1 特例 stage_no==2 ⇒ 已清关数+2）：stage_no==S.stages_cleared+2 ∧ $0400:=0
+  -- 每关末 INC $180（E37C）⇒ shop 时 stage_no=已清关数+2；stg08 清后无 shop=结局段（done 观测窗）
+}
+
 -- ---------------- 策略状态
 local S = {
   phase = "combat",          -- combat | clear | shop | done
   phase_frame = 0,
+  stages_cleared = 0,        -- 已清关数（shop 计次推进；8 ⇒ done 结局观测）
   shop_t0 = nil,
   clear_t0 = nil,
   pstate_prev = 0,
@@ -354,15 +364,22 @@ function BOT.decide(frame, read)
       ev("stage_clear_gate", frame, { flags26 = s.flags26 })
     end
   elseif S.phase == "clear" then
-    -- 商店 init 判定式（AD65-1：stage_no==2 ∧ $0400:=0）
-    if s.stage == 2 and s.pstate == 0 then
+    -- 商店 init 判定式（AD65-1 泛化：stage_no==已清关数+2 ∧ $0400:=0；stg01 特例=2）
+    -- 每关末 INC $180（E37C）⇒ shop 时 stage_no=已清+2；stg08 清后无 shop（E392 $180==9 → 结局）
+    if S.stages_cleared < 7 and s.stage == S.stages_cleared + 2 and s.pstate == 0 then
+      S.stages_cleared = S.stages_cleared + 1
       set_phase("shop", frame)
       S.shop_t0 = frame
-      ev("shop_init", frame, { stage = s.stage })
+      ev("shop_init", frame, { stage = s.stage, stages_cleared = S.stages_cleared })
+    elseif S.stages_cleared >= 7 and frame >= (S.clear_t0 or frame) + 600 then
+      -- stg08 清后无 shop ⇒ 结局观测窗（all-clear-95f9 / 三结局分支采样）
+      set_phase("done", frame)
+      ev("ending_window", frame, { stage = s.stage, stages_cleared = S.stages_cleared })
     end
   elseif S.phase == "shop" then
     if frame >= S.phase_frame + 400 then
-      set_phase("done", frame)
+      set_phase("combat", frame)  -- 出店→下一关战斗（八关循环；原单关版到此 done）
+      ev("stage_advance", frame, { stages_cleared = S.stages_cleared })
     end
   end
 
