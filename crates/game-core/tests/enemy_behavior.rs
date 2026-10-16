@@ -688,3 +688,57 @@ fn compute_4d_formula() {
     // 越界 fail-closed（A&$0E=8 ⇒ 行溢出）
     assert_eq!(compute_4d_index(8, 0, 0, 0, 2), None, "OOB fail-closed");
 }
+
+/// ㉟ 三路自动选择（W-DMG3 收尾）：机制判别+武器映射数据层。
+#[test]
+fn auto_hit_path_selection() {
+    use game_core::shot::{auto_hit_path, weapon_hit_flags, HitDmgPath};
+    // 机制层：bit7=1 ⇒ Const2（最高优先）
+    assert_eq!(auto_hit_path(true, true), HitDmgPath::Const2);
+    assert_eq!(auto_hit_path(true, false), HitDmgPath::Const2);
+    // 穿透 ⇒ Zp12；否则 Field0630
+    assert_eq!(auto_hit_path(false, true), HitDmgPath::Zp12);
+    assert_eq!(auto_hit_path(false, false), HitDmgPath::Field0630);
+    // 武器映射（数据层候选）
+    assert_eq!(weapon_hit_flags(1), (true, false), "1# 恒定 −2");
+    assert_eq!(weapon_hit_flags(2), (false, true), "2# 穿透");
+    assert_eq!(weapon_hit_flags(3), (false, false), "3# 字段");
+    // 全武器映射闭环：自动选择一致
+    for w in 1..=5u8 {
+        let (c, p) = weapon_hit_flags(w);
+        let path = auto_hit_path(c, p);
+        assert_eq!(
+            path,
+            match w {
+                1 => HitDmgPath::Const2,
+                2 => HitDmgPath::Zp12,
+                _ => HitDmgPath::Field0630,
+            }
+        );
+    }
+}
+
+/// ㉟b $4D 入参生成式（续d 全链）：四表+关号钳制。
+#[test]
+fn compute_4d_inputs_full_chain() {
+    use game_core::shot::{compute_4d_inputs, EF49_DISPATCH, EF81_STAGE_CAP};
+    // 表 ROM 直读
+    assert_eq!(EF49_DISPATCH[4], 1);
+    assert_eq!(EF81_STAGE_CAP, [0, 0, 4, 6]);
+    // 默认档：$4C=1 ⇒ 帽 0 ⇒ A=0 ⇒ $4D=0（trace 实证）
+    assert_eq!(compute_4d_inputs(0, 0, 1, 8, 2), Some(0), "默认档 $4D=0");
+    // $4C=3（EXPERT）帽 6：stage 8 钳 6
+    assert_eq!(
+        compute_4d_inputs(0, 0, 3, 8, 2),
+        compute_4d_inputs(0, 0, 3, 6, 2),
+        "stage 8 钳 6 同值"
+    );
+    // $4A 武器维：>>4 入 $05
+    assert_eq!(
+        compute_4d_inputs(0, 0x30, 3, 1, 2),
+        compute_4d_inputs(0, 0x30, 3, 1, 2),
+        "确定性"
+    );
+    // 越界 fail-closed（$4C 非 0..3 → None）
+    assert_eq!(compute_4d_inputs(0, 0, 4, 1, 2), None, "$4C=4 OOB fail-closed");
+}

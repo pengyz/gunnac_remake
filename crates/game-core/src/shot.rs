@@ -407,3 +407,47 @@ pub fn compute_4d_index(a: u8, f04: u8, f05: u8, f4c: u8, y: u8) -> Option<u8> {
     let cap = if y < 2 { 6u16 } else { 7u16 };
     Some(val.min(cap) as u8)
 }
+
+/// 三路自动选择（W-DMG3 收尾）：命中上下文判别——`$6E` bit7=1 ⇒ `Const2`；
+/// 穿透（多源极值扣血——**2# 族候选**）⇒ `Zp12`；否则单弹字段 ⇒ `Field0630`。
+/// 机制层判别=A 级（$6E bit7/极值收集）；武器→标志映射=数据层候选（Soig 表
+/// 2#=穿透/1#=−2 恒定——B 级待矩阵回填后钉正）。
+pub fn auto_hit_path(const2_flag: bool, penetrating: bool) -> HitDmgPath {
+    if const2_flag {
+        HitDmgPath::Const2
+    } else if penetrating {
+        HitDmgPath::Zp12
+    } else {
+        HitDmgPath::Field0630
+    }
+}
+
+/// 武器类→命中标志（数据层候选——B 级待矩阵回填）：(const2_flag, penetrating)。
+pub fn weapon_hit_flags(weapon_class: u8) -> (bool, bool) {
+    match weapon_class {
+        1 => (true, false),  // 1#：−2 恒定（$D688 真身）
+        2 => (false, true),  // 2#：穿透（多源极值——C 路候选）
+        _ => (false, false), // 3#/4#/5#：单弹字段（B 路）
+    }
+}
+
+/// `$EF49` 派发表（8B——`$04 := $EF49[前驱A>>3]`，S4b-9 同源）。
+pub const EF49_DISPATCH: [u8; 8] = [0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00];
+
+/// `$EF81` 关号帽表（4B——`A := min($0180 关号, $EF81[$4C])`；表界=代码起点
+/// `$EF85` 判读注：`00 00 04 06` 后接 `48 8a 98…` 指令流）。
+pub const EF81_STAGE_CAP: [u8; 4] = [0x00, 0x00, 0x04, 0x06];
+
+/// `$4D` 入参生成式（续d 5b3ac67 A 级全链——scene init `JSR $EED7` 族）：
+/// `$04 := $EF49[prev_a>>3]`、`$05 := $4A>>4`、`A := min(stage, $EF81[$4C])`
+/// ⇒ `compute_4d_index(a, $04, $05, $4C, y)`。
+/// **语义定谳**：`$4D`=**关号驱动等级档**（Soig「3# L4-5 等级段」=关号段 L=Level/
+/// Stage 维 ✓）；武器维=`$4A`/`$4C`。
+pub fn compute_4d_inputs(prev_a: u8, f4a: u8, f4c: u8, stage: u8, y: u8) -> Option<u8> {
+    let f04 = *EF49_DISPATCH.get((prev_a >> 3) as usize)?;
+    let f05 = f4a >> 4;
+    // fail-closed：$4C=GAME LEVEL 0..3 域外 ⇒ None（不掩码折返——不发明）
+    let cap = *EF81_STAGE_CAP.get(f4c as usize)?;
+    let a = stage.min(cap);
+    compute_4d_index(a, f04, f05, f4c, y)
+}
