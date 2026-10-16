@@ -7,3 +7,4 @@
 {"scene": "tas-clear-full", "f": 72823, "mode": "StageClear", "checkpoint": "stg03-clear", "source_run": "tas-clear-full-v5(assist=invincible)", "trigger": "natural"}
 {"scene": "tas-clear-full", "f": 73539, "mode": "Shop", "checkpoint": "stg04-shop", "source_run": "tas-clear-full-v5(assist=invincible)", "trigger": "natural"}
 {"scene": "tas-clear-full", "f": 73939, "mode": "Combat", "checkpoint": "stg04-combat", "source_run": "tas-clear-full-v5(assist=invincible)", "trigger": "natural"}
+{"scene": "tas-clear-full", "f": 28683, "mode": "StageClear", "checkpoint": "stg07-clear", "source_run": "tas-stg07-relay(assist=invincible)", "trigger": "natural"}
