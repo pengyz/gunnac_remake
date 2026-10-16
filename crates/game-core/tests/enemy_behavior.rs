@@ -631,3 +631,22 @@ fn motion_update_subpixel_integration() {
     phase_counter_bump(&mut s);
     assert_eq!(s.f5dc, 6);
 }
+
+/// ㉜ 外部数据接线（Soig B 级登记面）：F/B/T/W 等级时长+boss 杂兵清零互证。
+#[test]
+fn soig_external_data_registry() {
+    use game_core::enemy::{BOSS_SPAWN_CLEARS_MOBS, SPECIAL_READY_TIMER, SPECIAL_WEAPON_TIMERS};
+    // ready timer 27（四武器同值）
+    assert_eq!(SPECIAL_READY_TIMER, 27);
+    // 逐格字面（xlsx sheet1 解析复导）：F/B/T/W × L1-4（含 -2/-3/-5 修正）
+    assert_eq!(SPECIAL_WEAPON_TIMERS[0], [180, 300, 358, 358], "F");
+    assert_eq!(SPECIAL_WEAPON_TIMERS[1], [240, 298, 418, 418], "B");
+    assert_eq!(SPECIAL_WEAPON_TIMERS[2], [300, 358, 416, 416], "T（-2*1/-2*2）");
+    assert_eq!(SPECIAL_WEAPON_TIMERS[3], [238, 297, 355, 355], "W（-2/-3/-5）");
+    // L4=same as L3（四武器同构）
+    for w in &SPECIAL_WEAPON_TIMERS {
+        assert_eq!(w[2], w[3], "L4=L3");
+    }
+    // boss 杂兵清零互证登记
+    assert!(BOSS_SPAWN_CLEARS_MOBS);
+}
