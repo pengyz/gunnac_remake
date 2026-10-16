@@ -6,7 +6,7 @@
 # 后置窗分析（lead (c) 裁定）：trace 按段锚四连逐关验收——段锚=golden 段锚同名
 #   （stgN-shop/Transition/stgN-start/stgN-combat/stgN-clear）；OBS-1=stg08 出店段同 trace 裁。
 name tas-stg08-direct
-frames 60000
+frames 120000
 press_len 4
 
 # ===== 输入前缀（gameplay-stage1 同源至 stg01 起点；勿改）=====
