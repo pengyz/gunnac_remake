@@ -66,3 +66,32 @@ $95F9 体 `LDA $1BE` 选卡与 #86 D2 面（DEATH/NON DEATH 二记录）互证 �
 内容实读="COMPILE STAFF"/"GAME DESIGN & PROGRAM"/…/"PRESENTED BY NEXOFT CORP."/
 "@2011 JIUBAN"（真 credits 流）✓。边界诚实注（"内部时长挂起不发明=run 步进率非时序主张"）在案 ✓。
 （自查记：初读误用 bank2 窗——$95xx 族实为 bank0，已改；口径修正入自查。）
+
+---
+
+## 段 C：③diff_run_face 独立复跑 + ④确定性 replay + Verdict
+
+### C.1 ③ run 面序列对拍——**我的自算 41/41 逐位全等** ✅
+不调被审 `diff_run_face`，自算对位：`oracle/traces/s5-all-clear.l5.jsonl`（S5 golden，44 行=
+boot 3 行 Black/Title/Menu + 41 run 形事件）去 boot 后 vs `clear-run.trace.jsonl` 41 事件——
+**(mode, checkpoint) 逐位对拍不合约 0/41 ⇒ 41/41 全等** ✓✓；golden scene 面
+（s5-title/s5-stg01/s5-chain）与 checkpoint 命名族一致。被审 `clear_run_face_matches_golden_sequence`
+复跑绿（l5_s5 8/8）✓ 双路同结论。
+
+### C.2 ④ 确定性 replay——**两跑全等断言完备** ✅
+㉛ `clear_run_deterministic_replay` 体：`ClearRun::new(2)` **同输入两跑** →
+`assert_eq!(t(), t())` 比较 **(events 全序列, ending_card（$4C）, final_frame)** 三元组 ✓✓——
+"同 $4C 两跑全等"声称的判别面完整（非仅 $4C，含全程 trace+末帧）；复跑绿。
+配套：`clear_run_completes_all_stages`+`clear_run_three_endings_by_game_level` 同套件绿
+（八关完成+三结局运行面）✓。
+
+### C.3 Verdict：**pass** ✅
+①41 事件 8/8 关段锚=gate tick 精确 ②三结局分支 1:1 吻合+恒等表字节级 ③自算对拍 41/41
+④两跑全等三元组断言 ⑤通关支链三件齐 ⑥staff roll 43 字节级精确+五步锚全对——
+**六靶全中，零必修**。**"Rust 版 8 关可通关"终验收实证成立**：
+8 关自然跑判据链（#93/#94）× 通关跑 41 事件锚 × 三结局面 × 确定性 replay，全链证据闭合。
+
+### C.4 纪律自查
+41 事件帧距/gate tick 对账=我方自算（#93/#94 独立重导的锚二次复用）；staff roll 流 ROM 直解
+（自查记：bank 窗口径错已改）；序列对拍独立实现（未调被审 diff）；测试复跑+断言体全读
+（防"测试名≠断言面"）；未改被审产物。
