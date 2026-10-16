@@ -43,6 +43,10 @@ fn main() {
                 let mut projected = 0usize;
                 let mut parsed_lines = 0usize;
                 let mut ppu_writes = 0usize;
+                let mut w2006 = 0usize;
+                let mut w2007 = 0usize;
+                let mut latch_seq = 0usize;
+                let no_filter = std::env::var("NOOWF").is_ok(); // 旁路开关（覆写过滤）
                 let dbg = std::env::var("DBGPROBE").is_ok() || std::env::var("DBGSTREAM").is_ok();
                 let dbg_latch = dbg;
                 for l in t.lines() {
@@ -55,6 +59,8 @@ fn main() {
                     match a {
                         "2006" => {
                             ppu_writes += 1;
+                            w2006 += 1;
+                            latch_seq += 1;
                             // 【l4 修】$2006 高字节先行（NES 协议）——旧码低字节位+
                             // 无移位 OR=投影零落根因（0x20|0xC8=0xE8 越界跳过）
                             if latch_hi {
@@ -70,6 +76,7 @@ fn main() {
                         }
                         "2007" => {
                             ppu_writes += 1;
+                            w2007 += 1;
                             if let Some(addr) = ppu {
                                 let off = (addr as usize).wrapping_sub(0x2000);
                                 if off < 960 {
@@ -84,7 +91,10 @@ fn main() {
                     }
                 }
                 if dbg {
-                    eprintln!("DBGPROBE file={} parsed_lines={} ppu_writes={} projected={} nt0_sample={:02x?}", pp, parsed_lines, ppu_writes, projected, &nt.tiles[0][0x68..0x70]);
+                    eprintln!("DBGPROBE file={} parsed={} ppu={} (2006={} 2007={}) latch_seq={} projected={} nt0={:02x?} no_filter={}", pp, parsed_lines, ppu_writes, w2006, w2007, latch_seq, projected, &nt.tiles[0][0x68..0x70], no_filter);
+                }
+                if no_filter {
+                    eprintln!("DBGPROBE NOOWF 旁路模式（覆写过滤关闭）");
                 }
                 if projected == 0 {
                     eprintln!("WARN probe 投影零写入（{}）——记录形/覆写诊断", pp);
