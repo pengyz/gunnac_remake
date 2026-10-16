@@ -980,3 +980,58 @@ fn menu_input_gate_two_layers() {
         Some(input_bits::B | input_bits::START)
     );
 }
+
+// ===== 通关跑（lead 通关令——Rust 引擎全通跑）=====
+
+/// ㉙ 通关跑全链：8 关→结局卡到达=通关（$4C=1）。
+#[test]
+fn clear_run_completes_all_stages() {
+    use game_core::engine::{ClearRun, ClearRunPhase};
+    let mut run = ClearRun::new(1); // $4C=1 INTERMEDIATE（默认）
+    run.run_to_clear();
+    assert_eq!(run.phase, ClearRunPhase::Cleared, "通关=结局画面到达");
+    assert_eq!(run.ending_card, Some(1), "结局卡=$97D3[$4C]=1（scene1）");
+    // 段锚 trace：8 关×(shop/start/combat/clear)+all-clear
+    let cps: Vec<&str> = run.events.iter().map(|e| e.checkpoint()).collect();
+    for n in 1..=8u8 {
+        let tag = format!("stg{n:02}");
+        for kind in ["shop", "start", "combat", "clear"] {
+            let cp = format!("{tag}-{kind}");
+            assert!(cps.contains(&cp.as_str()), "缺段锚 {cp}");
+        }
+    }
+    assert!(cps.contains(&"all-clear-95f9"), "结局段锚");
+}
+
+/// ㉚ 三结局按 $4C 分别可达（A3 结局链：$97D3[$4C]）+NOVICE 无卡。
+#[test]
+fn clear_run_three_endings_by_game_level() {
+    use game_core::engine::{ClearRun, ClearRunPhase};
+    // $4C=1/2/3 ⇒ 结局卡 scene1/2/3（三结局）
+    for (lvl, scene) in [(1u8, 1u8), (2, 2), (3, 3)] {
+        let mut run = ClearRun::new(lvl);
+        run.run_to_clear();
+        assert_eq!(run.ending_card, Some(scene), "$4C={lvl} ⇒ 卡 scene{scene}");
+    }
+    // $4C=3（EXPERT）卡常驻（START 无效）
+    let mut run = ClearRun::new(3);
+    run.run_to_clear();
+    assert!(run.card_resident, "EXPERT 卡常驻");
+    // $4C=0（NOVICE）无卡 ⇒ 回标题
+    let mut run = ClearRun::new(0);
+    run.run_to_clear();
+    assert_eq!(run.ending_card, None, "NOVICE 无结局卡");
+    assert_eq!(run.title_returned, true, "直接回标题");
+}
+
+/// ㉛ 通关跑确定性（replay 可复现——同 $4C 两跑 trace 全等）。
+#[test]
+fn clear_run_deterministic_replay() {
+    use game_core::engine::ClearRun;
+    let t = || {
+        let mut r = ClearRun::new(2);
+        r.run_to_clear();
+        (r.events.clone(), r.ending_card, r.final_frame())
+    };
+    assert_eq!(t(), t(), "确定性 replay（trace 全等）");
+}
