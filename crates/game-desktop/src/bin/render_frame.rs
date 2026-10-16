@@ -66,6 +66,10 @@ fn main() {
                             if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) {
                                 lb[(lan - 0x0130) as usize] = lv;
                                 // $0160 flag 非零=行上传（目的址=行缓冲尾字段 t131 4 字段）
+                                // 【v=2 真身 b876198】$0160=**bitfield 非枚举**：bit0=v=1
+                                // 态（EC42 LDA #1）/bit1=完成（88A3 ORA $160 流字节 bit 置位
+                                // 合成——无直接 LDA #2）；F0DC CMP #2=bit1 单测（bit0=0 时）。
+                                // 12 写点全谱（827A/ECD0=0 族/87EB/EECE/EEE1=3 族/EE59 表查）。
                                 // 【flag 语义细化+对账注】trace 实证：v=3（EED4）=瓦写脉冲
                                 // （194892 超发 6500×）/ **v=1（BBBD）=行完成候选**（1110≈
                                 // 402 行/块×2.7 块量级双证；实测最佳 50088 同点+三带归位
