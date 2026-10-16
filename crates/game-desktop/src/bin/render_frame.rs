@@ -55,37 +55,37 @@ fn main() {
                 let mut lb_addr: usize = 0;
                 let mut zp8e: u8 = 0;
                 let mut zp8f: u8 = 0;
+                let mut row_seq: u32 = 0; // 块内行序（zp 写=重置——块基行序②）
                 for l in t.lines() {
                     if l.contains("\"a\":") { parsed_lines += 1; }
                     let la = match l.split("\"a\":\"").nth(1) { Some(x) => x.split('"').next().unwrap_or(""), None => continue };
                     if let Ok(lan) = u16::from_str_radix(la, 16) {
-                        if lan == 0x008E { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8e = lv; } }
-                        if lan == 0x008F { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8f = lv; } }
+                        if lan == 0x008E { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8e = lv; row_seq = 0; } }
+                        if lan == 0x008F { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8f = lv; row_seq = 0; } }
                         if (0x0130..=0x0160).contains(&lan) {
                             if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) {
                                 lb[(lan - 0x0130) as usize] = lv;
                                 // $0160 flag 非零=行上传（目的址=行缓冲尾字段 t131 4 字段）
                                 if lan == 0x0160 && lv != 0 {
-                                    let lo = zp8e;
-                                    let hi = zp8f;
                                     if lb_addr < 3 && std::env::var("DBGPROBE").is_ok() {
                                         eprintln!("DBGLB flag#{} tail={:02x?}", lb_addr, &lb[0x1E..0x31]);
                                     }
-                                    let base_addr = ((hi as u16) << 8) | lo as u16;
-                                    if (0x2000..0x3000).contains(&base_addr) {
-                                        let rel = (base_addr - 0x2000) as usize;
+                                    // 【块基行序实证注】zp 重置+行递增=47857（<静态块基
+                                    // 49919）——flag 63648 vs zp 158≈402 行/块 >>30 行屏=
+                                    // flag 重复写疑（行完成判定待证）；静态块基=最佳实测 81.2%
+                                    let dst = ((zp8f as u16) << 8) | zp8e as u16;
+                                    let _ = row_seq;
+                                    if (0x2000..0x3000).contains(&dst) {
+                                        let rel = (dst - 0x2000) as usize;
                                         for i in 0..32usize {
                                             let off = rel + i;
                                             let (n, o) = (off / 0x400, off % 0x400);
                                             if n < 4 && o < 0x3C0 {
                                                 nt.tiles[n][o] = lb[i];
-                                                projected += 1;
                                             }
                                         }
                                     }
-                                    // 【实证注】逐行 +32 递增反降（47857<49919）——
-                                    // 目的址=块基语义（zp $8E/$8F 每块更新 158 次 vs
-                                    // flag 63648）非逐行递增；静态块基=最佳实测（81.2%）
+                                    row_seq += 1;
                                     lb_addr += 1;
                                 }
                             }
