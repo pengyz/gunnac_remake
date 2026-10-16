@@ -352,21 +352,29 @@ pub fn clear_hit_entry(e: &HitBoxEntry) -> HitBoxEntry {
 
 /// 伤害公式（`bank14:$D674`，X=被击者）：
 /// - `$4C==0`（语义未证域）→ 直接 HP:=0（一击死）——**参数化待证，不入默认路径**；
-/// 【112d5cf dated 更正】~~弹命中伤害路径 $CEA2 SBC #3（ShotDmgPath 二枚举）~~
-/// **双重证伪**（bank13 全 8K 无 E9 03 原字节；bank14 同址字节=OAM 图形步进
-/// $CDF2 族）——真身=**命中双路机制**（A 级 bank14:$D67C-$D6BB）。
-///
-/// 命中双路：**切换开关=`$6E` bit7**（BPL 分支）——bit7=1 ⇒ 恒定 −2（`$D688`
-/// SBC #2 真身=1# −2HP）；bit7=0 ⇒ HP−=`$0630+槽`（**伤害字段**——spawn 写者
-/// 数据驱动：A659（$0190 索引→$A66B 双表）/AB1B（$4D 索引→$AAE2 8 项表）/
-/// 96DB（TYA→$0630））。出口三态：BEQ HP:=0 死亡/BCS 存活/BCC 清 0（调用方
-/// `$D616` 死亡门）。物撞=同双路 bit7=0 路（字段=对方 `$0630`）统一。
-/// 3# L4-5 −3→−2 分支点**不在命中侧**=spawn 矩阵值变化（自动选择按「spawn
-/// 写者+索引」建模——W-DMG3 续：−3 族 37 格矩阵=写者全谱定位挂账）。
-///
-/// - `const2_mode` = `$6E` bit7 镜像（1 ⇒ 恒定 −2）；
-/// - `damage_field` = `$0630+槽` 伤害字段值（bit7=0 路的减量）。
-pub fn damage_apply(hp: u8, const2_mode: bool, damage_field: u8) -> u8 {
-    let dmg: u16 = if const2_mode { 2 } else { u16::from(damage_field) };
+/// 命中伤害路径（5e45dc5 **全 SBC 穷举三路**——bank14:$D67C-$D6BB 族）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HitDmgPath {
+    /// `$D684 SBC #2` 恒定（`$6E` bit7=1——1# −2HP 真身）。
+    Const2,
+    /// `$D69C SBC $0630,Y` 弹伤字段（spawn 写者数据驱动）。
+    Field0630,
+    /// `$D705 SBC $12` 第三路（`$12` 索引源待续b——W-DMG3 续）。
+    Zp12,
+}
+
+/// 命中伤害（三路统一；物撞=Field0630 路（字段=对方 `$0630`））。
+/// 【112d5cf dated】~~$CEA2 SBC #3 两立即数~~ 双重证伪；【5e45dc5】三路穷举定谳：
+/// 弹伤写者族（bank03 五点）=立即数 1（A005）/$96B7 链 &$7F（A651）/$631 相邻槽
+/// 拷贝（字段复用族）/**$35 配置字段**（写者 bank01:A4E1）/**$AAE2[$4D] 8 项表**
+/// （AB1B：04 05 06 07 08 09 0B 0E）；敌 HP 表族（bank04-07 ~45 点）表[$4D|$4C]
+/// →`$0630+槽`（bank5:$A9C8 [2,3,4,4,5,6,7,8]=−2/−3 候选值域）。
+/// 3# L4-5 −3→−2=spawn 矩阵值变化非命中分支。出口三态：BEQ 死亡/BCS 存活/
+/// BCC 清 0（调用方 `$D616` 死亡门）。
+pub fn damage_apply(hp: u8, path: HitDmgPath, operand: u8) -> u8 {
+    let dmg: u16 = match path {
+        HitDmgPath::Const2 => 2,
+        HitDmgPath::Field0630 | HitDmgPath::Zp12 => u16::from(operand),
+    };
     u16::from(hp).saturating_sub(dmg).min(0xFF) as u8
 }
