@@ -1531,3 +1531,51 @@ impl ClearRun {
         }
     }
 }
+
+// ===== bot 战斗面输出接口（转段主任务——plan §4 游走/火力/保命+boss 输出循环）=====
+
+/// 敌弹槽预测（**保命面**）：槽状态+帧数 ⇒ 预测坐标——motion_update 亚像素对
+/// 积分同源（确定性外推 N 帧）。返回 (x, y)。
+pub fn predict_slot_position(slot: &ObjectSlot, frames: u16) -> (u8, u8) {
+    let mut s = ObjectSlot { ..*slot };
+    for _ in 0..frames {
+        match motion_update(&mut s) {
+            MotionOutcome::Continue { .. } => {}
+            MotionOutcome::Offscreen => break, // 出屏即停（预测域外）
+        }
+    }
+    (s.x, s.y)
+}
+
+/// 弹命中盒（7×10——`shot_hitbox_register` 同源）：x−4..x+3 / y−5..y+5。
+/// 返回 (x_lo, x_hi, y_lo, y_hi)。bot 避让判据面。
+pub fn predicted_hitbox(x: u8, y: u8) -> (u8, u8, u8, u8) {
+    (x.saturating_sub(4), x.saturating_add(3).min(0xFF), y.saturating_sub(5), y.saturating_add(5).min(0xFF))
+}
+
+/// 武器 DPS（**火力面**）：单发伤害×发射率。`fire_interval_frames`=实测发射间隔
+/// （调用方输入——射速语义未证不发明）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WeaponDps {
+    /// 单发伤害（命中路径解析值）。
+    pub damage_per_shot: u8,
+    /// 60f 期望伤害（=damage×60/interval）。
+    pub dps_per_60f: u32,
+}
+
+/// 武器 DPS 计算（伤害值由调用方按命中路径解析（Const2=2/字段=表值）——路径
+/// 自动选择见 `auto_hit_path`）。
+pub fn weapon_dps(damage_per_shot: u8, fire_interval_frames: u16) -> WeaponDps {
+    let interval = fire_interval_frames.max(1) as u32;
+    WeaponDps {
+        damage_per_shot,
+        dps_per_60f: u32::from(damage_per_shot) * 60 / interval,
+    }
+}
+
+/// boss 击杀数（**输出循环面**）：`ceil(boss_hp / damage)`（Soig sheet2 命中数
+/// 互证面；boss HP=RAM `$0630+槽` 读值或 Soig 表）。
+pub fn boss_hits_to_kill(boss_hp: u16, damage_per_shot: u8) -> u32 {
+    let d = u32::from(damage_per_shot).max(1);
+    (u32::from(boss_hp) + d - 1) / d
+}
