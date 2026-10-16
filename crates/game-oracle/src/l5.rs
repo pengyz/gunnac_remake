@@ -155,6 +155,32 @@ pub fn diff_l5(golden: &[L5Event], rust: &[L5Event]) -> Vec<String> {
     problems
 }
 
+/// run 面序列对拍（③通关 trace vs golden L5——**模式/段锚序全等**；帧号=run 帧域
+/// 非实机帧（域注：run=f(tick 调度) 确定性 replay，golden=实机帧——序列对拍面）。
+/// 返回差异列表（空=序列全等）。
+pub fn diff_run_face(
+    run: &[(&str, &str)],
+    golden: &[L5Event],
+) -> Vec<String> {
+    let mut problems = Vec::new();
+    // run 面范围=链段（shop→ending）；boot/title 段（Black/Title/Menu）=flow 面
+    //（title-menu probe 覆盖）——过滤后对拍
+    let gseq: Vec<(&str, &str)> = golden
+        .iter()
+        .filter(|e| !matches!(e.mode.as_str(), "Black" | "Title" | "Menu"))
+        .map(|e| (e.mode.as_str(), e.checkpoint.as_deref().unwrap_or("")))
+        .collect();
+    if run.len() != gseq.len() {
+        problems.push(format!("序列长不等 run {} vs golden {}", run.len(), gseq.len()));
+    }
+    for (i, (r, g)) in run.iter().zip(gseq.iter()).enumerate() {
+        if r != g {
+            problems.push(format!("[{i}] 序不等 run {:?} vs golden {:?}", r, g));
+        }
+    }
+    problems
+}
+
 /// 显式挂起清单（b 案②配套）：golden 中 f=0 占位行的行号（pending 不入 0 容差面
 /// ——ok-trigger-pending 同族注记，不冒充 natural/真帧）。
 pub fn l5_pending_rows(events: &[L5Event]) -> Vec<usize> {

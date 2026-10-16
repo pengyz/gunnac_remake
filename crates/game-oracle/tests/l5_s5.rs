@@ -230,3 +230,20 @@ fn s5_chain_run_anchored_real_frames() {
     let p = run.events.iter().find(|e| e.checkpoint.as_deref() == Some("stg08-start")).unwrap();
     assert_eq!(p.f, 0, "stg08 未采段占位（stg07 已实锚）");
 }
+
+/// ⑤ run 面序列对拍（通关 trace vs golden——③判据）。
+#[test]
+fn clear_run_face_matches_golden_sequence() {
+    use game_core::engine::ClearRun;
+    use game_oracle::l5::diff_run_face;
+    let mut run = ClearRun::new(1);
+    run.run_to_clear();
+    let seq: Vec<(&str, &str)> = run
+        .events
+        .iter()
+        .map(|e| (e.mode, e.checkpoint()))
+        .collect();
+    // golden 全链序列（s5-stg01+s5-chain 33 行）——run 序列全等
+    let problems = diff_run_face(&seq, &golden());
+    assert!(problems.is_empty(), "run 面序列对拍：{problems:?}");
+}
