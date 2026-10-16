@@ -52,7 +52,12 @@ fn main() {
     // 此前误把 JSONL inv 行号当段序号（calls 11-18 全被滤掉=假阳性源）。
     // 七段起点（t130 §2 表）：$2170/$21A2/$2289/$22B7/$21B8/$2205/$2252
     let seg_starts: [u16; 7] = [0x2170, 0x21A2, 0x2289, 0x22B7, 0x21B8, 0x2205, 0x2252];
-    let raw_writes: Vec<(u32, u16, u8, u32, u32)> = std::fs::read_to_string("analysis/phase/gameplay-stage1-text.jsonl")
+    // 【l4_timeline 消解令】文本写集路径按 scene 派生（--text-file 覆盖可选）——
+    // 此前硬编码 gameplay-stage1-text.jsonl=注入链场景重建用错文本源根因。
+    let text_path: String = args.iter().position(|a| a == "--text-file")
+        .and_then(|i| args.get(i + 1)).cloned()
+        .unwrap_or_else(|| format!("analysis/phase/{}-text.jsonl", scene));
+    let raw_writes: Vec<(u32, u16, u8, u32, u32)> = std::fs::read_to_string(&text_path)
         .map(|t| t.lines().filter_map(|l| {
             let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
             let a = u16::from_str_radix(l.split("\"addr\":\"").nth(1)?.split('"').next()?, 16).ok()?;
