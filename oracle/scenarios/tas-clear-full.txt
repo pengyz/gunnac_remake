@@ -1,0 +1,33 @@
+# 场景：tas-clear-full —— 真机 bot 八关全程（通关令二线 · (c) 全程跑+逐关窗）
+# 口径：bot（tools/tas_bot.lua CFG.stages_total=8）自 stg01 起点接管，相位自推进八关
+#   （combat→clear→shop→下一关…→stg08 清 ⇒ done 结局观测窗）；**无 poke 无条件指令**。
+# 段长参照（port 段长表，run 帧域量级非跨域映射）：每关≈1755-2338f（shop 168+tr 33+
+#   start 240+combat 649-1232+clear 665）⇒ 全程≈16k f；DSL 帧域另域，预算 30000 裕度。
+# 后置窗分析（lead (c) 裁定）：trace 按段锚四连逐关验收——段锚=golden 段锚同名
+#   （stgN-shop/Transition/stgN-start/stgN-combat/stgN-clear）；OBS-1=stg08 出店段同 trace 裁。
+name tas-clear-full
+frames 30000
+press_len 4
+
+# ===== 输入前缀（gameplay-stage1 同源至 stg01 起点；勿改）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+
+# ===== bot 接管（stg01-start 起；八关自推进）=====
+bot stg01-clear from 1260
+
+# ===== 采集面（段锚巡检+判定 RAM）=====
+capture_every 1500 probe
+watch 0180 stage_no
+watch 0026 flags26
+watch 0400 pstate
+watch 0640 player_x
+watch 04fc boss_x
