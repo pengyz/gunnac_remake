@@ -110,3 +110,37 @@ fn fade_stream_spectrum_and_loader() {
     assert_eq!(t.mode, 2);
     assert!(t.loaded);
 }
+
+/// L4 索引族：①tile 校正+⑤type CHR bank。
+#[test]
+fn index_family_faces() {
+    use game_desktop::{tile_correction, type_chr_bank, TILE_CORRECT_9B, TYPE_CHR_BANK};
+    // ① tile 校正（CN $DA4C 00×7,C1,C1）
+    assert_eq!(TILE_CORRECT_9B, [0, 0, 0, 0, 0, 0, 0, 0xC1, 0xC1]);
+    assert_eq!(tile_correction(1), 0);
+    assert_eq!(tile_correction(8), 0xC1, "关 8-9 校正");
+    assert_eq!(tile_correction(9), 0xC1);
+    assert_eq!(tile_correction(0), 0, "越界 fail-closed");
+    assert_eq!(tile_correction(10), 0);
+    // ⑤ type CHR bank（bank2:$816E 直读——$A0-$BD CHR bank 族）
+    assert_eq!(TYPE_CHR_BANK.len(), 256);
+    assert_eq!(type_chr_bank(0), 0xA3);
+    assert_eq!(type_chr_bank(1), 0xA5);
+    assert!(type_chr_bank(0x30) >= 0xA0 || type_chr_bank(0x30) <= 0x07, "bank 值域");
+}
+
+/// R-5 碎片组+画面锚。
+#[test]
+fn fragment_groups_and_screen_anchors() {
+    use game_desktop::{FRAGMENT_GROUPS, SCREEN_ANCHORS};
+    // 4 组+碎片共享实证（$13/$14 跨组）
+    assert_eq!(FRAGMENT_GROUPS.len(), 4);
+    assert!(FRAGMENT_GROUPS[1].contains(&0x13) && FRAGMENT_GROUPS[3].contains(&0x13), "13 跨组共享");
+    assert!(FRAGMENT_GROUPS[1].contains(&0x14) && FRAGMENT_GROUPS[3].contains(&0x14), "14 跨组共享");
+    // 组0=$30 头+01-12 碎（19 字节；碎=18——$30 头注）
+    assert_eq!(FRAGMENT_GROUPS[0].len(), 19);
+    assert_eq!(FRAGMENT_GROUPS[0][0], 0x30);
+    // 画面锚族
+    assert!(SCREEN_ANCHORS.contains(&"stage_1"));
+    assert!(SCREEN_ANCHORS.contains(&"ending_robot"));
+}
