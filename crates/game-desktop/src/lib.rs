@@ -629,9 +629,9 @@ pub fn type_chr_bank(type_: u8) -> u8 {
 
 // ===== R-5 CHR 碎片组（4c8e38d——⑤tile 语义+graphics.csv 锚）=====
 
-/// 碎片组（bank0:$9822 起 00 分隔 4 组——**碎片共享实证**：$13/$14 跨组复用
-/// （社区 T09「碎片共享 13 字」互证）；组=composition 碎片库（B 级——每画面=
-/// 碎片组合；R-5b 挂 per-screen 组合表）。
+/// 【3fa001c dated】~~00 分隔碎片组~~ **=hi 表+相邻流数据**（R-5b 组合表定谳：
+/// 真组合=双表→流非分隔组）。碎片共享实证维持：$13/$14 跨组复用（社区 T09 互证）；
+/// 本常量保留为碎片 ID 族登记（合成真身=composition_stream_ptr 链）。
 /// 组0=$30+01-12（18 碎）/组1=13 14/组2=15-1A/组3=13 14+1B-21。
 pub const FRAGMENT_GROUPS: [&[u8]; 4] = [
     &[0x30, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
@@ -721,4 +721,56 @@ pub fn screen_step(data: &[u8], pos: usize) -> Option<(ScreenStep, usize)> {
             }
         }
     }
+}
+
+// ===== R-5b 关名合成链（3fa001c——三线合龙末件）=====
+
+/// 组合流指针表 lo（bank2:$97BA 16B——ROM 直读）。
+pub const COMP_PTR_LO: [u8; 16] = [
+    0x6A, 0x6F, 0x7A, 0x85, 0x9D, 0xB2, 0xD2, 0xEA, 0xF7, 0xFC, 0x25, 0x31, 0x36, 0x53, 0x7C, 0x16,
+];
+/// 组合流指针表 hi（bank2:$9812 16B）。
+pub const COMP_PTR_HI: [u8; 16] = [
+    0x98, 0x98, 0x98, 0x98, 0x98, 0x98, 0x98, 0x98, 0x98, 0x98, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99,
+];
+
+/// `$518` 形状索引→组合流指针（双表查——`hi[i]<<8|lo[i]`；fail-closed 越界 None）。
+pub fn composition_stream_ptr(shape_index: usize) -> Option<u16> {
+    let lo = *COMP_PTR_LO.get(shape_index)?;
+    let hi = *COMP_PTR_HI.get(shape_index)?;
+    Some(u16::from_le_bytes([lo, hi]))
+}
+
+/// F 编码位移解码（有符号补码 i8——FF=-1/FA=-6/F4=-12 ✓）。
+pub fn f_decode(b: u8) -> i8 {
+    b as i8
+}
+
+/// 组合流步（`01 头|位移对|计数|嵌套指针 lo,hi|参数对`——R-5b 格式；嵌套指针=
+/// R-5b-2 挂（指针集 $9941/$9895/$98AA/$98C6/$9998/$99CA…）。fail-closed 截断 None。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompStep {
+    /// `01` 头。
+    Header,
+    /// 位移对（F 编码 dx,dy）。
+    Displacement { dx: i8, dy: i8 },
+    /// 嵌套指针（lo,hi——R-5b-2 碎片表挂）。
+    Nested { ptr: u16 },
+    /// 参数对（值域 R-5b-2 挂）。
+    Param { a: u8, b: u8 },
+}
+
+/// 组合流单步（启发式字段界（8 样本同构注）——精确步进机=R-5b-2 随证修）。
+pub fn comp_step(data: &[u8], pos: usize) -> Option<(CompStep, usize)> {
+    let &b0 = data.get(pos)?;
+    if b0 == 0x01 && pos == 0 {
+        return Some((CompStep::Header, pos + 1));
+    }
+    let b1 = *data.get(pos + 1)?;
+    // 嵌套指针形：hi ∈ $98..$99（组合流/碎片表窗）且 lo 任意
+    if (0x98..=0x99).contains(&b1) {
+        return Some((CompStep::Nested { ptr: u16::from_le_bytes([b0, b1]) }, pos + 2));
+    }
+    // 位移对（F 编码）或参数对——按位移域判（|v|≤16 候选域=位移）
+    Some((CompStep::Displacement { dx: f_decode(b0), dy: f_decode(b1) }, pos + 2))
 }
