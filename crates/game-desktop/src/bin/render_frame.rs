@@ -329,7 +329,7 @@ fn main() {
             let mut row = [0u8; 32];
             row.copy_from_slice(&buf[0x00..0x20]);
             let addr_ok = ((addr_regs.1 as u16) << 8 | addr_regs.0 as u16) >= 0x2000;
-            if !addr_ok && row.iter().any(|&v| v != 0) {
+            if !addr_ok && row.iter().any(|&v| v != 0) && std::env::var("NOHUDLUT").is_err() {
                 // ① 放置序=**降序+双写**（t109 参数表：行索引逆序映射、每行双调用——
                 // 顺序填充实验反向即本因）：fills/2 → LUT 行 15 递降
                 let lut = [0x21C0u16, 0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380];
@@ -397,7 +397,9 @@ fn main() {
             // 全不匹配留档）；条带行上下文未定=中性（不画）
             // ①③四分路由实测注（t243）：<64→图形窗 20 实测净负（97.48<98.34 守卫拦下）
             // ——保持字体窗 124+tile/64（t238 矩阵窗基 124 实例）；四分路由注留档
-            let bank = if tile_page[ntr][ty] == 2 { 28 } else { 124 } + tile / 64;
+            // 【映射修】tile_page 2 族 bank 基 28→**44**（golden 反查实证：结局卡字形
+            // =bank44 瓦 1/2/3；bank28 直读全零=旧基错）。行窗偏移（码内容差）=余诊。
+            let bank = if tile_page[ntr][ty] == 2 { 44 } else { 124 } + tile / 64;
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 // 【2026-10-13 更正（t185 R18-1 高危）】墨掩码=p0 置位（索引 1/3 为墨、
