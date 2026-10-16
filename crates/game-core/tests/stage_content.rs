@@ -287,10 +287,7 @@ fn dual_allocators_and_time_division() {
 #[test]
 fn hitbox_register_and_damage_golden() {
     use game_core::shot::{
-        attrs_intersect, boxes_overlap, clear_hit_entry, damage_apply, hit_resolves, ShotDmgPath,
-    };
-    const D688: ShotDmgPath = ShotDmgPath::D688Minus2;
-    use game_core::shot::{
+        attrs_intersect, boxes_overlap, clear_hit_entry, damage_apply, hit_resolves,
         shot_hitbox_register, HitBoxEntry,
     };
     // 注册 golden：x=128,y=128 → 7×10 框（124..131, 123..133），归属=槽偏移，attr=$30
@@ -329,12 +326,12 @@ fn hitbox_register_and_damage_golden() {
         "仅清三字段（写集外字段误清必红）"
     );
     // 伤害公式：弹 −2/物撞 −=对方 HP；HP 饱和 0（$D616 死亡门由调用方判 hp==0）
-    assert_eq!(damage_apply(14, true, 30, D688), 12, "弹命中 −2（中 boss HP14→12 实测锚）");
-    assert_eq!(damage_apply(2, true, 30, D688), 0, "HP 归 0 ⇒ 死亡门");
-    assert_eq!(damage_apply(10, false, 6, D688), 4, "物撞 −=对方 $0630=6");
-    assert_eq!(damage_apply(10, false, 14, D688), 0, "物撞伤害=对方 HP（非 −2）饱和 0");
-    assert_ne!(damage_apply(14, false, 30, D688), 12, "物撞按 −2 误算必红");
-    assert_eq!(damage_apply(1, true, 30, D688), 0, "下溢饱和 0 不回绕");
+    assert_eq!(damage_apply(14, true, 30), 12, "弹命中 −2（中 boss HP14→12 实测锚）");
+    assert_eq!(damage_apply(2, true, 30), 0, "HP 归 0 ⇒ 死亡门");
+    assert_eq!(damage_apply(10, false, 6), 4, "物撞 −=对方 $0630=6");
+    assert_eq!(damage_apply(10, false, 14), 0, "物撞伤害=对方 HP（非 −2）饱和 0");
+    assert_ne!(damage_apply(14, false, 30), 12, "物撞按 −2 误算必红");
+    assert_eq!(damage_apply(1, true, 30), 0, "下溢饱和 0 不回绕");
 }
 
 /// ㉘ 商店主面板项数随关卡变（stg08 run#1 新语义）：「退」=末项非固定 3。
