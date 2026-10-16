@@ -152,3 +152,29 @@ fade 流字节序列全谱=与 S5-2 帧域序列 trace 对照后可直出 port �
 
 **fade 线闭合**：R-2（记录表）/R-3（参数源=流）/R-3b（语法+装载体）/R-3c（fade 流全谱）✓——
 W-C1 改写器→流回放→$3Fxx 上传全链四段合龙。
+
+## R-5 · graphics.csv tile 语义（2026-10-16 弹药随发，首片收）
+
+**① graphics.csv 面（A 级）**：`analysis/community/gun-nac-ko/translation/graphics.csv`
+（社区韩化翻译表，32 行）——列=`id,category,screen,ko_translation,notes,review_status`；
+行族：**stage_1..stage_8**（screen=「AREA n 시작」=关名屏）/ opening_bubble / ending_robot /
+ending_normal / …——**id=画面语义锚**（R-4 OP-ED 画面 CHR 同域注）。
+
+**② ROM tile 组流（A 级）= bank0:$9822 起 00 分隔 4 组**：
+
+| 组 | tile 索引 | 数 |
+|---|---|---|
+| 0 | $30 + **01-12** | 18 |
+| 1 | **13 14** | 2 |
+| 2 | 15-1A | 6 |
+| 3 | **13 14** + 1B-21 | 9 |
+
+- **碎片共享实证**：索引 **13/14 跨组复用**（组1/组3/组4 含）——社区 T09「碎片共享 13 字→24 碎→48 tile」
+  ✓ A 级互证。
+- **组=composition 碎片库**（B 级）：每画面=碎片组合（组0=主字集 18 碎、组1/2/3=修饰碎）；
+  **R-1 校正表 $DA4C**（关 8/9 → $C1）=组合基值校正（同域互证）。
+- **R-5b 挂**：per-screen 组合表（graphics.csv id→组序/组合式）——渲染 trace 或社区 patch
+  组合表对照后直出（与 R-2b 并行池）。
+
+**弹药面收口**：①$D7B9（R-1=$DA4C ✓ 前案）+⑤CHR 索引族（本片）——port 直用面：
+「csv id 锚 + 4 碎片组 + 共享索引 + $DA4C 校正」四件套。
