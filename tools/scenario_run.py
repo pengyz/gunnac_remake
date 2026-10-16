@@ -61,7 +61,7 @@ PRESS_LEN_DEFAULT = 2
 # B2 v4 bot 闭环（tools/tas_bot.lua 决策器）：策略白名单 fail-closed（未知策略拒绝）。
 # bot 场景 = 实时决策（读 RAM→按键）+ 逐帧按键录制（inputs.jsonl）→ tas_gen record-to-scenario
 # 转写开环轨回放复核（闭环两遍一致）。**bot 场景禁 poke**（无写注入——通关必须自然）。
-BOT_POLICIES = {"stg01-clear"}
+BOT_POLICIES = {"stg01-clear", "stage-clear"}  # stage-clear=八关参数化策略（通关令步骤 1-2）
 BOT_LUA = ROOT / "tools" / "tas_bot.lua"
 
 
