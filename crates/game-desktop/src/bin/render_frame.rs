@@ -37,8 +37,14 @@ fn main() {
     let scene = args.get(3).cloned().unwrap_or_else(|| "gameplay-stage1".into());
     let base: usize = args.iter().position(|a| a == "--base")
         .and_then(|i| args.get(i + 1)).and_then(|v| v.parse().ok()).unwrap_or(0);
-    let rom = std::fs::read("rom/gunnac_cn.nes").expect("ROM");
-    let trace = std::fs::read_to_string(format!("analysis/traces/{scene}.frames.jsonl")).expect("trace");
+    let repo_root: std::path::PathBuf = std::env::var("REPO_ROOT").map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::env::current_exe().unwrap_or_default()
+                .parent().and_then(|p| p.parent()).and_then(|p| p.parent())
+                .map(|p| p.to_path_buf()).unwrap_or_default()
+        });
+    let rom = std::fs::read(repo_root.join("rom/gunnac_cn.nes")).expect("ROM");
+    let trace = std::fs::read_to_string(repo_root.join(format!("analysis/traces/{scene}.frames.jsonl"))).expect("trace");
     // NMI 级重建（R-l4-linebuf 五不变量，t94/t96）：
     // 帧 N 主循环扫写填充行缓冲（probe 写事件）→ 帧 N+1 vblank NMI 读走（读后即废）→
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
@@ -73,6 +79,8 @@ fn main() {
                 let mut lb_addr: usize = 0;
                 let mut zp8e: u8 = 0;
                 let mut zp8f: u8 = 0;
+                let mut woff: u16 = 0;
+                let mut lb_fresh = false; // 数据新鲜度（$0131-015F 写后置真——flag 仅新鲜时上传）
                 // 【双路径调色板②】$0161 族=行调色板色码组（cc9fcff F0F7=调色板刷新
                 // $0161→$3F10 直写；$EC46=色码表 11B 全 NES 色码）——行上传时行调色板
                 // 随行状态（W-C1 影子上传族并接=第二路）
@@ -84,15 +92,16 @@ fn main() {
                     if l.contains("\"a\":") { parsed_lines += 1; }
                     let la = match l.split("\"a\":\"").nth(1) { Some(x) => x.split('"').next().unwrap_or(""), None => continue };
                     if let Ok(lan) = u16::from_str_radix(la, 16) {
-                        if lan == 0x008E { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8e = lv; row_seq = 0; } }
+                        if lan == 0x008E { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8e = lv; row_seq = 0; woff = 0; } }
                         if lan == 0x0161 { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { pal_state[0] = lv; } }
                         if lan == 0x0162 { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { pal_state[1] = lv; } }
                         if lan == 0x0165 { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { pal_state[2] = lv; } }
                         if lan == 0x0168 { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { pal_state[3] = lv; } }
-                        if lan == 0x008F { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8f = lv; row_seq = 0; } }
+                        if lan == 0x008F { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8f = lv; row_seq = 0; woff = 0; } }
                         if (0x0130..=0x0160).contains(&lan) {
                             if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) {
                                 lb[(lan - 0x0130) as usize] = lv;
+                                if lan != 0x0160 { lb_fresh = true; }
                                 // $0160 flag 非零=行上传（目的址=行缓冲尾字段 t131 4 字段）
                                 // 【v=2 真身 b876198】$0160=**bitfield 非枚举**：bit0=v=1
                                 // 态（EC42 LDA #1）/bit1=完成（88A3 ORA $160 流字节 bit 置位
@@ -106,15 +115,24 @@ fn main() {
                                 // **对账**：trace v=1@BBBD vs ROM v=2 完成型=疑 $0160-0168
                                 // 行参数组多字段/写点族差（细分挂）；fail-closed 按 v=1 实测
                                 // 面接（三件套细分证后切 v=2 判定）
-                                if lan == 0x0160 && lv == 1 {
+                                if lan == 0x0160 && lv == 1 && lb_fresh {
+                                    lb_fresh = false;
                                     if lb_addr < 3 && std::env::var("DBGPROBE").is_ok() {
                                         eprintln!("DBGLB flag#{} tail={:02x?}", lb_addr, &lb[0x1E..0x31]);
                                     }
                                     // 【块基行序实证注】zp 重置+行递增=47857（<静态块基
                                     // 49919）——flag 63648 vs zp 158≈402 行/块 >>30 行屏=
                                     // flag 重复写疑（行完成判定待证）；静态块基=最佳实测 81.2%
-                                    let dst = ((zp8f as u16) << 8) | zp8e as u16;
-                                    let _ = row_seq;
+                                    // 【内容落位②】行序变体（ROWMAP env）：0=静态块基
+                                    // 1=块内递增 2=反序+半速（t109 降序+双写注：行索引逆序
+                                    // 映射+每行双调用——hud_row_seq/2 同式）
+                                    let rowmap: u32 = std::env::var("ROWMAP").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+                                    let base_addr = ((zp8f as u16) << 8) | zp8e as u16;
+                                    let dst = match rowmap {
+                                        1 => base_addr.wrapping_add((row_seq as u16).wrapping_mul(32)),
+                                        2 => base_addr.wrapping_add((((29u32).saturating_sub(row_seq / 2)) as u16).wrapping_mul(32)),
+                                        _ => base_addr,
+                                    };
                                     if (0x2000..0x3000).contains(&dst) {
                                         let rel = (dst - 0x2000) as usize;
                                         for i in 0..32usize {
@@ -158,15 +176,19 @@ fn main() {
                         "2007" => {
                             ppu_writes += 1;
                             w2007 += 1;
-                            if let Some(addr) = ppu {
-                                let off = (addr as usize).wrapping_sub(0x2000);
-                                if off < 960 {
-                                    let o = off % 960;
-                                    nt.tiles[0][o] = v;
+                            // 【内容源②】$2007 直写=结局卡真源候选（构建窗行缓冲
+                            // 零数据写/纯 flag 脉冲=旧数据上传=全异根因）——目的址=
+                            // zp $8E/$8F 基址+写自增（$2006 锁存缺失 quirk 绕行）
+                            let dst = (((zp8f as u16) << 8) | zp8e as u16).wrapping_add(woff);
+                            if (0x2000..0x3000).contains(&dst) {
+                                let rel = (dst - 0x2000) as usize;
+                                let (n, o) = (rel / 0x400, rel % 0x400);
+                                if n < 4 && o < 0x3C0 {
+                                    nt.tiles[n][o] = v;
                                     projected += 1;
                                 }
-                                ppu = Some(addr.wrapping_add(1));
                             }
+                            woff = woff.wrapping_add(1);
                         }
                         _ => {}
                     }
@@ -232,7 +254,7 @@ fn main() {
     let mut sy = 0u8;
     let mut zp_prev: Vec<u8> = vec![0; 256];
     // probe 写事件（NMI 级相位）
-    let probe_path = format!("analysis/traces/{scene}.probe.jsonl");
+    let probe_path = repo_root.join(format!("analysis/traces/{scene}.probe.jsonl")).to_string_lossy().into_owned();
     let probe: Vec<(u64, u16, u8)> = std::fs::read_to_string(&probe_path).map(|t| {
         t.lines().filter_map(|l| {
             let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
@@ -250,15 +272,21 @@ fn main() {
     let seg_starts: [u16; 7] = [0x2170, 0x21A2, 0x2289, 0x22B7, 0x21B8, 0x2205, 0x2252];
     // 【l4_timeline 消解令】文本写集路径按 scene 派生（--text-file 覆盖可选）——
     // 此前硬编码 gameplay-stage1-text.jsonl=注入链场景重建用错文本源根因。
+    // 【CWD 坑根治】text_path 仓根绝对派生（repo_root 上置）
     let text_path: String = args.iter().position(|a| a == "--text-file")
         .and_then(|i| args.get(i + 1)).cloned()
-        .unwrap_or_else(|| format!("analysis/phase/{}-text.jsonl", scene));
-    // 【stg02-start 回归修】per-scene 文本件缺 ⇒ 回退 legacy（gameplay-stage1-text）
-    // +警告注——共享链前缀域文本集通用（stg02-start 0→902 根因=场景件缺空集）；
-    // fail-closed 语义：回退显式警告非静默（per-scene 件齐后自动切换）
+        .unwrap_or_else(|| repo_root.join(format!("analysis/phase/{}-text.jsonl", scene)).to_string_lossy().into_owned());
+    // 【fallback 语义修】严格模式：per-scene 文本件缺 ⇒ **空集**（禁跨场景 fallback
+    // ——结局段帧渲 gameplay 文本=码族全异污染源堵死）；TEXTFALLBACK=1 逃生阀
+    // （stg02-start 共享域回归用——注：回归修与污染堵的权衡，per-scene 件齐后废弃）
     let text_path = if !std::path::Path::new(&text_path).exists() {
-        eprintln!("WARN text write set 缺（{}）——回退 gameplay-stage1-text.jsonl", text_path);
-        "analysis/phase/gameplay-stage1-text.jsonl".to_string()
+        if std::env::var("TEXTFALLBACK").is_ok() {
+            eprintln!("WARN text write set 缺（{}）——TEXTFALLBACK=1 回退 gameplay 集", text_path);
+            "analysis/phase/gameplay-stage1-text.jsonl".to_string()
+        } else {
+            eprintln!("WARN text write set 缺（{}）——严格空集（跨场景 fallback 禁）", text_path);
+            String::new()
+        }
     } else {
         text_path
     };
@@ -550,10 +578,10 @@ fn main() {
     let bg_opaque = [[false; 256]; 240]; // BG 面重建为空（黑场）——掩码全透明
     game_desktop::render_sprites(&mut canvas, &rom, &sprites, 30, &sprite_pals, &bg_opaque);
 
-    std::fs::create_dir_all("oracle/screens/actual").unwrap();
-    let out_path = format!("oracle/screens/actual/{name}.png");
+    std::fs::create_dir_all(repo_root.join("oracle/screens/actual")).unwrap();
+    let out_path = repo_root.join(format!("oracle/screens/actual/{name}.png")).to_string_lossy().into_owned();
     canvas.export_png(std::path::Path::new(&out_path)).expect("导出");
-    let idx_path = format!("oracle/screens/actual/{name}.idx.json");
+    let idx_path = repo_root.join(format!("oracle/screens/actual/{name}.idx.json")).to_string_lossy().into_owned();
     std::fs::write(&idx_path, format!(
         "{{\"palette_src\":\"{}\",\"attrs\":\"{}\",\"tiles\":\"{}\"}}",
         palette_src.iter().map(|b| format!("{b:02x}")).collect::<String>(),
@@ -561,7 +589,7 @@ fn main() {
         nt.tiles[ntr].iter().map(|b| format!("{b:02x}")).collect::<String>(),
     )).expect("侧车");
     let _ = idx_rows;
-    let mut log = std::fs::OpenOptions::new().create(true).append(true).open("oracle/screens/actual/.render.log").unwrap();
+    let mut log = std::fs::OpenOptions::new().create(true).append(true).open(repo_root.join("oracle/screens/actual/.render.log")).unwrap();
     writeln!(log, "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={}", nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count(), probe.len()).unwrap();
     let _ = (SCREEN_W, SCREEN_H);
 }
