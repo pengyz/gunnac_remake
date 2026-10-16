@@ -46,3 +46,9 @@ gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nt_nz=0 probe
 gameplay-stage1_f01260_stage-start frame=1260 base=0 scroll=(0,114) nt_nz=0 probe=200001
 gameplay-stage1_f01260_stage-start frame=1260 base=0 scroll=(0,114) nt_nz=160 probe=200001
 gameplay-stage1_f01500_mid-combat frame=1500 base=0 scroll=(0,114) nt_nz=32 probe=200001
+l4_stg02-start frame=3404 base=0 scroll=(0,208) nt_nz=220 probe=0
+l4_clear-inject frame=4600 base=0 scroll=(0,120) nt_nz=220 probe=0
+l4_shop-window frame=5400 base=0 scroll=(0,0) nt_nz=220 probe=0
+l4_stg03-start frame=5700 base=0 scroll=(0,132) nt_nz=220 probe=0
+l4_combat-variety frame=6500 base=0 scroll=(0,52) nt_nz=220 probe=0
+l4_late-combat frame=12000 base=0 scroll=(0,0) nt_nz=220 probe=0
