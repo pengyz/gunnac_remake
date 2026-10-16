@@ -49,3 +49,21 @@ fn palette_rewrite_face() {
     sh.rewrite(32, 0, 3);
     assert_eq!(sh.buf[0], 0x03, "越界不写");
 }
+
+/// R-2 场景调色板记录表（描述符+3B 记录）。
+#[test]
+fn scene_palette_table_face() {
+    use game_desktop::{
+        descriptor_palette_base, palette_record_at, PaletteRecord, SCENE_DESCRIPTORS,
+    };
+    // 描述符表 5 项 ROM 吻合（+2/+3 基址域=$A000 换窗区）
+    assert_eq!(SCENE_DESCRIPTORS.len(), 5);
+    assert_eq!(descriptor_palette_base(&SCENE_DESCRIPTORS[0]), 0xBEFB);
+    assert_eq!(descriptor_palette_base(&SCENE_DESCRIPTORS[1]), 0xC0D2);
+    assert_eq!(descriptor_palette_base(&SCENE_DESCRIPTORS[4]), 0xBFFB);
+    // 3B 记录取项+越界 fail-closed
+    let recs = [0x10, 0x80, 0xF0, 0x10, 0xF0, 0x10];
+    assert_eq!(palette_record_at(&recs, 0), Some(PaletteRecord([0x10, 0x80, 0xF0])));
+    assert_eq!(palette_record_at(&recs, 1), Some(PaletteRecord([0x10, 0xF0, 0x10])));
+    assert_eq!(palette_record_at(&recs, 2), None, "越界 fail-closed");
+}
