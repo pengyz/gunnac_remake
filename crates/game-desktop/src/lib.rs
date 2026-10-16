@@ -554,3 +554,35 @@ pub fn stream_step(data: &[u8], pos: usize) -> Option<(StreamStep, usize)> {
     let &count = data.get(pos + 1)?;
     Some((StreamStep::Data { value: b, count }, pos + 2))
 }
+
+// ===== R-3c fade 流全谱（364400b——fade 线四段闭合）=====
+
+/// fade 流段 1（bank1:$A7C2——10 色码+`$00` 终止；全 ≤`$3F` NES 色码域）。
+pub const FADE_STREAM_SEG1: [u8; 11] = [0x0F, 0x35, 0x27, 0x21, 0x16, 0x06, 0x21, 0x16, 0x06, 0x30, 0x00];
+
+/// fade 流段 2（14 色码+`$00` 终止）。
+pub const FADE_STREAM_SEG2: [u8; 15] = [
+    0x35, 0x30, 0x3C, 0x35, 0x30, 0x3C, 0x37, 0x30, 0x06, 0x37, 0x30, 0x26, 0x35, 0x30, 0x00,
+];
+
+/// fade 流尾参（`03 01 01`——ROM 尾区观测；语义注随 R-2b/播放对照）。
+pub const FADE_STREAM_TAIL: [u8; 3] = [0x03, 0x01, 0x01];
+
+/// 转场装载时序（R-3c A 级关键点：`JSR $EED7` 等级档 → `$75:=$C2/$76:=$A7`
+/// 装流 `$A7C2` → `$EDB0(A=2)` 执行——**转场 setup 一次装+逐帧回放**）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransitionLoader {
+    /// 流指针（`$75:$76`）。
+    pub stream: u16,
+    /// 执行器模式参（`$EDB0(A=2)` 转场）。
+    pub mode: u8,
+    /// 已装载（setup 完成）。
+    pub loaded: bool,
+}
+
+impl TransitionLoader {
+    /// 转场 setup（`$75:=$C2/$76:=$A7` ⇒ 流 `$A7C2`；`$EDB0(A=2)`）。
+    pub fn setup() -> Self {
+        TransitionLoader { stream: 0xA7C2, mode: 2, loaded: true }
+    }
+}

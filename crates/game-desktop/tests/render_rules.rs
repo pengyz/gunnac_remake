@@ -89,3 +89,24 @@ fn palette_command_stream_face() {
     // 截断 fail-closed（data 后缺 count）
     assert_eq!(stream_step(&[0x4D], 0), None);
 }
+
+/// R-3c fade 流全谱+转场装载时序。
+#[test]
+fn fade_stream_spectrum_and_loader() {
+    use game_desktop::{
+        TransitionLoader, FADE_STREAM_SEG1, FADE_STREAM_SEG2, FADE_STREAM_TAIL,
+    };
+    // 双段 ROM 直读吻合（≤$3F 色码域）
+    assert_eq!(FADE_STREAM_SEG1.len(), 11);
+    assert_eq!(FADE_STREAM_SEG2.len(), 15);
+    assert!(FADE_STREAM_SEG1[..10].iter().all(|&c| c <= 0x3F), "段1 色码域");
+    assert!(FADE_STREAM_SEG2[..14].iter().all(|&c| c <= 0x3F), "段2 色码域");
+    assert_eq!(FADE_STREAM_SEG1[10], 0x00, "段1 终止");
+    assert_eq!(FADE_STREAM_SEG2[14], 0x00, "段2 终止");
+    assert_eq!(FADE_STREAM_TAIL, [0x03, 0x01, 0x01]);
+    // 转场装载：流 $A7C2+mode2（setup 一次装+逐帧回放）
+    let t = TransitionLoader::setup();
+    assert_eq!(t.stream, 0xA7C2);
+    assert_eq!(t.mode, 2);
+    assert!(t.loaded);
+}
