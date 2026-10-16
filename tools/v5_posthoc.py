@@ -68,8 +68,54 @@ def sch4_probe(name):
     return {"samples": out, "note": "watch 无 $32——probe 稀疏采样；充足观测需下批 watch 行加 0032"}
 
 
+RUN_ASSIST = "assist=invincible"   # run 级标签（存活辅助——不改锚 trigger，双层标注显式）
+
+
+def emit_anchors(name, evs, frames, out_path):
+    """锚发射器（--anchors-out）：事件→既有锚型分类，trigger=natural（自然游戏事件）。
+    双层标注：锚级 trigger=natural；run 级存活辅助=source_run 尾签（不混入 trigger）。"""
+    src = f"{name}({RUN_ASSIST})"
+    rows = []
+    stage_of = lambda k: f"stg{k:02}"
+    for e in evs:
+        k = e.get("kind")
+        if k == "stage_clear_gate":
+            n = len([r for r in rows if r.get("checkpoint", "").endswith("-clear")]) + 1
+            rows.append({"id": f"{stage_of(n)}-clear", "golden": True, "checkpoint": f"{stage_of(n)}-clear",
+                         "mode": "StageClear", "scene": "s5-chain", "f": e["f"], "trigger": "natural",
+                         "source_run": src, "predicate": "$26 bit4 关末门自然置位（清关）",
+                         "evidence": f"analysis/traces/{name}.events.jsonl#f{e['f']}"})
+        elif k == "shop_init":
+            n = e.get("stages_cleared", 0) + 1
+            rows.append({"id": f"{stage_of(n)}-shop", "golden": True, "checkpoint": f"{stage_of(n)}-shop",
+                         "mode": "Shop", "scene": "s5-chain", "f": e["f"], "trigger": "natural",
+                         "source_run": src, "predicate": f"shop_init（stage_no={e.get('stage')}∧$0400:=0）",
+                         "evidence": f"analysis/traces/{name}.events.jsonl#f{e['f']}"})
+        elif k == "stage_advance":
+            n = e.get("stages_cleared", 0) + 1
+            rows.append({"id": f"{stage_of(n)}-combat", "golden": True, "checkpoint": f"{stage_of(n)}-combat",
+                         "mode": "Combat", "scene": "s5-chain", "f": e["f"], "trigger": "natural",
+                         "source_run": src, "predicate": "出店→关始→战斗段起（phase=combat）",
+                         "evidence": f"analysis/traces/{name}.events.jsonl#f{e['f']}"})
+        elif k == "ending_window":
+            rows.append({"id": "all-clear-95f9", "golden": True, "checkpoint": "all-clear-95f9",
+                         "mode": "Ending", "scene": "s5-chain", "f": e["f"], "trigger": "natural",
+                         "source_run": src, "predicate": "stg08 清后无 shop（E392 $180==9 → 结局域）",
+                         "evidence": f"analysis/traces/{name}.events.jsonl#f{e['f']}"})
+    out = Path(out_path)
+    out.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")
+    print(f"锚发射：{len(rows)} 行 → {out}（trigger=natural；run 级签={src}）")
+    return rows
+
+
 def main(argv):
-    name = argv[1] if len(argv) > 1 else "tas-clear-full-v5"
+    if "--anchors-out" in argv:
+        i = argv.index("--anchors-out")
+        out_path = argv[i + 1]
+        name = argv[1] if i > 1 else "tas-clear-full-v5"
+    else:
+        out_path = None
+        name = argv[1] if len(argv) > 1 and not argv[1].startswith("--") else "tas-clear-full-v5"
     evs, frames = load(name, "events.jsonl"), load(name, "frames.jsonl")
     if not evs or not frames:
         print(f"缺产物 {name}.events/frames.jsonl")
@@ -83,6 +129,8 @@ def main(argv):
     print("\n④ S-CH-4 $32:", json.dumps(sch4_probe(name), ensure_ascii=False))
     last = frames[-1]
     print(f"\n末帧 f{last['f']} stage_no={last.get('w', {}).get('stage_no')}")
+    if out_path:
+        emit_anchors(name, evs, frames, out_path)
     return 0
 
 
