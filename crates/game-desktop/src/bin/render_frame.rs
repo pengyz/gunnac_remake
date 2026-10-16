@@ -13,6 +13,23 @@ fn hex_decode(s: &str) -> Vec<u8> {
     (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect()
 }
 
+/// NES 2C02 调色板 RGB（64 色标准表——EC46 色码域映射）。
+fn nes_rgb(code: u8) -> game_desktop::Rgba {
+    // 标准 NES 调色板（简化 2C02——逐色码 RGB）
+    const P: [[u8; 3]; 64] = [
+        [0x66,0x66,0x66],[0x00,0x2A,0x88],[0x14,0x12,0xA7],[0x3B,0x00,0xA4],[0x5C,0x00,0x7E],[0x6E,0x00,0x40],[0x6C,0x06,0x00],[0x56,0x1D,0x00],
+        [0x33,0x35,0x00],[0x0B,0x48,0x00],[0x00,0x52,0x00],[0x00,0x4F,0x08],[0x00,0x40,0x4D],[0x00,0x00,0x00],[0x00,0x00,0x00],[0x00,0x00,0x00],
+        [0xAD,0xAD,0xAD],[0x15,0x5F,0xD9],[0x42,0x40,0xFF],[0x75,0x27,0xFE],[0xA0,0x1A,0xCC],[0xB7,0x1E,0x7B],[0xB5,0x31,0x20],[0x99,0x4E,0x00],
+        [0x6B,0x6D,0x00],[0x38,0x87,0x00],[0x0C,0x93,0x00],[0x00,0x8F,0x32],[0x00,0x7C,0x8D],[0x00,0x00,0x00],[0x00,0x00,0x00],[0x00,0x00,0x00],
+        [0xFF,0xFE,0xFF],[0x64,0xB0,0xFF],[0x92,0x90,0xFF],[0xC6,0x76,0xFF],[0xF3,0x6A,0xFF],[0xFE,0x6E,0xCC],[0xFE,0x81,0x70],[0xEA,0x9E,0x22],
+        [0xBC,0xBE,0x00],[0x88,0xD8,0x00],[0x5C,0xE4,0x30],[0x45,0xE0,0x82],[0x48,0xCD,0xDE],[0x4F,0x4F,0x4F],[0x00,0x00,0x00],[0x00,0x00,0x00],
+        [0xFF,0xFE,0xFF],[0xC0,0xDF,0xFF],[0xD3,0xD2,0xFF],[0xE8,0xC8,0xFF],[0xFB,0xC2,0xFF],[0xFE,0xC4,0xEA],[0xFE,0xCC,0xC5],[0xF7,0xD8,0xA5],
+        [0xE4,0xE5,0x94],[0xCF,0xEF,0x96],[0xBD,0xF4,0xAB],[0xB3,0xF3,0xCC],[0xB5,0xEB,0xF2],[0xB8,0xB8,0xB8],[0x00,0x00,0x00],[0x00,0x00,0x00],
+    ];
+    let c = P[(code & 0x3F) as usize];
+    [c[0], c[1], c[2], 255]
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let frame: u64 = args.get(1).expect("帧号").parse().expect("帧号");
@@ -26,6 +43,7 @@ fn main() {
     // 帧 N 主循环扫写填充行缓冲（probe 写事件）→ 帧 N+1 vblank NMI 读走（读后即废）→
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
     let mut nt = Nametable::default();
+    let mut row_pals: std::collections::HashMap<usize, [u8; 4]> = Default::default(); // 行调色板（双路径②）
     // 【主源切换】probe 捕获写集回放（$2006/$2007 协议解释→nametable——真投影面：
     // 8 组 probe 区含 2006-2007（v8b2 99 万条/stg03 58 万条）——l4 主攻线）。
     if let Some(i) = args.iter().position(|a| a == "--probe-file") {
@@ -55,12 +73,22 @@ fn main() {
                 let mut lb_addr: usize = 0;
                 let mut zp8e: u8 = 0;
                 let mut zp8f: u8 = 0;
+                // 【双路径调色板②】$0161 族=行调色板色码组（cc9fcff F0F7=调色板刷新
+                // $0161→$3F10 直写；$EC46=色码表 11B 全 NES 色码）——行上传时行调色板
+                // 随行状态（W-C1 影子上传族并接=第二路）
+                let mut pal_state: [u8; 4] = [0; 4]; // $0161/$0162/$0165/$0168
+                const EC46: [u8; 11] = [0x00, 0x10, 0x30, 0x35, 0x25, 0x15, 0x05, 0x07, 0x08, 0x09, 0x0F];
+                let _ = EC46;
                 let mut row_seq: u32 = 0; // 块内行序（zp 写=重置——块基行序②）
                 for l in t.lines() {
                     if l.contains("\"a\":") { parsed_lines += 1; }
                     let la = match l.split("\"a\":\"").nth(1) { Some(x) => x.split('"').next().unwrap_or(""), None => continue };
                     if let Ok(lan) = u16::from_str_radix(la, 16) {
                         if lan == 0x008E { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8e = lv; row_seq = 0; } }
+                        if lan == 0x0161 { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { pal_state[0] = lv; } }
+                        if lan == 0x0162 { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { pal_state[1] = lv; } }
+                        if lan == 0x0165 { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { pal_state[2] = lv; } }
+                        if lan == 0x0168 { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { pal_state[3] = lv; } }
                         if lan == 0x008F { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8f = lv; row_seq = 0; } }
                         if (0x0130..=0x0160).contains(&lan) {
                             if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) {
@@ -97,6 +125,7 @@ fn main() {
                                             }
                                         }
                                     }
+                                    row_pals.insert(row_seq as usize, pal_state);
                                     row_seq += 1;
                                     lb_addr += 1;
                                 }
@@ -471,18 +500,11 @@ fn main() {
                 // < 族 A 单式 98.15/97.27——CJK 族 glyph 形状根（W73'）阻墨表生效；
                 // 保持族 A 单式（index2）为实测判优默认，二维墨表留 t204/t206 档注
                 // ③ 二维墨表落地（t204/t207）：Game 族映射=当前判优配置（lossless）
-                // 【t243 核修②】色表族按域选：字模域（bank≥124）→Cjk 族（R18-1 墨=p0
-                // 索引 1/3——Game 族 index2 单式对结局卡墨域全落黑档=canvas_nz=0 根因）
-                let fam = if bank >= 124 {
-                    game_desktop::render_rules::SpriteFamily::Cjk
-                } else {
-                    game_desktop::render_rules::SpriteFamily::Game
-                };
+                // 【双路径调色板②渲染侧】行调色板=$0161 族色码组（cc9fcff）——
+                // NES 色码→RGB（标准 2C02 调色板）；旧行=ink_table 族表（保真对照注）
+                let row_pal = row_pals.get(&ty).copied().unwrap_or([0x0F, 0x30, 0x10, 0x00]);
                 let bg_pal: [game_desktop::Rgba; 4] = [
-                    game_desktop::render_rules::ink_table(fam, 0),
-                    game_desktop::render_rules::ink_table(fam, 1),
-                    game_desktop::render_rules::ink_table(fam, 2),
-                    game_desktop::render_rules::ink_table(fam, 3),
+                    nes_rgb(row_pal[0]), nes_rgb(row_pal[1]), nes_rgb(row_pal[2]), nes_rgb(row_pal[3]),
                 ];
                 canvas.draw_chr(&rom, bank, tile % 64, px, py, &bg_pal);
                 draws += 1;
