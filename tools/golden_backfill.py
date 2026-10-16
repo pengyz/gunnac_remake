@@ -27,7 +27,41 @@ def load(p):
     return [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()]
 
 
+def selftest():
+    """秒收链逻辑自检（合成数据——不触真台账/golden）。"""
+    anch = [
+        {"golden": True, "scene": "s5-chain", "checkpoint": "stg08-start", "mode": "StageStart", "f": 21000},
+        {"golden": True, "scene": "s5-chain", "checkpoint": "stg08-clear", "mode": "StageClear", "f": 25000},
+    ]
+    gold = [
+        {"scene": "s5-chain", "mode": "StageStart", "checkpoint": "stg08-start", "f": 0},
+        {"scene": "s5-chain", "mode": "StageClear", "checkpoint": "stg08-clear", "f": 0},
+        {"scene": "s5-chain", "mode": "Combat", "checkpoint": "stg08-combat", "f": 0},  # 无锚
+    ]
+    ai = {(a["scene"], a.get("checkpoint"), a["mode"]): a["f"] for a in anch}
+    filled = 0
+    for g in gold:
+        if g["f"] != 0:
+            continue
+        key = (g["scene"], g.get("checkpoint"), g["mode"])
+        f = ai.get(key)
+        if f is None or f == 0:
+            continue
+        match = [a for a in anch if (a["scene"], a.get("checkpoint"), a["mode"]) == key and a["f"] == f]
+        if len(match) != 1:
+            continue
+        g["f"] = f
+        filled += 1
+    assert filled == 2, f"回填 2 行（有锚）: {filled}"
+    assert gold[0]["f"] == 21000 and gold[1]["f"] == 25000
+    assert gold[2]["f"] == 0, "无锚行保持占位（fail-closed）"
+    print("selftest ok: 2 回填 + 1 无锚保持占位")
+    return 0
+
+
 def main():
+    if "--selftest" in sys.argv:
+        return selftest()
     dry = "--dry-run" in sys.argv
     anch = [a for a in load(ANCHORS) if a.get("golden")]
     ai = {(a["scene"], a.get("checkpoint"), a["mode"]): a["f"] for a in anch}
