@@ -137,6 +137,50 @@ local function box_dist(p, b)
   return math.sqrt(dx * dx + dy * dy)
 end
 
+-- ---------------- 三循环接口（公式对等镜像——data/reference/ram-map-slot-predict.json schema/1）
+-- 参考实现=game-core::engine::{predict_slot_position,predicted_hitbox,weapon_dps,boss_hits_to_kill}
+-- parity_mode=同式镜像（test_tas_bot 对等抽验锁）；字段族=R-enemy-4（$0470/$048C/$04E0/$04FC/$550/$56C/$588/$5A4）
+local FIELD = {                      -- 槽字段地址（field_addr = base + slot；步长 1）
+  x_sub = 0x0470, y_sub = 0x048C, x = 0x04E0, y = 0x04FC,
+  vx_lo = 0x0550, vx_hi = 0x056C, vy_lo = 0x0588, vy_hi = 0x05A4,
+}
+local HITBOX = { w = 7, h = 10, x0 = -4, x1 = 3, y0 = -5, y1 = 5 }  -- 7×10 盒（0/FF 钳制）
+local PREDICT_FRAMES = 2                   -- 避让前瞻帧数（2 帧=1px/帧速×2 余量）
+
+-- 亚像素积分镜像（motion_rule：lo 无符号分数 + hi 有符号补码；出屏即停=y>=0xF0）
+local function predict_slot_pos(read, slot, n)
+  local xs, ys = read(FIELD.x_sub + slot), read(FIELD.y_sub + slot)
+  local x, y = read(FIELD.x + slot), read(FIELD.y + slot)
+  local function s8(v) return v < 128 and v or v - 256 end
+  local vxh, vyh = s8(read(FIELD.vx_hi + slot)), s8(read(FIELD.vy_hi + slot))
+  local vxl, vyl = read(FIELD.vx_lo + slot), read(FIELD.vy_lo + slot)
+  for _ = 1, n do
+    xs = (xs + vxl) % 256
+    local cx = xs < vxl and 1 or 0
+    x = (x + vxh + cx) % 256
+    ys = (ys + vyl) % 256
+    local cy = ys < vyl and 1 or 0
+    y = (y + vyh + cy) % 256
+    if y >= 0xF0 then return nil end    -- 出屏（offscreen 规则）
+  end
+  return x, y
+end
+
+-- 预测框（7×10；0/FF 钳制语义=坐标 u8 域内偏移）
+local function predicted_hitbox(x, y)
+  return { l = x + HITBOX.x0, r = x + HITBOX.x1, t = y + HITBOX.y0, b = y + HITBOX.y1 }
+end
+
+-- 火力 DPS（60f 期望伤害；interval>=1 防除）
+local function weapon_dps(damage, fire_interval)
+  return damage * 60 / math.max(fire_interval, 1)
+end
+
+-- boss 命中数（ceil；damage<=0 防除）
+local function boss_hits_to_kill(hp, damage)
+  return math.ceil(hp / math.max(damage, 1))
+end
+
 -- ---------------- 事件日志（逐发归因数据源）
 local evPath = PLAN.out_dir .. "/" .. PLAN.name .. ".events.jsonl"
 local evF = nil
@@ -193,6 +237,8 @@ local function capture(read)
       s.enemies[#s.enemies + 1] = {
         slot = n, type = t, x = read(0x04E0 + n), y = read(0x04FC + n),
         form = read(0x0518 + n), hp = read(0x0630 + n),
+        vx_lo = read(0x0550 + n), vx_hi = read(0x056C + n),
+        vy_lo = read(0x0588 + n), vy_hi = read(0x05A4 + n),
       }
     end
   end
@@ -238,6 +284,10 @@ local S = {
   stop_frame = nil,
   last_bomb = -100000,
   last_hit_f = 0,
+  boss_hits_left = nil,        -- boss 命中倒计时（boss_hits_to_kill 镜像）
+  fire_interval = 8,           -- 实测射速（fire_gate 间隔滚动均值；初值=B2 通解）
+  dps = 0,                     -- weapon_dps(伤害,间隔) 60f 期望
+  last_fire_f = -100000,
 }
 
 local function set_phase(p, frame)
@@ -249,12 +299,34 @@ local function set_phase(p, frame)
 end
 
 -- ---------------- 避让（判据 4 + 对象接触避让——v2/v3 实测死因=敌对象接触）
+-- 快照预测（predict_slot_pos 同式镜像——入参=速度字段快照）
+local function predict_pos_snap(e, n)
+  local function s8(v) return v < 128 and v or v - 256 end
+  local xs, ys = e.vx_lo, e.vy_lo          -- 亚像素增量起算（快照无亚像素绝对值时按增量近似——parity 锁步进律）
+  local x, y = e.x, e.y
+  local vxh, vyh = s8(e.vx_hi), s8(e.vy_hi)
+  for _ = 1, n do
+    xs = (xs + e.vx_lo) % 256
+    local cx = xs < e.vx_lo and 1 or 0
+    x = (x + vxh + cx) % 256
+    ys = (ys + e.vy_lo) % 256
+    local cy = ys < e.vy_lo and 1 or 0
+    y = (y + vyh + cy) % 256
+    if y >= 0xF0 then return nil end
+  end
+  return x, y
+end
+
 local function threat_boxes(s)
   local out = {}
   for _, e in ipairs(s.enemies) do
-    for _, b in ipairs(obj_boxes(e.x, e.y, e.form, 2)) do
+    local px_, py_ = predict_pos_snap(e, PREDICT_FRAMES)
+    local bx, by = px_ or e.x, py_ or e.y
+    for _, b in ipairs(obj_boxes(bx, by, e.form, 2)) do
       out[#out + 1] = b
     end
+    local hb = predicted_hitbox(bx, by)     -- 7×10 基线盒（JSON schema/1）
+    out[#out + 1] = hb
   end
   for _, bl in ipairs(s.bullets) do
     out[#out + 1] = {
@@ -532,6 +604,16 @@ function BOT.decide(frame, read)
       why = fire_why, px = s.px, py = s.py,
       bx = boss and boss.x or -1, by = boss and boss.y or -1, bias = S.aim_bias,
     })
+    -- 火力 DPS 面（weapon_dps 镜像：间隔滚动均值；伤害=Const2 恒 2 起步——矩阵接入后按路径解析）
+    if S.last_fire_f >= 0 then
+      S.fire_interval = math.max(1, math.floor((S.fire_interval * 3 + (frame - S.last_fire_f)) / 4))
+    end
+    S.last_fire_f = frame
+    S.dps = weapon_dps(2, S.fire_interval)
+    -- boss 命中倒计时（boss_hits_to_kill 镜像：hp $064B / damage=2）
+    if boss_type ~= 0 then
+      S.boss_hits_left = boss_hits_to_kill(boss_hp, 2)
+    end
   end
   return btn
 end
