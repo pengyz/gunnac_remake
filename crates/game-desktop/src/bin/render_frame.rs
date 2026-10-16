@@ -116,7 +116,10 @@ fn main() {
                                 // 行参数组多字段/写点族差（细分挂）；fail-closed 按 v=1 实测
                                 // 面接（三件套细分证后切 v=2 判定）
                                 if lan == 0x0160 && lv == 1 && lb_fresh && std::env::var("FLAGUPLOAD").is_ok() {
-                                    let half = (lb_addr & 1) as u16; // 分半（双调用各半行）
+                                    // 【配对精化】x=12/244 交替=真对（558/509 均分实锤）
+                                    // ——half 按 x 值非奇偶（x=244⇒第二半）
+                                    let xv: u16 = l.split("\"x\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse().ok()).unwrap_or(0);
+                                    let half = if xv >= 244 { 1 } else { 0 };
                                     lb_fresh = false;
                                     if lb_addr < 3 && std::env::var("DBGPROBE").is_ok() {
                                         eprintln!("DBGLB flag#{} tail={:02x?}", lb_addr, &lb[0x1E..0x31]);
