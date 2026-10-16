@@ -774,3 +774,36 @@ pub fn comp_step(data: &[u8], pos: usize) -> Option<(CompStep, usize)> {
     // 位移对（F 编码）或参数对——按位移域判（|v|≤16 候选域=位移）
     Some((CompStep::Displacement { dx: f_decode(b0), dy: f_decode(b1) }, pos + 2))
 }
+
+// ===== R-5b-2 位移网格链（f5fe64b——组合链末环）=====
+
+/// 位移网格（R-5b-2：`(x,y 有符号位移对序列，F 编码)→[计数,链指针 lo,hi]`——
+/// **非 tile 码**（碎片=位置布局块；16×16 四象限=4 网格段 B 级注））。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DispGrid {
+    /// 位移对序列（F 编码补码）。
+    pub pairs: Vec<(i8, i8)>,
+    /// 计数。
+    pub count: u8,
+    /// 链指针（`None`=链尾；$9941 自引用=重复块回指）。
+    pub chain: Option<u16>,
+}
+
+/// 位移网格解析（格式：位移对序列…[count][lo][hi] 尾三字节——启发式界（6 表
+/// 同构注）；`hi=0`⇒链尾 fail-closed None 注）。截断 None。
+pub fn parse_disp_grid(data: &[u8]) -> Option<DispGrid> {
+    if data.len() < 3 {
+        return None;
+    }
+    let tail = data.len() - 3;
+    if tail % 2 != 0 {
+        return None;
+    }
+    let mut pairs = Vec::new();
+    for i in (0..tail).step_by(2) {
+        pairs.push((f_decode(data[i]), f_decode(data[i + 1])));
+    }
+    let count = data[tail];
+    let chain = u16::from_le_bytes([data[tail + 1], data[tail + 2]]);
+    Some(DispGrid { pairs, count, chain: if chain == 0 { None } else { Some(chain) } })
+}

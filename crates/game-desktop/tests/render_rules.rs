@@ -239,3 +239,22 @@ fn composition_chain_face() {
     // 截断 fail-closed
     assert_eq!(comp_step(&[0x01], 1), None);
 }
+
+/// R-5b-2 位移网格链（组合链末环）。
+#[test]
+fn displacement_grid_chain() {
+    use game_desktop::parse_disp_grid;
+    // 位移对+尾三字节（count,chain）
+    let d = [0x01, 0xFF, 0xFA, 0x06, 0x03, 0xAA, 0x98];
+    let g = parse_disp_grid(&d).unwrap();
+    assert_eq!(g.pairs, vec![(1, -1), (-6, 6)]);
+    assert_eq!(g.count, 3);
+    assert_eq!(g.chain, Some(0x98AA), "链指针（$9895→$98AA 链续实证形）");
+    // 链尾（hi=0 ⇒ None）
+    let d2 = [0x01, 0x01, 0x00, 0x00, 0x00];
+    let g2 = parse_disp_grid(&d2).unwrap();
+    assert_eq!(g2.chain, None);
+    // 截断 fail-closed
+    assert_eq!(parse_disp_grid(&[0x01]), None);
+    assert_eq!(parse_disp_grid(&[0x01, 0x02, 0x03, 0x04]), None, "奇数位移对界 fail-closed");
+}
