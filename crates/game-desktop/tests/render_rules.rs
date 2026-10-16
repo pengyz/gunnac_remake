@@ -67,3 +67,19 @@ fn scene_palette_table_face() {
     assert_eq!(palette_record_at(&recs, 1), Some(PaletteRecord([0x10, 0xF0, 0x10])));
     assert_eq!(palette_record_at(&recs, 2), None, "越界 fail-closed");
 }
+
+/// R-3 命令流解释器（fade 参数源=流回放）。
+#[test]
+fn palette_command_stream_face() {
+    use game_desktop::{stream_step, StreamStep};
+    // 数据+计数对
+    let d = [0x4D, 0x02, 0x00];
+    assert_eq!(stream_step(&d, 0), Some((StreamStep::Data { value: 0x4D, count: 2 }, 2)));
+    // $00 终止
+    assert_eq!(stream_step(&d, 2), Some((StreamStep::End, 3)));
+    // BMI 跳转（bit7=1——语义 R-3b 挂）
+    let d2 = [0x81, 0x00];
+    assert_eq!(stream_step(&d2, 0), Some((StreamStep::Jump { opcode: 0x81 }, 1)));
+    // 截断 fail-closed（data 后缺 count）
+    assert_eq!(stream_step(&[0x4D], 0), None);
+}
