@@ -181,6 +181,27 @@ local function boss_hits_to_kill(hp, damage)
   return math.ceil(hp / math.max(damage, 1))
 end
 
+-- 伤害路径选路（game-core::shot::auto_hit_path 镜像——damage_paths JSON 面）
+-- Const2=$D684 SBC #2 恒（$6E bit7=1）/ Zp12=SBC $12 极值（穿透族）/ Field0630=SBC $0630,Y 表[$4D]
+local function auto_hit_path(const2_flag, penetrating)
+  if const2_flag then return "Const2"
+  elseif penetrating then return "Zp12"
+  else return "Field0630" end
+end
+
+-- 武器类→命中标志（weapon_hit_flags 镜像——B 级数据层候选）
+local function weapon_hit_flags(weapon_class)
+  if weapon_class == 1 then return true, false        -- 1#：Const2（−2 恒定）
+  elseif weapon_class == 2 then return false, true    -- 2#：Zp12（穿透极值）
+  else return false, false end                        -- 3-5#：Field0630
+end
+
+-- 伤害解析（damage_apply 路径语义镜像：Const2=2；Field0630/Zp12=operand）
+local function resolve_damage(path, operand)
+  if path == "Const2" then return 2 end
+  return operand
+end
+
 -- ---------------- 事件日志（逐发归因数据源）
 local evPath = PLAN.out_dir .. "/" .. PLAN.name .. ".events.jsonl"
 local evF = nil
@@ -288,6 +309,7 @@ local S = {
   fire_interval = 8,           -- 实测射速（fire_gate 间隔滚动均值；初值=B2 通解）
   dps = 0,                     -- weapon_dps(伤害,间隔) 60f 期望
   last_fire_f = -100000,
+  weapon_class = 1,            -- 当前武器类（1# 起步；weapon_hit_flags 选路）
 }
 
 local function set_phase(p, frame)
@@ -612,7 +634,10 @@ function BOT.decide(frame, read)
     S.dps = weapon_dps(2, S.fire_interval)
     -- boss 命中倒计时（boss_hits_to_kill 镜像：hp $064B / damage=2）
     if boss_type ~= 0 then
-      S.boss_hits_left = boss_hits_to_kill(boss_hp, 2)
+      local cf, pen = weapon_hit_flags(S.weapon_class)
+      local path = auto_hit_path(cf, pen)
+      local operand = path == "Zp12" and read(0x0012) or read(0x0630 + 27)
+      S.boss_hits_left = boss_hits_to_kill(boss_hp, resolve_damage(path, operand))
     end
   end
   return btn
