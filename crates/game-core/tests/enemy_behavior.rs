@@ -650,3 +650,19 @@ fn soig_external_data_registry() {
     // boss 杂兵清零互证登记
     assert!(BOSS_SPAWN_CLEARS_MOBS);
 }
+
+/// ㉝ W-DMG3 伤害面武器参数化（ROM 两立即数）。
+#[test]
+fn damage_apply_weapon_parameterized() {
+    use game_core::shot::{damage_apply, ShotDmgPath};
+    // $D688 路：−2HP（旧行为兼容）
+    assert_eq!(damage_apply(10, true, 0, ShotDmgPath::D688Minus2), 8);
+    // $CEA2 路：−3HP（新——表 −3 族码径候选）
+    assert_eq!(damage_apply(10, true, 0, ShotDmgPath::CEA2Minus3), 7);
+    // 物撞路：对方 HP（武器维不影响）
+    assert_eq!(damage_apply(10, false, 4, ShotDmgPath::D688Minus2), 6);
+    assert_eq!(damage_apply(10, false, 4, ShotDmgPath::CEA2Minus3), 6);
+    // 饱和 0
+    assert_eq!(damage_apply(1, true, 0, ShotDmgPath::CEA2Minus3), 0);
+    assert_eq!(damage_apply(2, true, 0, ShotDmgPath::CEA2Minus3), 0);
+}
