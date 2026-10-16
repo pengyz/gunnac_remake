@@ -442,7 +442,9 @@ pub const EF81_STAGE_CAP: [u8; 4] = [0x00, 0x00, 0x04, 0x06];
 /// `$04 := $EF49[prev_a>>3]`、`$05 := $4A>>4`、`A := min(stage, $EF81[$4C])`
 /// ⇒ `compute_4d_index(a, $04, $05, $4C, y)`。
 /// **语义定谳**：`$4D`=**关号驱动等级档**（Soig「3# L4-5 等级段」=关号段 L=Level/
-/// Stage 维 ✓）；武器维=`$4A`/`$4C`。
+/// Stage 维 ✓）；武器维=`$4A`/`$4C`。【57a13f8 dated】`$4C`=**boot 默认值非常数**
+/// （设置屏武器行 `STA ($04),Y` 间接写可改——`f4c` 入参=当前值（配置变更面天然
+/// 支持）；对拍须录 `$4C` 轨迹）。
 pub fn compute_4d_inputs(prev_a: u8, f4a: u8, f4c: u8, stage: u8, y: u8) -> Option<u8> {
     let f04 = *EF49_DISPATCH.get((prev_a >> 3) as usize)?;
     let f05 = f4a >> 4;

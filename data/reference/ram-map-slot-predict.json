@@ -131,5 +131,27 @@
     },
     "weapon_flags_candidate": "1#=(const2,非穿透)/2#=(非const2,穿透)/3-5#=(非const2,非穿透)——数据层候选待矩阵钉正",
     "level_tier": "$4D=关号驱动等级档（compute_4d_inputs 全链：EF49/EF81/EF59/EF45 四表）"
+  },
+  "config_poke_face": {
+    "purpose": "bot 配置面 poke 地址（R-D2-1 57a13f8——设置屏行光标→$94D0 指针表→STA ($04),Y 间接写）",
+    "fields": [
+      {
+        "name": "death_non_death",
+        "addr": "0x01BE",
+        "note": "DEATH·NON DEATH 二选一（不死）"
+      },
+      {
+        "name": "weapon_select",
+        "addr": "0x01B6",
+        "note": "武器配置"
+      },
+      {
+        "name": "special_weapon_select",
+        "addr": "0x01B7",
+        "note": "特武配置"
+      }
+    ],
+    "write_mechanism": "设置屏行光标 → $94D0 指针表 → STA ($04),Y 间接写",
+    "level_index_note": "【57a13f8 dated】$4C=boot 默认值非常数——设置屏武器行可间接写改（compute_4d_inputs 的 f4c 入参=当前值（配置变更面天然支持）；复证表对拍须录 $4C 轨迹）"
   }
 }
