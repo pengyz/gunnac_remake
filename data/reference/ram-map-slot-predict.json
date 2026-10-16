@@ -152,6 +152,46 @@
       }
     ],
     "write_mechanism": "设置屏行光标 → $94D0 指针表 → STA ($04),Y 间接写",
-    "level_index_note": "【57a13f8 dated】$4C=boot 默认值非常数——设置屏武器行可间接写改（compute_4d_inputs 的 f4c 入参=当前值（配置变更面天然支持）；复证表对拍须录 $4C 轨迹）"
+    "level_index_note": "【57a13f8 dated】$4C=boot 默认值非常数——设置屏武器行可间接写改（compute_4d_inputs 的 f4c 入参=当前值（配置变更面天然支持）；复证表对拍须录 $4C 轨迹）",
+    "settings_rows": [
+      {
+        "row": 0,
+        "addr": "0x0180",
+        "name": "AREA",
+        "note": "选关！可见性=FFF9 门 ∧ SOUND=5 双门"
+      },
+      {
+        "row": 1,
+        "addr": "0x01AE",
+        "name": "sound_field",
+        "note": ""
+      },
+      {
+        "row": 2,
+        "addr": "0x004C",
+        "name": "level_index",
+        "note": "W-DMG3 $4C——设置屏可改（BIND scoped 互证）"
+      },
+      {
+        "row": 5,
+        "addr": "0x01BE",
+        "name": "death_non_death",
+        "note": "不死"
+      },
+      {
+        "row": 6,
+        "addr": "0x01B6",
+        "name": "weapon_select",
+        "note": ""
+      },
+      {
+        "row": 7,
+        "addr": "0x01B7",
+        "name": "special_weapon_select",
+        "note": ""
+      }
+    ],
+    "mapping": "$94CE+光标*2 倒序对 → STA ($04),Y 间接写（行序收口 f19a9b0 B→A）",
+    "row0_gate": "FFF9 门 ∧ SOUND=5 双门管 row0（AREA）可见性"
   }
 }
