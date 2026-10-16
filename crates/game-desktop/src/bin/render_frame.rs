@@ -275,7 +275,11 @@ fn main() {
         // —— 主循环相位：probe 写事件填充缓冲 ——
         apply_frame_writes(&mut buf, &mut attrs, &mut addr_regs, &mut palette_src, f, &mut probe_i);
         // 帧末挂起：行缓冲若本帧被写过（扫写）→ 排队下帧 NMI 上传（地址取当帧 zp）
-        let wrote = probe.iter().any(|(pf, pa, _)| *pf == f && (0x0130..=0x0150).contains(pa));
+        // 【l4 修】上传触发域=全缓冲（$0130-$0160 含 flag $0160——旧域 $0130-$0150
+        // 漏尾部字段/flag=结束卡 4020 写/帧批疑不触发根因；flag=$0160 非零=挂起类型）
+        let wrote = probe.iter().any(|(pf, pa, pv)| {
+            *pf == f && (0x0130..=0x0160).contains(pa) && (*pa != 0x0160 || *pv != 0)
+        });
         // —— 文本放置（t129 机制终版）：核回放写集（phase-batch 产物）直接落 nametable——
         // 77+46 变长足迹表由 ROM 链原生产出（与 t128 A 级裁定逐址一致）——
         // PPU 协议解释（t131 归属合并击根修）：$2006 写锁存地址（高/低），
