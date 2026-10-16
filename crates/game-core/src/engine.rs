@@ -1284,3 +1284,250 @@ impl MenuInputGate {
         result
     }
 }
+
+// ===== 通关跑（lead 通关令——Rust 引擎全通跑，确定性 replay）=====
+
+/// 通关跑事件（段锚 trace 行——①全程 trace 落盘 diff 面）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClearEvent {
+    /// run 帧号（run 帧域——非实机帧；序列对拍用）。
+    pub f: u32,
+    /// flow 模式名。
+    pub mode: &'static str,
+    /// 段锚名（Transition 行=""）。
+    pub cp: String,
+}
+
+impl ClearEvent {
+    /// 段锚名。
+    pub fn checkpoint(&self) -> &str {
+        &self.cp
+    }
+}
+
+/// 通关跑阶段。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClearRunPhase {
+    /// 商店段（每关开始前到店——R-l5-6）。
+    Shop,
+    /// 转场尾（33f）。
+    TransitionTail,
+    /// 关始段（240f intro——R-ui-6 锚）。
+    StageStart,
+    /// 战斗段（关内自然跑至门）。
+    Combat,
+    /// 关末链（400f 倒数+265f 飞离——ChainCycle 同常数）。
+    ClearSeq,
+    /// 结局段（$95F9 入口）。
+    Ending,
+    /// 通关（结局画面到达）。
+    Cleared,
+}
+
+/// 结局段步（EndingFx 五步序——A3 结局链；内部时长挂起不发明=run 步进率非时序主张）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EndingStep {
+    /// `$95F9` 入口场景服务。
+    EntryScene,
+    /// staff roll BGM。
+    StaffRollBgm,
+    /// 前置场景（`$1BE==0 && $4C!=0` 故事页；否则 scene4）。
+    PreScene,
+    /// 滚屏循环（流 `$9955` **43 记录**+`$FF` 尾 ⇒ `$180:=1`）。
+    StaffRollScroll,
+    /// 结局卡（`$97D3[$4C]`）。
+    EndingCard,
+}
+
+/// 通关跑状态（确定性 replay——同 `game_level` 两跑 trace 全等）。
+pub struct ClearRun {
+    /// `$4C` GAME LEVEL（0..3=NOVICE/INTERMEDIATE/ADVANCED/EXPERT——三结局=1/2/3）。
+    pub game_level: u8,
+    /// 当前关（1..=8）。
+    pub stage: u8,
+    /// 阶段。
+    pub phase: ClearRunPhase,
+    /// 关内状态。
+    pub stage_state: StageState,
+    /// 段锚 trace。
+    pub events: Vec<ClearEvent>,
+    /// 结局卡（`$97D3[$4C]`=`$4C` 恒等表；$4C=0 无卡）。
+    pub ending_card: Option<u8>,
+    /// `$4C==3` 卡常驻（START 无效——EXPERT）。
+    pub card_resident: bool,
+    /// `$4C==0` 回标题（NOVICE 无卡）。
+    pub title_returned: bool,
+    frame: u32,
+    phase_frames: u32,
+    ending_step: EndingStep,
+    ending_frames: u32,
+    scroll_frames: u32,
+}
+
+/// 商店段时长（run 自动出店调度：入店 48f+导航窗 120f——run 帧域调度非时序主张）。
+pub const RUN_SHOP_NAV_FRAMES: u32 = 120;
+/// 关始 intro（240f——R-ui-6 锚 1260→1500）。
+pub const RUN_STAGE_INTRO_FRAMES: u32 = 240;
+/// staff roll 记录数（流 `$9955` 43 记录——A 级）。
+pub const STAFF_ROLL_RECORDS: u32 = 43;
+
+impl ClearRun {
+    /// 新建（`game_level`=$4C；关 1 前商店段起——R-l5-6 每关开始前到店）。
+    pub fn new(game_level: u8) -> Self {
+        let mut st = StageState {
+            script: ScriptCursor::from_records(&STG01_SCRIPT),
+            scene: "stg01".into(),
+            ..Default::default()
+        };
+        st.grid.slots[0].type_ = 0x03; // slot0 在场（$0400 门）
+        ClearRun {
+            game_level,
+            stage: 1,
+            phase: ClearRunPhase::Shop,
+            stage_state: st,
+            events: vec![ClearEvent { f: 0, mode: "Shop", cp: "stg01-shop".into() }],
+            ending_card: None,
+            card_resident: false,
+            title_returned: false,
+            frame: 0,
+            phase_frames: 0,
+            ending_step: EndingStep::EntryScene,
+            ending_frames: 0,
+            scroll_frames: 0,
+        }
+    }
+
+    /// 终帧号。
+    pub fn final_frame(&self) -> u32 {
+        self.frame
+    }
+
+    fn emit(&mut self, mode: &'static str, cp: String) {
+        let f = self.frame;
+        self.events.push(ClearEvent { f, mode, cp });
+    }
+
+    fn load_stage(&mut self, n: u8) {
+        let rows: &[(u16, u8, Option<u16>, Option<u16>)] = match n {
+            1 => &STG01_SCRIPT,
+            2 => &STG02_SCRIPT,
+            3 => &STG03_SCRIPT,
+            4 => &STG04_SCRIPT,
+            5 => &STG05_SCRIPT,
+            6 => &STG06_SCRIPT,
+            7 => &STG07_SCRIPT,
+            _ => &STG08_SCRIPT,
+        };
+        let mut st = StageState {
+            script: ScriptCursor::from_records(rows),
+            scene: format!("stg{n:02}"),
+            ..Default::default()
+        };
+        st.grid.slots[0].type_ = 0x03;
+        self.stage_state = st;
+    }
+
+    /// 帧推进（确定性）。
+    pub fn tick_frame(&mut self) {
+        if self.phase == ClearRunPhase::Cleared {
+            return;
+        }
+        self.frame += 1;
+        self.phase_frames += 1;
+        match self.phase {
+            ClearRunPhase::Shop => {
+                if self.phase_frames >= SHOP_ENTER_FRAMES + RUN_SHOP_NAV_FRAMES {
+                    // 出店 ⇒ 转场尾（入店延迟 48f+导航窗 120f——run 调度）
+                    self.phase = ClearRunPhase::TransitionTail;
+                    self.phase_frames = 0;
+                    self.emit("Transition", String::new());
+                }
+            }
+            ClearRunPhase::TransitionTail => {
+                if self.phase_frames >= TRANSITION_TAIL_FRAMES as u32 {
+                    self.phase = ClearRunPhase::StageStart;
+                    self.phase_frames = 0;
+                    let tag = format!("stg{:02}-start", self.stage);
+                    self.emit("StageStart", tag);
+                }
+            }
+            ClearRunPhase::StageStart => {
+                if self.phase_frames >= RUN_STAGE_INTRO_FRAMES {
+                    self.phase = ClearRunPhase::Combat;
+                    self.phase_frames = 0;
+                    let tag = format!("stg{:02}-combat", self.stage);
+                    self.emit("Combat", tag);
+                }
+            }
+            ClearRunPhase::Combat => {
+                // 关内自然跑（tick=scroll/16 ⇒ 16px/帧=1 tick/帧）
+                let fx = stage_tick(&mut self.stage_state, &TickInputs { scroll_delta: 16 });
+                if fx.stage_clear_requested {
+                    let tag = format!("stg{:02}-clear", self.stage);
+                    self.emit("StageClear", tag);
+                    self.phase = ClearRunPhase::ClearSeq;
+                    self.phase_frames = 0;
+                }
+            }
+            ClearRunPhase::ClearSeq => {
+                // 400f 倒数+265f 飞离（ChainCycle 同常数）⇒ 通关支（8 关）/商店段（<8）
+                if self.phase_frames >= CLEAR_COUNTDOWN_STEPS * CLEAR_COUNTDOWN_STEP_FRAMES + CLEAR_FLYOFF_FRAMES
+                {
+                    if self.stage >= 8 {
+                        // 通关支：$180==9 ⇒ $95F9 结局入口
+                        self.phase = ClearRunPhase::Ending;
+                        self.phase_frames = 0;
+                        self.emit("Ending", "all-clear-95f9".into());
+                    } else {
+                        self.stage += 1;
+                        self.load_stage(self.stage);
+                        self.phase = ClearRunPhase::Shop;
+                        self.phase_frames = 0;
+                        let tag = format!("stg{:02}-shop", self.stage);
+                        self.emit("Shop", tag);
+                    }
+                }
+            }
+            ClearRunPhase::Ending => {
+                self.ending_frames += 1;
+                let done = match self.ending_step {
+                    EndingStep::EntryScene => true,
+                    EndingStep::StaffRollBgm => true,
+                    EndingStep::PreScene => true,
+                    EndingStep::StaffRollScroll => self.ending_frames >= STAFF_ROLL_RECORDS,
+                    EndingStep::EndingCard => true,
+                };
+                if done {
+                    self.ending_frames = 0;
+                    self.ending_step = match self.ending_step {
+                        EndingStep::EntryScene => EndingStep::StaffRollBgm,
+                        EndingStep::StaffRollBgm => EndingStep::PreScene,
+                        EndingStep::PreScene => EndingStep::StaffRollScroll,
+                        EndingStep::StaffRollScroll => EndingStep::EndingCard,
+                        EndingStep::EndingCard => {
+                            // 结局卡到达判据（$97D3[$4C] 恒等表）：$4C=0 无卡回标题
+                            if self.game_level == 0 {
+                                self.title_returned = true;
+                            } else {
+                                self.ending_card = Some(self.game_level);
+                                if self.game_level == 3 {
+                                    self.card_resident = true; // EXPERT 卡常驻
+                                }
+                            }
+                            self.phase = ClearRunPhase::Cleared;
+                            EndingStep::EndingCard
+                        }
+                    };
+                }
+            }
+            ClearRunPhase::Cleared => {}
+        }
+    }
+
+    /// 跑至通关（结局画面到达）。
+    pub fn run_to_clear(&mut self) {
+        while self.phase != ClearRunPhase::Cleared {
+            self.tick_frame();
+        }
+    }
+}
