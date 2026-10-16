@@ -35,3 +35,34 @@ checkpoint `all-clear-95f9` 与 ⑤ 的 $95F9 命名一致 ✓。
   `LDA #$13/JSR $ED3B`（PPU 令）→ **`LDA $1BE`**（DEATH 选卡——#86 D2 面互证）✓；
 - **直跳边**：`bank00:8E4E JMP sub_95F9` ✓（该边由 $FFF9/$18==$18 门引——隐藏支同入口，
   通关支经 $180 态汇入同结局体）。trace `all-clear-95f9` 锚名与 $95F9 精确对应 ✓。
+
+---
+
+## 段 B：②三结局分支 listing 对账 + ⑥EndingFx 五步/staff roll 43
+
+### B.1 ② 三结局分支——**表/分支/兜底三面精确** ✅
+
+| 件 | listing | 裁定 |
+|---|---|---|
+| $97D3[$4C] 恒等表 | bank0:$97D3 = `00 01 02 03 …` ROM 直读 ✓ | ✅ 索引 0-3 恒等 |
+| 表读点 | `9734 B9 D3 97 LDA $97D3,Y` | ✅ |
+| 分支条件 | `960E LDA $1BE / 9611 BNE` + `9613 LDA $4C / 9615 BNE loc_9625` | ✅ **`$1BE==0 && $4C!=0`⇒故事页（9625: $AC87 指针）/否则 scene4（9617: JSR $AB70…LDA #4/JSR sub_9763）** |
+| 实现同构 | EndingStep::PreScene 注"前置场景（$1BE==0 && $4C!=0 故事页；否则 scene4）" | ✅✓ **与 listing 逐条件 1:1 吻合** |
+
+scene1/2/3=恒等表索引 1/2/3（结局卡面）；**NOVICE 无卡**=scene0 收尾屏（#86 H-A3-1 已裁定
+"功能名=内容名同物"）✓；**EXPERT 常驻**=结局卡常驻面（9431/9439 卡服务读者）；
+$95F9 体 `LDA $1BE` 选卡与 #86 D2 面（DEATH/NON DEATH 二记录）互证 ✓。
+
+### B.2 ⑥ EndingFx 五步 + staff roll 43 记录——**五步锚全对 + 43 字节级精确** ✅
+五步序（engine.rs EndingStep）逐锚：
+1. **EntryScene**（$95F9 入口场景服务）← 段A.2 结局体 ✓
+2. **StaffRollBgm** ✓
+3. **PreScene**（$1BE==0&&$4C!=0 故事页/否则 scene4）← B.1 分支 ✓✓
+4. **StaffRollScroll**（流 $9955 **43 记录**+**$FF 尾** ⇒ $180:=1）
+5. **EndingCard**（$97D3[$4C]）← B.1 表 ✓
+
+**staff roll 流 ROM 直解**（bank0:$9955，`[attr][chars]FE` 记录族）：
+总 FE 记录 66（空行 23）+**非空 43** ✓✓ 精确命中；**$FF 尾 @offset 621** ✓；
+内容实读="COMPILE STAFF"/"GAME DESIGN & PROGRAM"/…/"PRESENTED BY NEXOFT CORP."/
+"@2011 JIUBAN"（真 credits 流）✓。边界诚实注（"内部时长挂起不发明=run 步进率非时序主张"）在案 ✓。
+（自查记：初读误用 bank2 窗——$95xx 族实为 bank0，已改；口径修正入自查。）
