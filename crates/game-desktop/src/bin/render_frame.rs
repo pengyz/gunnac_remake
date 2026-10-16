@@ -116,6 +116,7 @@ fn main() {
                                 // 行参数组多字段/写点族差（细分挂）；fail-closed 按 v=1 实测
                                 // 面接（三件套细分证后切 v=2 判定）
                                 if lan == 0x0160 && lv == 1 && lb_fresh && std::env::var("FLAGUPLOAD").is_ok() {
+                                    let half = (lb_addr & 1) as u16; // 分半（双调用各半行）
                                     lb_fresh = false;
                                     if lb_addr < 3 && std::env::var("DBGPROBE").is_ok() {
                                         eprintln!("DBGLB flag#{} tail={:02x?}", lb_addr, &lb[0x1E..0x31]);
@@ -131,6 +132,7 @@ fn main() {
                                     let dst = match rowmap {
                                         1 => base_addr.wrapping_add((row_seq as u16).wrapping_mul(32)),
                                         2 => base_addr.wrapping_add((((29u32).saturating_sub(row_seq / 2)) as u16).wrapping_mul(32)),
+                                        3 => base_addr.wrapping_add(half * 32), // 分半（双调用 dest/half 行）
                                         _ => base_addr,
                                     };
                                     if (0x2000..0x3000).contains(&dst) {
