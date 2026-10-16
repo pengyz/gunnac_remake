@@ -742,3 +742,27 @@ fn compute_4d_inputs_full_chain() {
     // 越界 fail-closed（$4C 非 0..3 → None）
     assert_eq!(compute_4d_inputs(0, 0, 4, 1, 2), None, "$4C=4 OOB fail-closed");
 }
+
+/// ㊲ Lua↔镜像自动锁（#97 advisory——JSON 消费面↔Rust 行为常量对拍）。
+#[test]
+fn json_mirror_parity_lock() {
+    use game_core::engine::predicted_hitbox;
+    use game_core::shot::{EF45_COMPENSATION, EF59_STAIRCASE};
+    let d: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string("../../data/reference/ram-map-slot-predict.json").expect("JSON"))
+            .expect("解析");
+    // 命中盒常量对拍（JSON 声明 vs Rust 行为）
+    let hb = &d["hitbox"];
+    assert_eq!(hb["w"], 7);
+    assert_eq!(hb["h"], 10);
+    assert_eq!(hb["x_offset_range"], serde_json::json!([-4, 3]));
+    assert_eq!(hb["y_offset_range"], serde_json::json!([-5, 5]));
+    assert_eq!(predicted_hitbox(0x20, 0x30), (0x1C, 0x23, 0x2B, 0x35), "盒行为=JSON 声明");
+    // 字段地址族对拍（JSON 映射 vs 已知 RAM 族）
+    let fields = d["fields"].as_array().expect("fields");
+    let addrs: Vec<&str> = fields.iter().map(|f| f["addr"].as_str().unwrap()).collect();
+    assert_eq!(addrs, ["0x0470", "0x048C", "0x04E0", "0x04FC", "0x0550", "0x056C", "0x0588", "0x05A4"]);
+    // 表常量锚（EF59/EF45 首值——镜像生成面参考实现锚）
+    assert_eq!(EF59_STAIRCASE[0], 0);
+    assert_eq!(EF45_COMPENSATION[3], 5);
+}
