@@ -34,6 +34,9 @@
 ## 4. 战斗输入轨（每关战斗段）
 
 - **复用优先**：W-tas 既有轨（tas-alldemo/alldemo2/W-tas20）战斗段按键流可整段摘取为该关保底轨；tas-arena 系（b2/复现轨）火力模式复用。
+  > 【2026-10-16 dated 更正（port 实测）】三轨全仓/analysis/tools/docs **零命中=轨不存在**（历史 W-tas 期产物未入库）——
+  > 本条"整段摘取"前提失效。既有实轨素材=tas-stg01-v2/v3（→tick 824 中 boss 竞技场）+tas-arena-repro 系（arena 段）
+  > +tas-stg01-bot1-replay；**stg01 中后段（tick 824→关门）无轨**。轨源受阻待裁（外部取轨 or 方向③ bot 战斗面扩）。
 - bot 决策面（tas_bot.lua 既有：游走/火力/保命）+ **boss 段扩展**：BOSS 血量 RAM 面→输出循环（未取证 RAM 挂账——按 §3 规则现用 dodge+hold 火力通解，取到 boss 血址再精化）。
 - 战斗输入轨验收：段内存活（player_state≠死亡态）+ 段末达成 `stgN-clear` 锚。
 
