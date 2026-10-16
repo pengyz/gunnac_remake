@@ -267,7 +267,10 @@ pub fn combat_frame(state: &mut StageState, _fx: &mut StageEffects) {
                 if hit_resolves(sb, &enemy) {
                     // 弹命中：敌 HP−2（$D688 弹路）；弹回收（$87FD）；一框一伤
                     let hp = state.grid.slots[si].f630;
-                    let new_hp = damage_apply(hp, crate::shot::HitDmgPath::Const2, 0); // 恒定 −2（1# 真身）
+                    // 【be912bf dated】Const2=**简化现状**：实测主伤害路=Field0630 多值
+                    //（表[$4D] spawn 写者 1-9 值域）——combat_frame 现按 1# 恒定 −2 简化
+                    //（spawn 写者族接入后切 auto_hit_path 自动选路；三路模型本体已证形合）
+                    let new_hp = damage_apply(hp, crate::shot::HitDmgPath::Const2, 0);
                     state.grid.slots[si].f630 = new_hp;
                     state.bullets.release(*bi as u8);
                     *sb = crate::shot::clear_hit_entry(sb);
