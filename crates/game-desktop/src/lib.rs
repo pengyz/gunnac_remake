@@ -491,8 +491,9 @@ impl PaletteShadow {
 // ===== R-2 场景调色板记录表（d00269d——W-C1 ③ 数据源接线）=====
 
 /// 场景描述符表（bank00:$97D7 8B/项 ×5——R-2 A 级）：+0/+1=流指针对/+2/+3=
-/// `$7A:$7B` 调色板记录基址（$A000 换窗区 bank 相关读）/+4/+5=`$75:$76` 第二表
-/// （$1809/$1809/…/$9809——语义 open）/+6/+7=第四对（未述——装载体 9780-97A9）。
+/// `$7A:$7B` 调色板记录基址（$A000 换窗区 bank 相关读）【R-3b dated】+4/+5=**流指针源**
+/// `$14:$15`（hi|=$80，97AD-97B7）**非第二表**——五项全共享流 `$9809`（per-scene
+/// 差异=调色板记录基址）；+6→`$EBC2` 渲染 writer/+7→`$ED65` 流执行器参。
 pub const SCENE_DESCRIPTORS: [[u8; 8]; 5] = [
     [0x2E, 0x2C, 0xFB, 0xBE, 0x09, 0x18, 0xFF, 0x97],
     [0x5E, 0x5C, 0xD2, 0xC0, 0x09, 0x18, 0x55, 0x98],
@@ -526,19 +527,29 @@ pub enum StreamStep {
     Data { value: u8, count: u8 },
     /// 流终止（`$00`）。
     End,
-    /// BMI 跳转（bit7=1 字节——跳转编码=R-3b 挂参数化）。
+    /// `$80` 相对跳转（offset=Y+1+基址→`$B6,X` 指针重算）。
     Jump { opcode: u8 },
+    /// `$81-$FF` 循环计数（`DEC $B0,X`——计数器初值=opcode−$80）。
+    Loop { counter: u8 },
 }
 
-/// 流解释器单步（fail-closed：截断 None；跳转语义待 R-3b）。
-/// 格式（R-3 A 级）：`$00`=终止/bit7=1=跳转/否则 [data][count] 对。
+/// 流解释器单步（fail-closed：截断 None）。
+/// 格式（R-3b A 级**三形**）：`$00`=终止 / `$80`=**相对跳转**（offset=Y+1+基址
+/// →`$B6,X` 指针重算）/ `$81-$FF`=**循环计数**（`DEC $B0,X`）/ `$01-$7F`=数据+计数
+/// （`$11` 累加→JSR $8619 参数装）。流数据=NES 调色板色码序列（bank1:$9809 样本
+/// `07 0F 16 36 30 26 36 30 17 36 30`+`$00`）。
 pub fn stream_step(data: &[u8], pos: usize) -> Option<(StreamStep, usize)> {
     let &b = data.get(pos)?;
     if b == 0 {
         return Some((StreamStep::End, pos + 1));
     }
-    if b & 0x80 != 0 {
-        return Some((StreamStep::Jump { opcode: b }, pos + 1));
+    if b == 0x80 {
+        // 相对跳转：下一字节=offset（Y+1+基址语义——目标计算调用侧）
+        let &offset = data.get(pos + 1)?;
+        return Some((StreamStep::Jump { opcode: b }, pos + 2 + offset as usize));
+    }
+    if b >= 0x81 {
+        return Some((StreamStep::Loop { counter: b }, pos + 1));
     }
     let &count = data.get(pos + 1)?;
     Some((StreamStep::Data { value: b, count }, pos + 2))

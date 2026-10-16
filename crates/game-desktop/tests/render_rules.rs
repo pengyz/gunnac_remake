@@ -77,9 +77,15 @@ fn palette_command_stream_face() {
     assert_eq!(stream_step(&d, 0), Some((StreamStep::Data { value: 0x4D, count: 2 }, 2)));
     // $00 终止
     assert_eq!(stream_step(&d, 2), Some((StreamStep::End, 3)));
-    // BMI 跳转（bit7=1——语义 R-3b 挂）
-    let d2 = [0x81, 0x00];
-    assert_eq!(stream_step(&d2, 0), Some((StreamStep::Jump { opcode: 0x81 }, 1)));
+    // $80 相对跳转（offset=2 ⇒ pos 跳 0+2+2=4）
+    let d2 = [0x80, 0x02, 0x00, 0x00, 0x11];
+    assert_eq!(stream_step(&d2, 0), Some((StreamStep::Jump { opcode: 0x80 }, 4)));
+    // $81-$FF 循环计数（DEC $B0,X）
+    let d3 = [0x83, 0x00];
+    assert_eq!(stream_step(&d3, 0), Some((StreamStep::Loop { counter: 0x83 }, 1)));
+    // 流数据=NES 色码域（bank1:$9809 样本）
+    let sample = [0x07, 0x0F];
+    assert_eq!(stream_step(&sample, 0), Some((StreamStep::Data { value: 0x07, count: 0x0F }, 2)));
     // 截断 fail-closed（data 后缺 count）
     assert_eq!(stream_step(&[0x4D], 0), None);
 }
