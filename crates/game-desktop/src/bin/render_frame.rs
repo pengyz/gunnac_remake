@@ -26,6 +26,40 @@ fn main() {
     // 帧 N 主循环扫写填充行缓冲（probe 写事件）→ 帧 N+1 vblank NMI 读走（读后即废）→
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
     let mut nt = Nametable::default();
+    // 【末环接线】写集合并投影：屏流（R-4 格式）→ nametable（PPU 协议 $2006 锁存/
+    // $2007 自增）——流源=--stream-file（原始流字节；ROM 装载点提取=R-4b 待）。
+    if let Some(i) = args.iter().position(|a| a == "--stream-file") {
+        if let Some(sp) = args.get(i + 1) {
+            if let Ok(bytes) = std::fs::read(sp) {
+                let mut ppu: Option<u16> = None;
+                let mut pos = 0usize;
+                while pos < bytes.len() {
+                    let b = bytes[pos];
+                    pos += 1;
+                    match b {
+                        0xFE => { ppu = None; }
+                        0xFF => { ppu = None; }
+                        _ => {
+                            if pos >= bytes.len() { break; }
+                            let hi = bytes[pos];
+                            pos += 1;
+                            if (0x20..0x24).contains(&hi) {
+                                ppu = Some(u16::from_le_bytes([b, hi]));
+                            } else if let Some(a) = ppu {
+                                let off = (a as usize).wrapping_sub(0x2000);
+                                if off < 960 {
+                                    let n = (off / 960) as usize; // nametable 0（$2000 窗）
+                                    let o = off % 960;
+                                    if n < 4 { nt.tiles[n][o] = b; }
+                                }
+                                ppu = Some(a.wrapping_add(1));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     let mut buf = [0u8; 0x31]; // $0130-$015F + $0160
     let mut attrs = [0u8; 8];
     let mut addr_regs = (0u8, 0u8, 0u8); // $8E/$8F/$90（t99：probe 写点追踪，解相位陷阱）
