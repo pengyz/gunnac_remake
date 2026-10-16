@@ -81,3 +81,72 @@ impl GameRng for LcgRng {
         (self.state >> 32) as u32
     }
 }
+
+// ===== L-Audio APU 寄存器写流面（audio-golden.md——Stage A 音频战役）=====
+
+/// APU 寄存器写事件（`event := (frame, reg, value)`——`reg ∈ $00-$17`（$4000+reg），
+/// 写序保真；DMC 一体（$4010-$4015 入流）；样本内容不入 hash（Stage B 后补））。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ApuWrite {
+    /// 游戏逻辑帧（60Hz tick——非采样率，无需速率归一化）。
+    pub frame: u32,
+    /// 寄存器偏移（$00-$17）。
+    pub reg: u8,
+    /// 写值。
+    pub value: u8,
+}
+
+/// APU 写流（有序事件序列——写序保真）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ApuWriteStream {
+    /// 事件序列。
+    pub events: Vec<ApuWrite>,
+}
+
+impl ApuWriteStream {
+    /// 追加写事件。
+    pub fn write(&mut self, frame: u32, reg: u8, value: u8) {
+        self.events.push(ApuWrite { frame, reg: reg & 0x1F, value });
+    }
+
+    /// 60f 帧窗分段（段 k=frame ∈ [60k, 60k+60) 子序列——有序含写序）。
+    pub fn segments(&self) -> Vec<Vec<ApuWrite>> {
+        if self.events.is_empty() {
+            return Vec::new();
+        }
+        let max_frame = self.events.iter().map(|e| e.frame).max().unwrap_or(0);
+        let n = (max_frame / 60) + 1;
+        let mut segs = vec![Vec::new(); n as usize];
+        for e in &self.events {
+            segs[(e.frame / 60) as usize].push(*e);
+        }
+        segs
+    }
+}
+
+/// varint 编码（LEB128——**格式冻结=open item ①**（audio-golden.md）；本实现=候选
+/// 冻结面，golden 兼容性以最终冻结为准）。
+pub fn encode_varint(mut v: u32, out: &mut Vec<u8>) {
+    loop {
+        let byte = (v & 0x7F) as u8;
+        v >>= 7;
+        if v == 0 {
+            out.push(byte);
+            break;
+        }
+        out.push(byte | 0x80);
+    }
+}
+
+/// 段规范编码（`frame_delta(varint) | reg | value` 逐事件——帧内相对段首）。
+/// 空段=空字节串（hash(空串)显式记录非缺失）。
+pub fn canonical_encode_segment(seg: &[ApuWrite]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let base = seg.first().map(|e| e.frame).unwrap_or(0);
+    for e in seg {
+        encode_varint(e.frame.saturating_sub(base), &mut out);
+        out.push(e.reg);
+        out.push(e.value);
+    }
+    out
+}

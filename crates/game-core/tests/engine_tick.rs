@@ -1075,3 +1075,36 @@ fn bot_combat_face_interfaces() {
     // 零伤防除
     assert_eq!(boss_hits_to_kill(10, 0), 10);
 }
+
+/// ㊴ L-Audio APU 写流面（写流+规范编码+60f 分段）。
+#[test]
+fn apu_write_stream_face() {
+    use game_core::engine::*;
+    use game_core::{canonical_encode_segment, encode_varint, ApuWriteStream};
+    let mut s = ApuWriteStream::default();
+    s.write(0, 0x00, 0x9F);
+    s.write(0, 0x15, 0x0F);
+    s.write(59, 0x10, 0x80);
+    s.write(60, 0x11, 0x30); // 段 1 首
+    // 分段：60f 窗
+    let segs = s.segments();
+    assert_eq!(segs.len(), 2);
+    assert_eq!(segs[0].len(), 3);
+    assert_eq!(segs[1].len(), 1);
+    // 规范编码：段0=帧差 0,0,59 varint+reg+value
+    let enc = canonical_encode_segment(&segs[0]);
+    assert_eq!(enc, vec![0x00, 0x00, 0x9F, 0x00, 0x15, 0x0F, 0x3B, 0x10, 0x80]);
+    // varint（LEB128）：0/59/128/300
+    let mut v = Vec::new();
+    encode_varint(0, &mut v);
+    encode_varint(59, &mut v);
+    encode_varint(128, &mut v);
+    encode_varint(300, &mut v);
+    assert_eq!(v, vec![0x00, 0x3B, 0x80, 0x01, 0xAC, 0x02]);
+    // 空段=空编码
+    assert_eq!(canonical_encode_segment(&[]), Vec::<u8>::new());
+    // reg 钳 $1F（$00-$17 域注——越域钳制注）
+    let mut s2 = ApuWriteStream::default();
+    s2.write(0, 0x40, 0x01); // 越域 ⇒ 钳
+    assert_eq!(s2.events[0].reg, 0x00, "$40 & $1F 钳制");
+}
