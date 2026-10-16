@@ -689,3 +689,36 @@ pub fn place_text(bg: &mut BgModel, p: &TextPlacement, tiles: &[u8]) {
         }
     }
 }
+
+// ===== R-4 画面流回放（b650b26——tile 布局流非 CHR 本体）=====
+
+/// 画面流步（bank01:$A1xx 格式（A 级）：[PPU 地址 2B] tile 码流 [FE 重载][FF 段终]）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScreenStep {
+    /// PPU 地址装载（段起点）。
+    PpuAddr { ppu: u16 },
+    /// tile 码（写入当前 PPU 位置并推进）。
+    Tile { code: u8 },
+    /// FE 重载（新 PPU 地址装载）。
+    Reload,
+    /// FF 段终。
+    SegmentEnd,
+}
+
+/// 画面流单步（fail-closed：截断 None）。
+pub fn screen_step(data: &[u8], pos: usize) -> Option<(ScreenStep, usize)> {
+    match *data.get(pos)? {
+        0xFE => Some((ScreenStep::Reload, pos + 1)),
+        0xFF => Some((ScreenStep::SegmentEnd, pos + 1)),
+        _ => {
+            // PPU 地址 2B（首步）或 tile 码——由调用方状态机分派；此处=字节流逐读
+            let lo = *data.get(pos)?;
+            let hi = *data.get(pos + 1)?;
+            if hi >= 0x20 && hi < 0x24 {
+                Some((ScreenStep::PpuAddr { ppu: u16::from_le_bytes([lo, hi]) }, pos + 2))
+            } else {
+                Some((ScreenStep::Tile { code: lo }, pos + 1))
+            }
+        }
+    }
+}
