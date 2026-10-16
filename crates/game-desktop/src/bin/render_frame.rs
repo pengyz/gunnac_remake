@@ -26,7 +26,51 @@ fn main() {
     // 帧 N 主循环扫写填充行缓冲（probe 写事件）→ 帧 N+1 vblank NMI 读走（读后即废）→
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
     let mut nt = Nametable::default();
-    // 【末环接线】写集合并投影：屏流（R-4 格式）→ nametable（PPU 协议 $2006 锁存/
+    // 【主源切换】probe 捕获写集回放（$2006/$2007 协议解释→nametable——真投影面：
+    // 8 组 probe 区含 2006-2007（v8b2 99 万条/stg03 58 万条）——l4 主攻线）。
+    if let Some(i) = args.iter().position(|a| a == "--probe-file") {
+        if let Some(pp) = args.get(i + 1) {
+            if let Ok(t) = std::fs::read_to_string(pp) {
+                let mut ppu: Option<u16> = None;
+                let mut latch_hi = true;
+                let mut projected = 0usize;
+                for l in t.lines() {
+                    // 事件行：{"f":..,"a":"2006","v":..}——仅 $2006/$2007 PPU 面
+                    let a = match l.split("\"a\":\"").nth(1) { Some(x) => x.split('"').next().unwrap_or(""), None => continue };
+                    let v: u8 = match l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()) {
+                        Some(x) => x.parse().unwrap_or(0), None => continue,
+                    };
+                    match a {
+                        "2006" => {
+                            if latch_hi {
+                                ppu = Some(u16::from_le_bytes([0, v]));
+                                latch_hi = false;
+                            } else if let Some(hi) = ppu {
+                                ppu = Some(hi | v as u16);
+                                latch_hi = true;
+                            }
+                        }
+                        "2007" => {
+                            if let Some(addr) = ppu {
+                                let off = (addr as usize).wrapping_sub(0x2000);
+                                if off < 960 {
+                                    let o = off % 960;
+                                    nt.tiles[0][o] = v;
+                                    projected += 1;
+                                }
+                                ppu = Some(addr.wrapping_add(1));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if std::env::var("DBGSTREAM").is_ok() {
+                    eprintln!("DBGPROBE file={} projected={} nt0_sample={:02x?}", pp, projected, &nt.tiles[0][0x68..0x70]);
+                }
+            }
+        }
+    }
+    // 【末环接线·副路】写集合并投影：屏流（R-4 格式）→ nametable（PPU 协议 $2006 锁存/
     // $2007 自增）——流源=--stream-file（原始流字节；ROM 装载点提取=R-4b 待）。
     if let Some(i) = args.iter().position(|a| a == "--stream-file") {
         if let Some(sp) = args.get(i + 1) {
@@ -39,7 +83,7 @@ fn main() {
                     let b = bytes[pos];
                     pos += 1;
                     if b == 0xFE { expect_addr = true; continue; }
-                    if b == 0xFF { ppu = None; continue; }
+                    if b == 0xFF { ppu = None; expect_addr = true; continue; } // 链段界=新地址
                     if expect_addr {
                         if pos >= bytes.len() { break; }
                         let hi = bytes[pos];
@@ -55,6 +99,9 @@ fn main() {
                         }
                         ppu = Some(a.wrapping_add(1));
                     }
+                }
+                if std::env::var("DBGSTREAM").is_ok() {
+                    eprintln!("DBGSTREAM stream={} bytes={} nt0_sample={:02x?}", sp, bytes.len(), &nt.tiles[0][0x68..0x70]);
                 }
             }
         }
