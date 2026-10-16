@@ -1,0 +1,41 @@
+{
+  "schema": "ram-map-slot-predict/1",
+  "purpose": "bot 槽预测面 RAM 映射（tas_bot.lua 常量生成+scenario watch 行——公式对等镜像模式）",
+  "evidence": "R-enemy-4 字段族 + motion_update（099c510 bank14:$CCD3/$CD08 亚像素对定谳）+ trace vx 16 位有符号演化实证",
+  "slot_count": 28,
+  "slot_index_range": [0, 27],
+  "slot_stride_bytes": 1,
+  "fields": [
+    {"name": "x_subpixel", "addr": "0x0470", "width": 1, "signed": false, "scale": "subpixel_1_256", "family": "motion"},
+    {"name": "y_subpixel", "addr": "0x048C", "width": 1, "signed": false, "scale": "subpixel_1_256", "family": "motion"},
+    {"name": "x_coord", "addr": "0x04E0", "width": 1, "signed": false, "scale": "pixel", "family": "motion"},
+    {"name": "y_coord", "addr": "0x04FC", "width": 1, "signed": false, "scale": "pixel", "family": "motion"},
+    {"name": "vx_lo", "addr": "0x0550", "width": 1, "signed": false, "scale": "subpixel_1_256", "family": "velocity"},
+    {"name": "vx_hi", "addr": "0x056C", "width": 1, "signed": true, "scale": "pixel", "family": "velocity"},
+    {"name": "vy_lo", "addr": "0x0588", "width": 1, "signed": false, "scale": "subpixel_1_256", "family": "velocity"},
+    {"name": "vy_hi", "addr": "0x05A4", "width": 1, "signed": true, "scale": "pixel", "family": "velocity"}
+  ],
+  "slot_addressing": {
+    "formula": "field_addr(slot) = field.addr + slot_index",
+    "note": "步长 1 字节（+槽 直接加法）；slot 0..7=HUD 保留域（敌弹/对象主用 8..27）"
+  },
+  "motion_rule": {
+    "y": "y_subpixel += vy_lo (mod 256) → y_coord += vy_hi + carry",
+    "x": "x_subpixel += vx_lo (mod 256) → x_coord += vx_hi + carry",
+    "signed_note": "hi 字段=有符号解释（补码加=字节加等价）；lo=无符号分数",
+    "offscreen": "坐标溢出或 y>=0xF0 ⇒ 出屏（$534 bit4 门二择 SEC-only/回收——极性 W-GATE 待证）",
+    "reference_impl": "game-core::engine::motion_update / predict_slot_position（A 级参考实现+测试锁）"
+  },
+  "hitbox": {
+    "w": 7, "h": 10,
+    "x_offset_range": [-4, 3],
+    "y_offset_range": [-5, 5],
+    "clamp": "0/FF 钳制",
+    "reference_impl": "game-core::engine::predicted_hitbox / shot.rs shot_hitbox_register"
+  },
+  "prediction": {
+    "formula": "iterate motion_rule N frames（出屏即停）",
+    "reference_impl": "game-core::engine::predict_slot_position",
+    "parity_mode": "Lua 同式镜像（test_tas_bot 对等抽验锁）"
+  }
+}
