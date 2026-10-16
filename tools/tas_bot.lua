@@ -146,6 +146,7 @@ local FIELD = {                      -- 槽字段地址（field_addr = base + sl
 }
 local HITBOX = { w = 7, h = 10, x0 = -4, x1 = 3, y0 = -5, y1 = 5 }  -- 7×10 盒（0/FF 钳制）
 local PREDICT_FRAMES = 2                   -- 避让前瞻帧数（2 帧=1px/帧速×2 余量）
+local DANGER_R = 14                        -- ①近距强制半径（盒距 < 此值禁 (0,0)/禁对齐）
 
 -- 亚像素积分镜像（motion_rule：lo 无符号分数 + hi 有符号补码；出屏即停=y>=0xF0）
 local function predict_slot_pos(read, slot, n)
@@ -266,7 +267,13 @@ local function capture(read)
   s.bullets = {}
   for _, yslot in ipairs(SHOT_SLOTS) do
     if read(0x040E + yslot) ~= 0 and read(0x063E + yslot) == 0x80 then
-      s.bullets[#s.bullets + 1] = { x = read(0x04EE + yslot), y = read(0x055E + yslot), yslot = yslot }
+      local bx_, by_ = read(0x04EE + yslot), read(0x055E + yslot)
+      local prev = S.shot_prev and S.shot_prev[yslot] or nil
+      -- ③估速（帧差——弹速地址未映射不发明；threat_boxes 按速扩张用）
+      local vx_, vy_ = 0, 0
+      if prev and prev.x then vx_, vy_ = bx_ - prev.x, by_ - prev.y end
+      s.bullets[#s.bullets + 1] = { x = bx_, y = by_, yslot = yslot,
+        vx_hi = vx_ > 127 and vx_ - 256 or vx_, vy_hi = vy_ > 127 and vy_ - 256 or vy_ }
     end
   end
   s.boss = nil
@@ -347,13 +354,17 @@ local function threat_boxes(s)
     for _, b in ipairs(obj_boxes(bx, by, e.form, 2)) do
       out[#out + 1] = b
     end
-    local hb = predicted_hitbox(bx, by)     -- 7×10 基线盒（JSON schema/1）
-    out[#out + 1] = hb
+    if e.form == 0 then                      -- ⑤盒回退：仅无 form 盒目标用 7×10 基线
+      out[#out + 1] = predicted_hitbox(bx, by)
+    end
   end
   for _, bl in ipairs(s.bullets) do
+    local function s8(v) return v < 128 and v or v - 256 end
+    local sp = math.abs(s8(bl.vx_hi or 0)) + math.abs(s8(bl.vy_hi or 0))  -- ③按速前瞻
+    local la = math.max(BULLET_LOOKAHEAD, sp * PREDICT_FRAMES)
     out[#out + 1] = {
-      l = bl.x + BULLET_LB - BULLET_LOOKAHEAD, r = bl.x + BULLET_RB + BULLET_LOOKAHEAD,
-      t = bl.y + BULLET_TB - BULLET_LOOKAHEAD, b = bl.y + BULLET_BB + BULLET_LOOKAHEAD,
+      l = bl.x + BULLET_LB - la, r = bl.x + BULLET_RB + la,
+      t = bl.y + BULLET_TB - la, b = bl.y + BULLET_BB + la,
     }
   end
   return out
@@ -552,9 +563,34 @@ function BOT.decide(frame, read)
     end
   end
 
-  -- 避让优先（判据 4 + 接触避让）
+  -- 避让优先（判据 4 + 接触避让）——①近距强制（致命窗病灶直解）+②簇聚合逃逸
   local dvx, dvy, dscore = dodge_vector(s, s.px, s.py)
-  if dscore < SAFE_DIST then
+  -- ②簇聚合：2+ 盒 15px 内聚簇 → 逃逸向量=背簇质心
+  local function cluster_escape()
+    local cx, cy, n = 0, 0, 0
+    for _, b in ipairs(threat_boxes(s)) do
+      local bx_, by_ = (b.l + b.r) / 2, (b.t + b.b) / 2
+      if math.abs(bx_ - s.px) < 24 and math.abs(by_ - s.py) < 24 then
+        cx, cy, n = cx + bx_, cy + by_, n + 1
+      end
+    end
+    if n < 2 then return 0, 0, n end
+    return (s.px - cx >= 0 and 1 or -1), (s.py - cy >= 0 and 1 or -1), n
+  end
+  local cx_ev, cy_ev, cluster_n = cluster_escape()
+  -- ①近距强制：任一威胁盒侵入 DANGER_R ⇒ 禁 (0,0) 禁瞄准对齐
+  local danger = false
+  for _, b in ipairs(threat_boxes(s)) do
+    if box_dist(player_box(s.px, s.py), b) < DANGER_R then danger = true break end
+  end
+  if danger then
+    if dvx == 0 and dvy == 0 then          -- ①强制移动（打分 (0,0) 时背簇向量兜底）
+      dvx, dvy = cx_ev, cy_ev
+      if dvx == 0 and dvy == 0 then dvx = 1 end  -- 极端兜底：横向拉开
+    end
+    if dvx < 0 then btn.left = true elseif dvx > 0 then btn.right = true end
+    if dvy < 0 then btn.up = true elseif dvy > 0 then btn.down = true end
+  elseif dscore < SAFE_DIST then
     if dvx < 0 then btn.left = true elseif dvx > 0 then btn.right = true end
     if dvy < 0 then btn.up = true elseif dvy > 0 then btn.down = true end
   else
@@ -598,6 +634,13 @@ function BOT.decide(frame, read)
     fire, fire_why = true, "cleanup"   -- R-bot-5
   end
   btn.b = fire
+
+  -- ④簇炸弹决策（诊断书弹药 4：贴脸簇=炸弹场景）
+  if cluster_n >= 4 and (frame - S.last_bomb) >= BOMB_COOLDOWN then
+    btn.a = true
+    S.last_bomb = frame
+    ev("bomb", frame, { trigger = "cluster", cluster_n = cluster_n })
+  end
 
   -- R-bot-4 炸弹应急（被围：逃逸分 < SAFE_DIST 且近距敌弹 ≥6；A 边沿；冷却 300f）
   if dscore < SAFE_DIST and #s.bullets >= 6 and (frame - S.last_bomb) >= BOMB_COOLDOWN then
@@ -686,7 +729,10 @@ function BOT.on_frame(frame, read)
         end
         if hit_slot >= 0 then break end
       end
+      local hit_player = boxes_overlap({ l = a.x - 4, r = a.x + 3, t = a.y - 5, b = a.y + 5 },
+                                       player_box(s.px, s.py))
       ev("shot_die", frame, {
+        hit_player = hit_player,
         yslot = yslot, x = a.x, y = a.y, tcode = a.tcode, owner = a.tcode == 0x80 and 1 or 0,
         boss_x = boss_x, boss_y = boss_y, boss_hp = boss_hp, boss_type = boss_type,
         hit_slot = hit_slot, hit_type = hit_type,
