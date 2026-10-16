@@ -385,6 +385,14 @@ fn main() {
                     if n < 4 && o < 0x3C0 {
                         nt.tiles[n][o] = row[i]; // ②0 码=擦写（t243）：0 写入=擦除该格
                         upload_write += 1;
+                        // 【落位试②】ROWDBL=1 双写（t109 每行双调用注：行写 dest+dest+32）
+                        if std::env::var("ROWDBL").is_ok() {
+                            let off2 = rel + i + 32;
+                            let (n2, o2) = (off2 / 0x400, off2 % 0x400);
+                            if n2 < 4 && o2 < 0x3C0 {
+                                nt.tiles[n2][o2] = row[i];
+                            }
+                        }
                     }
                 }
             }
