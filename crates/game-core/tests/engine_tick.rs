@@ -1108,3 +1108,27 @@ fn apu_write_stream_face() {
     s2.write(0, 0x40, 0x01); // 越域 ⇒ 钳
     assert_eq!(s2.events[0].reg, 0x00, "$40 & $1F 钳制");
 }
+
+/// ㊵ bank11 音频驱动面（AUD-1 七入口跳板）。
+#[test]
+fn audio_driver_seven_entries() {
+    use game_core::{
+        audio_entry, ApuWriteStream, AudioDriver, AUDIO_TRAMPOLINES,
+    };
+    // 七入口 ROM 吻合（JMP 4C 形+目标）
+    assert_eq!(AUDIO_TRAMPOLINES.len(), 7);
+    assert_eq!(AUDIO_TRAMPOLINES[0], (0x8000, 0x88A3, "audio_init"));
+    assert_eq!(AUDIO_TRAMPOLINES[6], (0x8012, 0x8E2C, "main_tick"));
+    // init→触发→主 tick 链
+    let mut d = AudioDriver::default();
+    let mut w = ApuWriteStream::default();
+    assert!(audio_entry("audio_init", &mut d, 0, &mut w));
+    assert!(d.inited);
+    assert!(audio_entry("trigger_a", &mut d, 0x9F, &mut w));
+    assert_eq!(d.triggers_a, 1);
+    assert_eq!(w.events.len(), 1, "触发口写登记");
+    audio_entry("main_tick", &mut d, 0, &mut w);
+    assert_eq!(d.tick_count, 1);
+    // 未知入口 fail-closed
+    assert!(!audio_entry("nope", &mut d, 0, &mut w));
+}

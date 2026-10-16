@@ -333,7 +333,14 @@ pub fn render_sprites(
                     251 => (127, 30), // t246 ②：251 腿净负留档（t225 保持）
                     253 => (29, 32), // t246 ②实测 +21px 净正采纳
                     255 => (90, 34),
-                    _ => (if t & 1 == 1 { 96 } else { 28 }, t - 221),
+                    // 【l4 修②】t−221 下溢守卫（4 帧特异：t∈128..220 超 T−221 规则域）
+                    // ——fail-closed：域外 sprite 跳过（idx=None 语义注；域外家族待考证）
+                    _ => {
+                        match t.checked_sub(221) {
+                            Some(idx) => (if t & 1 == 1 { 96 } else { 28 }, idx),
+                            None => continue, // 域外 t 不渲染（渲染败→跳过注）
+                        }
+                    }
                 };
                 if std::env::var("DBGDAN").is_ok() && t >= 250 {
                     eprintln!("DBGDAN t={} X={} Y={} attr={:02x}", t, spr.x, spr.y, spr.attr);
@@ -806,4 +813,40 @@ pub fn parse_disp_grid(data: &[u8]) -> Option<DispGrid> {
     let count = data[tail];
     let chain = u16::from_le_bytes([data[tail + 1], data[tail + 2]]);
     Some(DispGrid { pairs, count, chain: if chain == 0 { None } else { Some(chain) } })
+}
+
+/// 屏流投影（R-4 格式流→BgModel 全量回放——**内容投影管线**：PPU 协议解释
+/// （$2006 地址锁存/$2007 tile 写自增）→ nametable 填充；FE 重载=新地址锁存/
+/// FF 段终。未覆盖区=保持（持久化语义）——结局卡纯 BG 内容缺投影修复面）。
+pub fn project_screen_stream(bg: &mut BgModel, data: &[u8]) -> usize {
+    let mut pos = 0;
+    let mut ppu: Option<u16> = None;
+    let mut written = 0;
+    while let Some((step, next)) = screen_step(data, pos) {
+        pos = next;
+        match step {
+            ScreenStep::PpuAddr { ppu: a } => {
+                ppu = Some(a);
+            }
+            ScreenStep::Reload => {
+                // FE：后续 PPU 地址装载由流内 PpuAddr 步承担（对格式注）
+                ppu = None;
+            }
+            ScreenStep::SegmentEnd => {
+                ppu = None;
+            }
+            ScreenStep::Tile { code } => {
+                if let Some(a) = ppu {
+                    if let Some((col, row)) = ppu_to_nametable(a) {
+                        if row < 30 && col < 32 {
+                            bg.tiles[row][col] = code;
+                            written += 1;
+                        }
+                    }
+                    ppu = Some(a.wrapping_add(1)); // $2007 自增
+                }
+            }
+        }
+    }
+    written
 }
