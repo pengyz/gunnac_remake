@@ -352,10 +352,28 @@ pub fn clear_hit_entry(e: &HitBoxEntry) -> HitBoxEntry {
 
 /// 伤害公式（`bank14:$D674`，X=被击者）：
 /// - `$4C==0`（语义未证域）→ 直接 HP:=0（一击死）——**参数化待证，不入默认路径**；
-/// - 弹命中（归属 bit7 置）：HP −= **2**（`$D684-$D688 SBC #$02`）；
+/// 弹命中伤害路径（W-DMG3：ROM **恰两处立即数**——$D688 SBC #2 / $CEA2 SBC #3；
+/// 武器→路径映射=①码径考证协同 decomp（表 −3 族 2#/3#/5#/特武 37 格候选））。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShotDmgPath {
+    /// `$D688 SBC #$02`（−2HP——1#/4# 族等）。
+    D688Minus2,
+    /// `$CEA2 SBC #$03`（−3HP——2#/3#/5#/特武 −3 族候选）。
+    CEA2Minus3,
+}
+
+/// - 弹命中（归属 bit7 置）：HP −= **2 或 3**（`$D688 SBC #$02`/`$CEA2 SBC #$03`
+/// ——武器参数化 W-DMG3；旧签名武器无关=缺口已补）；
 /// - 物撞（归属 bit7 清）：HP −= **对方 `$0630`**（`$D69C`；撞击伤害=对方 HP 值）。
 /// 返回新 HP（0/下溢饱和 0）；HP 归 0 ⇒ 调用方走 `$D616` 状态转移死亡门。
-pub fn damage_apply(hp: u8, owner_is_shot: bool, opponent_hp: u8) -> u8 {
-    let dmg: u16 = if owner_is_shot { 2 } else { u16::from(opponent_hp) };
+pub fn damage_apply(hp: u8, owner_is_shot: bool, opponent_hp: u8, shot_path: ShotDmgPath) -> u8 {
+    let dmg: u16 = if owner_is_shot {
+        match shot_path {
+            ShotDmgPath::D688Minus2 => 2,
+            ShotDmgPath::CEA2Minus3 => 3,
+        }
+    } else {
+        u16::from(opponent_hp)
+    };
     u16::from(hp).saturating_sub(dmg).min(0xFF) as u8
 }

@@ -33,6 +33,13 @@
 
 
 
+### OBS-2 · 武器满级 crash quirk 候选（2026-10-16）
+
+- 现象：Soig 统计表（xlsx sheet1）标注 **1# 武器 L9=crash / 特殊武器 F/B/T/W L5=crash**（"damage/time" 列=crash 字面）——满级使用导致游戏崩溃的原版 quirk 候选（D4 保真对象）。
+- 复现：**社区 B 级主张未复证**（xlsx 逐格字面已解析可复导：`python3 zipfile` 法见 tas-soig-external-data.md §2）；我方复现=武器升满级后使用（升级链 RAM 面待接）。
+- 不立号原因：社区数据 B 级（AGENTS §3 入结论前须复证）；需我方真机/engine 复现崩溃现场方可立 BUG-xxx。
+- 关联：W-DMG3 伤害参数化（damage_apply 两立即数）；保真纪律=复证后 Stage A **保留 crash 行为**不修（D4）。
+
 <!-- 新登记追加在下方，按编号递增；证伪不删历史，原地标注日期更正（AGENTS.md §3.6） -->
 
 ## BUG-021 · C9 bit5 死分支 quirk（波次流头部）
