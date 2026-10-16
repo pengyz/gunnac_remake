@@ -608,3 +608,31 @@ impl ShopPurchaseState {
         self.menu_items.saturating_sub(1)
     }
 }
+
+// ===== A1 商店隐藏交互（S-CH-2 70d036e——组合判站点+效果体+旗操作三件套）=====
+
+/// #2 免费购物组合判（站点 bank00:9E5D `AND #$21` 「左+选择」名从 S-CH-2——
+/// 掩码字面；位名映射=八位全谱 f19a9b0/70d036e）：`($18 & $21) == $21`。
+/// 效果体：购买扣款免减（「免费购物」——$0401 循环换值器 $10/$11 限值对机制注）。
+pub const CHEAT2_FREE_SHOP_MASK: u8 = 0x21;
+
+/// #2 组合判。
+pub fn cheat2_free_shop(buttons_18: u8) -> bool {
+    buttons_18 & CHEAT2_FREE_SHOP_MASK == CHEAT2_FREE_SHOP_MASK
+}
+
+/// #3 钱袋→特殊武器转换旗操作（站点 bank00:9C6D `$32 &:= ~$40` 转换旗候选——
+/// **复合归属 B 级**）。
+pub fn moneybag_convert_flag(f32: u8) -> u8 {
+    f32 & !0x40
+}
+
+/// #3 组合判（站点 bank00:9D3A `A|B|开始 三键+右判`——掩码=A|B|START|RIGHT
+/// =`$D1` 候选（标准位图 A=$80/B=$40/START=$10/RIGHT=$01）；**精确位待八位全谱
+/// 钉取**（S-CH-2 注）。
+pub const CHEAT3_MONEYBAG_MASK: u8 = 0xD1;
+
+/// #3 组合判。
+pub fn cheat3_moneybag(buttons_18: u8) -> bool {
+    buttons_18 & CHEAT3_MONEYBAG_MASK == CHEAT3_MONEYBAG_MASK
+}
