@@ -59,9 +59,42 @@ def selftest():
     return 0
 
 
+def backfill_cross_scene(gold_path, anch_rows, dry):
+    """跨场景同域回填（lead 域裁定：7 占位=注入域——stgXX-timeline §7 帧值共享链
+    前缀帧域；identity 断言=checkpoint+mode 精确（scene 不同源但同域共享帧值））。"""
+    gold = load(gold_path)
+    # 锚索引：(checkpoint, mode) → f（取同域实锚 f>0）
+    ai = {}
+    for a in anch_rows:
+        if a.get("golden") and a.get("f", 0) > 0:
+            ai[(a.get("checkpoint"), a["mode"])] = a["f"]
+    changed = 0
+    for g in gold:
+        if g["f"] != 0:
+            continue
+        key = (g.get("checkpoint"), g["mode"])
+        f = ai.get(key)
+        if f is None:
+            print(f"[cross] 占位无同域锚: {key}")
+            continue
+        print(f"[cross] 回填: {key} f=0 -> {f}（注入域共享帧值）")
+        g["f"] = f
+        changed += 1
+    if not dry and changed:
+        with open(gold_path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(json.dumps(r, ensure_ascii=False) for r in gold) + "\n")
+    return changed
+
+
 def main():
     if "--selftest" in sys.argv:
         return selftest()
+    if "--cross-scene" in sys.argv:
+        dry = "--dry-run" in sys.argv
+        anch = load(ANCHORS)
+        n = backfill_cross_scene(GOLDENS["stg01-chain"], anch, dry)
+        print(f"跨场景回填 {n} 行{'（dry-run 未写）' if dry else ''}")
+        return 0
     dry = "--dry-run" in sys.argv
     anch = [a for a in load(ANCHORS) if a.get("golden")]
     ai = {(a["scene"], a.get("checkpoint"), a["mode"]): a["f"] for a in anch}
