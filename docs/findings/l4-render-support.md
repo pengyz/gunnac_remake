@@ -178,3 +178,24 @@ ending_normal / …——**id=画面语义锚**（R-4 OP-ED 画面 CHR 同域注
 
 **弹药面收口**：①$D7B9（R-1=$DA4C ✓ 前案）+⑤CHR 索引族（本片）——port 直用面：
 「csv id 锚 + 4 碎片组 + 共享索引 + $DA4C 校正」四件套。
+
+## R-4 · 隐藏 OP-ED 画面 CHR（2026-10-16 随隙，首片收——画面流格式+装载点）
+
+**① 画面渲染命令流格式（A 级结构）**——bank01:$A1xx 域样本（$A129）：
+
+```
+[PPU 地址 hi,lo] tile 码… [FE nn]（重载/重复命令）… [FF]（段终）→ 下一 PPU 地址段…
+样本 $A129：21 E6 E6 E7 E8 | FE 03 22 F6 F7 F8 | 2D×7 | 24 | FF | 23 22 A0 A1 A2 86 87 20 8B 8C 8D | FE 43 22 …
+```
+
+- tile 码=CHR pattern 索引（A0-A2/86-87/8B-8D/90-92/96-97…）；2D×7=横线排（`-------` 注记吻合）。
+- **画面=tile 布局流**（非 CHR 本体）；CHR 本体=CHR ROM pattern 表（tile 码→图样，R-4c 可选）。
+
+**② 四装载点（A 级）**：bank01:**A043/A04E/A062/A08A**（`$13:=$A1` 系列=各画面流指针装）——
+S-CH-3 的 ending/兔子 OP 自旋屏（A0CD）同域 ✓；**多画面流**（$A1xx 系列每画面一流）。
+
+**③ graphics.csv 对应注**：opening_bubble / ending_robot / ending_normal = **文本/字幕面**
+（社区注「画面下方字幕输出」）——id↔流指针对照挂 **R-4b**；与 R-5 csv 锚同域。
+
+**R-4 首片收口**：流格式+装载点+CHR 分层（布局流→pattern 表）——port 文本/OP-ED 画面渲染面
+可按「$A1xx 流回放→tile 码→CHR pattern」接线。R-4b（id↔流对照）/R-4c（pattern 映射）挂。
