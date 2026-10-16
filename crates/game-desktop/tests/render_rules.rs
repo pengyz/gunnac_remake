@@ -164,3 +164,21 @@ fn text_placement_face() {
     assert_eq!(bg.tiles[6][10], 0x7C);
     assert_eq!(bg.tiles[6][7], 0, "前位不动");
 }
+
+/// R-4 画面流回放（tile 布局流格式）。
+#[test]
+fn screen_stream_replay_face() {
+    use game_desktop::{screen_step, ScreenStep};
+    // [PPU 2B][tiles][FE][FF] 格式
+    let d = [0xC8, 0x20, 0x2D, 0x2D, 0xFE, 0x00, 0xFF];
+    let (s0, n0) = screen_step(&d, 0).unwrap();
+    assert_eq!(s0, ScreenStep::PpuAddr { ppu: 0x20C8 });
+    let (s1, n1) = screen_step(&d, n0).unwrap();
+    assert_eq!(s1, ScreenStep::Tile { code: 0x2D }, "tile 码（横线「-------」注记域）");
+    assert_eq!(screen_step(&d, n1).unwrap().0, ScreenStep::Tile { code: 0x2D });
+    assert_eq!(screen_step(&d, 4).unwrap().0, ScreenStep::Reload);
+    assert_eq!(screen_step(&d, 5).unwrap().0, ScreenStep::Tile { code: 0x00 });
+    assert_eq!(screen_step(&d, 6).unwrap().0, ScreenStep::SegmentEnd);
+    // 截断 fail-closed
+    assert_eq!(screen_step(&[0xC8], 0), None);
+}
