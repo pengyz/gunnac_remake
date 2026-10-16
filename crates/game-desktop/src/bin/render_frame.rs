@@ -115,7 +115,7 @@ fn main() {
                                 // **对账**：trace v=1@BBBD vs ROM v=2 完成型=疑 $0160-0168
                                 // 行参数组多字段/写点族差（细分挂）；fail-closed 按 v=1 实测
                                 // 面接（三件套细分证后切 v=2 判定）
-                                if lan == 0x0160 && lv == 1 && lb_fresh {
+                                if lan == 0x0160 && lv == 1 && lb_fresh && std::env::var("FLAGUPLOAD").is_ok() {
                                     lb_fresh = false;
                                     if lb_addr < 3 && std::env::var("DBGPROBE").is_ok() {
                                         eprintln!("DBGLB flag#{} tail={:02x?}", lb_addr, &lb[0x1E..0x31]);
@@ -179,16 +179,20 @@ fn main() {
                             // 【内容源②】$2007 直写=结局卡真源候选（构建窗行缓冲
                             // 零数据写/纯 flag 脉冲=旧数据上传=全异根因）——目的址=
                             // zp $8E/$8F 基址+写自增（$2006 锁存缺失 quirk 绕行）
-                            let dst = (((zp8f as u16) << 8) | zp8e as u16).wrapping_add(woff);
-                            if (0x2000..0x3000).contains(&dst) {
-                                let rel = (dst - 0x2000) as usize;
-                                let (n, o) = (rel / 0x400, rel % 0x400);
-                                if n < 4 && o < 0x3C0 {
-                                    nt.tiles[n][o] = v;
-                                    projected += 1;
+                            // 【消融定谳】$2007 路=污染源（NOPROBE 7877≈golden 7680
+                            // =text replay 独立真容）——默认禁（PROJ2007=1 逃生）
+                            if std::env::var("PROJ2007").is_ok() {
+                                let dst = (((zp8f as u16) << 8) | zp8e as u16).wrapping_add(woff);
+                                if (0x2000..0x3000).contains(&dst) {
+                                    let rel = (dst - 0x2000) as usize;
+                                    let (n, o) = (rel / 0x400, rel % 0x400);
+                                    if n < 4 && o < 0x3C0 {
+                                        nt.tiles[n][o] = v;
+                                        projected += 1;
+                                    }
                                 }
+                                woff = woff.wrapping_add(1);
                             }
-                            woff = woff.wrapping_add(1);
                         }
                         _ => {}
                     }
@@ -369,8 +373,9 @@ fn main() {
         // —— NMI 语义边界（帧首）：上传上一帧填充的行缓冲（读后即废）——
         // t143 对账模式：行 LUT 路径暂缓（文本层 220 真值对账）
         // t230 ①：条带上传（帧 N 填充→帧 N+1 NMI 落 nametable——持久化模型闭环）
-        let probe_main = args.iter().any(|a| a == "--probe-file"); // 主路在=旧单行路旁路
-        if !probe_main { if let Some((row, _attrs, lo, hi, _c)) = pending_row.take() {
+        // 【消融定谳】旧 pending_row 路=text replay 合成=7877≈golden 7680（真源！）
+        // ——per-flag/$2007 路=污染（禁用态）；bypass 撤
+        if true { if let Some((row, _attrs, lo, hi, _c)) = pending_row.take() {
             let base_addr = ((hi as u16) << 8) | lo as u16;
             if (0x2000..0x3000).contains(&base_addr) {
                 let rel = (base_addr - 0x2000) as usize;
@@ -387,7 +392,9 @@ fn main() {
         let zi = line.find("\"zp\":\"").unwrap();
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
         // —— 主循环相位：probe 写事件填充缓冲 ——
-        apply_frame_writes(&mut buf, &mut attrs, &mut addr_regs, &mut palette_src, f, &mut probe_i);
+        if std::env::var("LOOPABL").is_err() {
+            apply_frame_writes(&mut buf, &mut attrs, &mut addr_regs, &mut palette_src, f, &mut probe_i);
+        }
         // 帧末挂起：行缓冲若本帧被写过（扫写）→ 排队下帧 NMI 上传（地址取当帧 zp）
         // 【l4 修】上传触发域=全缓冲（$0130-$0160 含 flag $0160——旧域 $0130-$0150
         // 漏尾部字段/flag=结束卡 4020 写/帧批疑不触发根因；flag=$0160 非零=挂起类型）
@@ -400,7 +407,7 @@ fn main() {
         // 77+46 变长足迹表由 ROM 链原生产出（与 t128 A 级裁定逐址一致）——
         // PPU 协议解释（t131 归属合并击根修）：$2006 写锁存地址（高/低），
         // $2007 写落 tile（地址自增）——注册器写序列 → nametable 态
-        while text_i < text_writes.len() && text_writes[text_i].0 <= f as u32 {
+        while std::env::var("TEXTABL").is_err() && text_i < text_writes.len() && text_writes[text_i].0 <= f as u32 {
             let (_f, addr, val, grp) = text_writes[text_i];
             if grp != last_grp {
                 ppu_addr_latch_high = true; // R3-1：每组新鲜锁存（修相位错位）
@@ -530,10 +537,21 @@ fn main() {
                 // ③ 二维墨表落地（t204/t207）：Game 族映射=当前判优配置（lossless）
                 // 【双路径调色板②渲染侧】行调色板=$0161 族色码组（cc9fcff）——
                 // NES 色码→RGB（标准 2C02 调色板）；旧行=ink_table 族表（保真对照注）
-                let row_pal = row_pals.get(&ty).copied().unwrap_or([0x0F, 0x30, 0x10, 0x00]);
-                let bg_pal: [game_desktop::Rgba; 4] = [
-                    nes_rgb(row_pal[0]), nes_rgb(row_pal[1]), nes_rgb(row_pal[2]), nes_rgb(row_pal[3]),
-                ];
+                // 【消融定谳】row_pals 值域未解（pal_state=15→NES 黑=内容黑化根因——
+                // EC46 映射/字段角色待证）——ink_table 族表回退（7877≈golden 7680 面）
+                // PALROW=1 逃生阀（row_pals 试）
+                let bg_pal: [game_desktop::Rgba; 4] = if std::env::var("PALROW").is_ok() {
+                    let row_pal = row_pals.get(&ty).copied().unwrap_or([0x0F, 0x30, 0x10, 0x00]);
+                    [nes_rgb(row_pal[0]), nes_rgb(row_pal[1]), nes_rgb(row_pal[2]), nes_rgb(row_pal[3])]
+                } else {
+                    let fam = if bank >= 124 { game_desktop::render_rules::SpriteFamily::Cjk } else { game_desktop::render_rules::SpriteFamily::Game };
+                    [
+                        game_desktop::render_rules::ink_table(fam, 0),
+                        game_desktop::render_rules::ink_table(fam, 1),
+                        game_desktop::render_rules::ink_table(fam, 2),
+                        game_desktop::render_rules::ink_table(fam, 3),
+                    ]
+                };
                 canvas.draw_chr(&rom, bank, tile % 64, px, py, &bg_pal);
                 draws += 1;
             }
@@ -576,7 +594,9 @@ fn main() {
         [unk, mk(0xFF, 0xFE, 0xFF), unk, mk(0xE4, 0xE5, 0x94)],
     ]; // R20-1 精灵墨（1/3）——label index2 开净负注（t212 回归守卫）
     let bg_opaque = [[false; 256]; 240]; // BG 面重建为空（黑场）——掩码全透明
-    game_desktop::render_sprites(&mut canvas, &rom, &sprites, 30, &sprite_pals, &bg_opaque);
+    if std::env::var("SPRABL").is_err() {
+        game_desktop::render_sprites(&mut canvas, &rom, &sprites, 30, &sprite_pals, &bg_opaque);
+    }
 
     std::fs::create_dir_all(repo_root.join("oracle/screens/actual")).unwrap();
     let out_path = repo_root.join(format!("oracle/screens/actual/{name}.png")).to_string_lossy().into_owned();
