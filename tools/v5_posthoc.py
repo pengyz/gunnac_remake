@@ -81,6 +81,18 @@ def sch4_probe(name):
 RUN_ASSIST = "assist=invincible"   # run 级标签（存活辅助——不改锚 trigger，双层标注显式）
 
 
+def frame_derived_clears(frames):
+    """关号跃变帧=清关锚（帧面派生——phase 事件漏检时的补证源）。"""
+    out, prev = [], None
+    for r in frames:
+        st = r.get("w", {}).get("stage_no")
+        if st is not None and prev is not None and st == prev + 1:  # 仅 +1 跃变=自然清关（poke 跳变排除）
+            out.append((r["f"], prev, st))
+        if st is not None:
+            prev = st
+    return out
+
+
 def emit_anchors(name, evs, frames, out_path):
     """锚发射器（--anchors-out）：事件→既有锚型分类，trigger=natural（自然游戏事件）。
     双层标注：锚级 trigger=natural；run 级存活辅助=source_run 尾签（不混入 trigger）。"""
@@ -112,6 +124,18 @@ def emit_anchors(name, evs, frames, out_path):
                          "mode": "Ending", "scene": "s5-chain", "f": e["f"], "trigger": "natural",
                          "source_run": src, "predicate": "stg08 清后无 shop（E392 $180==9 → 结局域）",
                          "evidence": f"analysis/traces/{name}.events.jsonl#f{e['f']}"})
+    # 帧面清关锚补证（关号跃变=INC $180 清关；事件类漏检时补）
+    seen = {r["id"] for r in rows}
+    for f, frm, to in frame_derived_clears(frames):
+        n = frm  # 跃变前关号=被清关
+        cid = f"{stage_of(n)}-clear"
+        if cid not in seen and frm >= 1:
+            rows.append({"id": cid, "golden": True, "checkpoint": cid,
+                         "mode": "StageClear", "scene": "s5-chain", "f": f, "trigger": "natural",
+                         "source_run": src, "predicate": f"stage_no {frm}→{to} 跃变（INC $180 清关·帧面派生）",
+                         "evidence": f"analysis/traces/{name}.frames.jsonl#f{f}"})
+            seen.add(cid)
+    rows.sort(key=lambda r: r["f"])
     out = Path(out_path)
     out.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")
     print(f"锚发射：{len(rows)} 行 → {out}（trigger=natural；run 级签={src}）")
