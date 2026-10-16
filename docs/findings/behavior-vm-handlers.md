@@ -301,3 +301,7 @@ for a,n in ((0x83AE,4),(0x83B2,4),(0x83B6,4),(0x8406,5),(0x840B,5),(0x844C,7),(0
 
 **port 步进原语注**（图形动画节奏，非运动）：phase := $5DC mod 4 → $684/$518 相位表（24/24/13 族）；
 cadence := $5C0 溢出率（速度派生）。S4b-2x ② 收口。
+
+【接口互证注（2026-10-16）】port 提取器接口兼容核验 ✓——frame_anchor_extract `--anchors-out`
+行 `checkpoint=cid` 与 golden_backfill `(scene,checkpoint,mode)` 键直接对齐（26/26 实测互证）；
+秒收链全就绪：v5 trace → --anchors-out → 台账合并 → golden_backfill 一键回填（5+7 占位）。
