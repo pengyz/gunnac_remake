@@ -352,3 +352,25 @@ fn shop_menu_items_stage_varying() {
     // fail-closed：0 项防下溢
     assert_eq!(mk(0).menu_exit_cursor(), 0);
 }
+
+/// ㊱ A1 商店隐藏交互三件套（S-CH-2：#2 免费购物/#3 钱袋转换）。
+#[test]
+fn shop_hidden_interaction_face() {
+    use game_core::ui::{
+        cheat2_free_shop, cheat3_moneybag, moneybag_convert_flag, CHEAT2_FREE_SHOP_MASK,
+        CHEAT3_MONEYBAG_MASK,
+    };
+    // #2：$21 掩码双位全按才真
+    assert_eq!(CHEAT2_FREE_SHOP_MASK, 0x21);
+    assert!(cheat2_free_shop(0x21));
+    assert!(cheat2_free_shop(0x31), "多余键不影响");
+    assert!(!cheat2_free_shop(0x20), "单按假");
+    assert!(!cheat2_free_shop(0x00));
+    // #3：$D1 四位全按才真（候选掩码注）
+    assert_eq!(CHEAT3_MONEYBAG_MASK, 0xD1);
+    assert!(cheat3_moneybag(0xD1));
+    assert!(!cheat3_moneybag(0xD0), "缺右假");
+    // #3 旗操作：$32 &:= ~$40（转换旗候选）
+    assert_eq!(moneybag_convert_flag(0x40), 0x00);
+    assert_eq!(moneybag_convert_flag(0x50), 0x10, "他位保留");
+}
