@@ -352,28 +352,21 @@ pub fn clear_hit_entry(e: &HitBoxEntry) -> HitBoxEntry {
 
 /// 伤害公式（`bank14:$D674`，X=被击者）：
 /// - `$4C==0`（语义未证域）→ 直接 HP:=0（一击死）——**参数化待证，不入默认路径**；
-/// 弹命中伤害路径（W-DMG3：ROM **恰两处立即数**——$D688 SBC #2 / $CEA2 SBC #3；
-/// 武器→路径映射=①码径考证协同 decomp（表 −3 族 2#/3#/5#/特武 37 格候选））。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShotDmgPath {
-    /// `$D688 SBC #$02`（−2HP——1#/4# 族等）。
-    D688Minus2,
-    /// `$CEA2 SBC #$03`（−3HP——2#/3#/5#/特武 −3 族候选）。
-    CEA2Minus3,
-}
-
-/// - 弹命中（归属 bit7 置）：HP −= **2 或 3**（`$D688 SBC #$02`/`$CEA2 SBC #$03`
-/// ——武器参数化 W-DMG3；旧签名武器无关=缺口已补）；
-/// - 物撞（归属 bit7 清）：HP −= **对方 `$0630`**（`$D69C`；撞击伤害=对方 HP 值）。
-/// 返回新 HP（0/下溢饱和 0）；HP 归 0 ⇒ 调用方走 `$D616` 状态转移死亡门。
-pub fn damage_apply(hp: u8, owner_is_shot: bool, opponent_hp: u8, shot_path: ShotDmgPath) -> u8 {
-    let dmg: u16 = if owner_is_shot {
-        match shot_path {
-            ShotDmgPath::D688Minus2 => 2,
-            ShotDmgPath::CEA2Minus3 => 3,
-        }
-    } else {
-        u16::from(opponent_hp)
-    };
+/// 【112d5cf dated 更正】~~弹命中伤害路径 $CEA2 SBC #3（ShotDmgPath 二枚举）~~
+/// **双重证伪**（bank13 全 8K 无 E9 03 原字节；bank14 同址字节=OAM 图形步进
+/// $CDF2 族）——真身=**命中双路机制**（A 级 bank14:$D67C-$D6BB）。
+///
+/// 命中双路：**切换开关=`$6E` bit7**（BPL 分支）——bit7=1 ⇒ 恒定 −2（`$D688`
+/// SBC #2 真身=1# −2HP）；bit7=0 ⇒ HP−=`$0630+槽`（**伤害字段**——spawn 写者
+/// 数据驱动：A659（$0190 索引→$A66B 双表）/AB1B（$4D 索引→$AAE2 8 项表）/
+/// 96DB（TYA→$0630））。出口三态：BEQ HP:=0 死亡/BCS 存活/BCC 清 0（调用方
+/// `$D616` 死亡门）。物撞=同双路 bit7=0 路（字段=对方 `$0630`）统一。
+/// 3# L4-5 −3→−2 分支点**不在命中侧**=spawn 矩阵值变化（自动选择按「spawn
+/// 写者+索引」建模——W-DMG3 续：−3 族 37 格矩阵=写者全谱定位挂账）。
+///
+/// - `const2_mode` = `$6E` bit7 镜像（1 ⇒ 恒定 −2）；
+/// - `damage_field` = `$0630+槽` 伤害字段值（bit7=0 路的减量）。
+pub fn damage_apply(hp: u8, const2_mode: bool, damage_field: u8) -> u8 {
+    let dmg: u16 = if const2_mode { 2 } else { u16::from(damage_field) };
     u16::from(hp).saturating_sub(dmg).min(0xFF) as u8
 }

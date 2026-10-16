@@ -651,18 +651,19 @@ fn soig_external_data_registry() {
     assert!(BOSS_SPAWN_CLEARS_MOBS);
 }
 
-/// ㉝ W-DMG3 伤害面武器参数化（ROM 两立即数）。
+/// ㉝ W-DMG3 命中双路机制（112d5cf dated：$6E bit7 开关——$CEA2 证伪改型）。
 #[test]
-fn damage_apply_weapon_parameterized() {
-    use game_core::shot::{damage_apply, ShotDmgPath};
-    // $D688 路：−2HP（旧行为兼容）
-    assert_eq!(damage_apply(10, true, 0, ShotDmgPath::D688Minus2), 8);
-    // $CEA2 路：−3HP（新——表 −3 族码径候选）
-    assert_eq!(damage_apply(10, true, 0, ShotDmgPath::CEA2Minus3), 7);
-    // 物撞路：对方 HP（武器维不影响）
-    assert_eq!(damage_apply(10, false, 4, ShotDmgPath::D688Minus2), 6);
-    assert_eq!(damage_apply(10, false, 4, ShotDmgPath::CEA2Minus3), 6);
-    // 饱和 0
-    assert_eq!(damage_apply(1, true, 0, ShotDmgPath::CEA2Minus3), 0);
-    assert_eq!(damage_apply(2, true, 0, ShotDmgPath::CEA2Minus3), 0);
+fn damage_apply_dual_path() {
+    use game_core::shot::damage_apply;
+    // bit7=1 ⇒ 恒定 −2（$D688 真身——1# −2HP）
+    assert_eq!(damage_apply(10, true, 0), 8);
+    assert_eq!(damage_apply(10, true, 99), 8, "字段不参与 bit7=1 路");
+    // bit7=0 ⇒ HP−=$0630 伤害字段（spawn 写者数据驱动）
+    assert_eq!(damage_apply(10, false, 3), 7, "字段 3 路（−3 族数据驱动）");
+    assert_eq!(damage_apply(10, false, 4), 6);
+    // 物撞=同双路 bit7=0 路（字段=对方 $0630）
+    assert_eq!(damage_apply(10, false, 6), 4);
+    // 饱和 0（出口 BEQ 死亡门判据）
+    assert_eq!(damage_apply(1, false, 3), 0);
+    assert_eq!(damage_apply(2, true, 0), 0);
 }
