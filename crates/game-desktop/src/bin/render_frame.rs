@@ -143,6 +143,9 @@ fn main() {
     let mut addr_regs = (0u8, 0u8, 0u8); // $8E/$8F/$90（t99：probe 写点追踪，解相位陷阱）
     let mut palette_src = [0u8; 7]; // $161-$167 调色板源（t99 ①）
     let mut pending_row: Option<([u8; 32], [u8; 8], u8, u8, u8)> = None;
+    let mut buf_fill = 0usize;
+    let mut flag_fire = 0usize;
+    let mut upload_write = 0usize;
     let mut hud_row_seq = 0usize; // ②基址上下文：预装载非零行按填充序 → $2000 系 LUT 行
     let mut sx = 0u8;
     let mut sy = 0u8;
@@ -266,6 +269,7 @@ fn main() {
                     let (n, o) = (off / 0x400, off % 0x400);
                     if n < 4 && o < 0x3C0 {
                         nt.tiles[n][o] = row[i]; // ②0 码=擦写（t243）：0 写入=擦除该格
+                        upload_write += 1;
                     }
                 }
             }
@@ -280,6 +284,8 @@ fn main() {
         let wrote = probe.iter().any(|(pf, pa, pv)| {
             *pf == f && (0x0130..=0x0160).contains(pa) && (*pa != 0x0160 || *pv != 0)
         });
+        buf_fill += probe.iter().filter(|(pf, pa, _)| *pf == f && (0x0130..=0x0160).contains(pa)).count();
+        if wrote { flag_fire += 1; }
         // —— 文本放置（t129 机制终版）：核回放写集（phase-batch 产物）直接落 nametable——
         // 77+46 变长足迹表由 ROM 链原生产出（与 t128 A 级裁定逐址一致）——
         // PPU 协议解释（t131 归属合并击根修）：$2006 写锁存地址（高/低），
@@ -347,6 +353,9 @@ fn main() {
             sx = zp[0x1C];
             sy = zp[0x1D];
         }
+    }
+    if std::env::var("DBGPROBE").is_ok() || std::env::var("DBGSTREAM").is_ok() {
+        eprintln!("DBGUPLOAD buf_fill={} flag_fire={} upload_write={}（上传三级——projected 不含此路注）", buf_fill, flag_fire, upload_write);
     }
     // 渲染：nametable 32×30 + 卷轴
     let mut canvas = Canvas::new();
