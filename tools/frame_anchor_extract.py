@@ -22,9 +22,11 @@ def iter_trace(path):
     with open(path) as fh:
         for line in fh:
             try:
-                yield json.loads(line)
+                d = json.loads(line)
             except Exception:
                 continue
+            if isinstance(d, dict) and "f" in d and "w" in d:  # 残行容断（缺键行跳——v5 崩尾根治）
+                yield d
 
 
 def main():
