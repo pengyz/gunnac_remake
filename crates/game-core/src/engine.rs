@@ -1582,3 +1582,7 @@ pub fn boss_hits_to_kill(boss_hp: u16, damage_per_shot: u8) -> u32 {
     let d = u32::from(damage_per_shot).max(1);
     (u32::from(boss_hp) + d - 1) / d
 }
+
+// 【N-0094 族微标注】本文件 bank14/15 引用地址换算（file 偏移=0x10 头+bank×0x2000+窗内偏移）：
+// bank14（$C000 窗）：$CCD3/$CD08（motion_update）⇒ file=0x10+14×0x2000+(addr−0xC000)；
+// bank15（$E000 窗）：E2F3-E307（关末块）/E399-E3A1（通关支）⇒ file=0x10+15×0x2000+(addr−0xE000)。

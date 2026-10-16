@@ -453,3 +453,8 @@ pub fn compute_4d_inputs(prev_a: u8, f4a: u8, f4c: u8, stage: u8, y: u8) -> Opti
     let a = stage.min(cap);
     compute_4d_index(a, f04, f05, f4c, y)
 }
+
+// 【N-0094 族微标注】本文件 bank14/15 引用地址换算（file 偏移=0x10 头+bank×0x2000+窗内偏移）：
+// bank14（$C000 窗）：$D67C-$D6BB/$D684/$D69C/$D705/D6FB ⇒ file=0x10+14×0x2000+(addr−0xC000)；
+// bank15（$E000 窗）：$EF40/$EF45/$EF49/$EF59/$EF81 ⇒ file=0x10+15×0x2000+(addr−0xE000)。
+//（换算坑：同 bank 双窗例 $A325=A000 窗/$8406=$8000 窗——窗基必须按引用地址判）
