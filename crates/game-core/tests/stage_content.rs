@@ -366,10 +366,10 @@ fn shop_hidden_interaction_face() {
     assert!(cheat2_free_shop(0x31), "多余键不影响");
     assert!(!cheat2_free_shop(0x20), "单按假");
     assert!(!cheat2_free_shop(0x00));
-    // #3：$D1 四位全按才真（候选掩码注）
-    assert_eq!(CHEAT3_MONEYBAG_MASK, 0xD1);
-    assert!(cheat3_moneybag(0xD1));
-    assert!(!cheat3_moneybag(0xD0), "缺右假");
+    // #3：$D2 四位全按才真（4d7dfcf 全谱钉取——RIGHT=$02 修正）
+    assert_eq!(CHEAT3_MONEYBAG_MASK, 0xD2);
+    assert!(cheat3_moneybag(0xD2));
+    assert!(!cheat3_moneybag(0xD0), "缺右（$02）假");
     // #3 旗操作：$32 &:= ~$40（转换旗候选）
     assert_eq!(moneybag_convert_flag(0x40), 0x00);
     assert_eq!(moneybag_convert_flag(0x50), 0x10, "他位保留");

@@ -627,10 +627,13 @@ pub fn moneybag_convert_flag(f32: u8) -> u8 {
     f32 & !0x40
 }
 
-/// #3 组合判（站点 bank00:9D3A `A|B|开始 三键+右判`——掩码=A|B|START|RIGHT
-/// =`$D1` 候选（标准位图 A=$80/B=$40/START=$10/RIGHT=$01）；**精确位待八位全谱
-/// 钉取**（S-CH-2 注）。
-pub const CHEAT3_MONEYBAG_MASK: u8 = 0xD1;
+/// #3 组合判（站点 bank00:9D3A `A|B|开始 三键+右判`）。
+/// 【4d7dfcf 八位全谱钉取 dated】~~$D1 候选（RIGHT=$01）~~ 修正：**RIGHT=$02**
+/// （bit0-1=LEFT/RIGHT=$01/$02——单键 AND+组合掩码四组互证）⇒ 三键+右=
+/// A|B|START|RIGHT=`$80|$40|$10|$02`=`**$D2**`。复合注：候选甲 `$33==$22`
+/// （RIGHT|SELECT——LEFT/START 缺席）+候选乙 `$D0`（A|B|START）——Soig
+/// 「右+A/B/开始」=乙掩码+甲旗操作复合（时点分工待 S-CH-4 效果实测）。
+pub const CHEAT3_MONEYBAG_MASK: u8 = 0xD2;
 
 /// #3 组合判。
 pub fn cheat3_moneybag(buttons_18: u8) -> bool {
