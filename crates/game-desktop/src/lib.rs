@@ -487,3 +487,32 @@ impl PaletteShadow {
         }
     }
 }
+
+// ===== R-2 场景调色板记录表（d00269d——W-C1 ③ 数据源接线）=====
+
+/// 场景描述符表（bank00:$97D7 8B/项 ×5——R-2 A 级）：+0/+1=流指针对/+2/+3=
+/// `$7A:$7B` 调色板记录基址（$A000 换窗区 bank 相关读）/+4/+5=`$75:$76` 第二表
+/// （$1809/$1809/…/$9809——语义 open）/+6/+7=第四对（未述——装载体 9780-97A9）。
+pub const SCENE_DESCRIPTORS: [[u8; 8]; 5] = [
+    [0x2E, 0x2C, 0xFB, 0xBE, 0x09, 0x18, 0xFF, 0x97],
+    [0x5E, 0x5C, 0xD2, 0xC0, 0x09, 0x18, 0x55, 0x98],
+    [0x22, 0x20, 0x4E, 0xBB, 0x09, 0x18, 0x85, 0x98],
+    [0x22, 0x20, 0x4E, 0xBB, 0x09, 0x18, 0xF3, 0x98],
+    [0x2E, 0x2C, 0xFB, 0xBF, 0x09, 0x98, 0xFF, 0x97],
+];
+
+/// 3B 场景调色板记录（`$0150+X×3+基址`——**编码语义 B 级候选=RGB 三元组**（值超
+/// NES 6bit 色域=汉化版增强面候选）；C 级止步不发明（R-2b 播放 trace 对照挂账））。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaletteRecord(pub [u8; 3]);
+
+/// 从记录流取第 `i` 项（3B/项——fail-closed 越界 None）。
+pub fn palette_record_at(records: &[u8], i: usize) -> Option<PaletteRecord> {
+    let s = i * 3;
+    records.get(s..s + 3).map(|b| PaletteRecord([b[0], b[1], b[2]]))
+}
+
+/// 描述符取调色板基址（+2/+3 小端——`$7A:$7B`）。
+pub fn descriptor_palette_base(desc: &[u8; 8]) -> u16 {
+    u16::from_le_bytes([desc[2], desc[3]])
+}
