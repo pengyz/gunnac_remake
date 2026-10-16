@@ -823,6 +823,21 @@ fn emit_probe5() {
             ));
         }
         std::fs::write("../../analysis/traces/s5-chain.probe5.jsonl", &out).expect("写 s5-chain probe5");
+    }
+    // 通关跑全程 trace（判据①：逐关段锚可 diff——run 帧域）
+    {
+        use game_core::engine::ClearRun;
+        let mut run = ClearRun::new(1);
+        run.run_to_clear();
+        let mut out = String::new();
+        for e in &run.events {
+            out.push_str(&format!(
+                "{{\"f\": {}, \"mode\": \"{}\", \"checkpoint\": {}}}\n",
+                e.f, e.mode,
+                if e.cp.is_empty() { "null".to_string() } else { format!("\"{}\"", e.cp) },
+            ));
+        }
+        std::fs::write("../../analysis/traces/clear-run.trace.jsonl", &out).expect("写 clear-run trace");
         let _ = WAVE_FLAGS; // 17 流登记面（对拍参考）
     }
 }
