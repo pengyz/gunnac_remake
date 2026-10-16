@@ -98,3 +98,17 @@ python3 tools/scenario_run.py run-all         # 全部顺序跑
 > （旧产物移入 `analysis/traces/.archive/<名>-<时间戳>/`，run 级隔离、历史可查）。
 > L3 golden（`oracle/traces/<场景>.player.jsonl`）只从确定性 run 抽取（重跑 sha256 一致才可信），
 > 死亡/重生等未证语义窗口按 spec §4 显式剔除并在抽取脚本登记帧域。
+
+## 秘籍/选关 poke 表（2026-10-16 用户裁定「不死跑到底」+战略备胎）
+
+| poke 地址 | 值 | 语义 | 证据 |
+|---|---|---|---|
+| `01be` | `01`（≠0） | **DEATH·NON DEATH=不死**（隐藏行；运行时死亡处理直读） | community-absorption-audit T13+336（A/B 级） |
+| `01b6` | `01`-`05` | WEAPON-{1..5} 隐藏行 | T13 八行 RAM 全图 |
+| `01b7` | `00`-`03` | BOMBER-{F,B,T,W} 隐藏行 | T13 |
+| `0180` | `01`-`08` | **AREA 选关**（战略备胎：单刀 stg08 OBS-1/分关锚采集） | T13（area=$0180,0-8） |
+
+- 白名单纪律（tools/scenario_run.py）：bot 场景 poke 仅限秘籍三址（01b6/01b7/01be）；
+  **$0180 选关 poke = 非 bot 场景或备胎场景专用**（bot 全程跑不得跳关——清关链自证）。
+- 备胎场景模板：`poke <帧> 0180 08` + `poke <帧> 01be 01`（+ bot 或开环）——v5 截断/卡死即启用。
+- trigger 标注纪律照旧：poke 过的 run 产出锚=trigger=injected（不得冒充自然）。
