@@ -379,3 +379,75 @@ pub fn render_sprites(
 }
 
 pub mod render_rules;
+// ===== L4 战役④ fade 7 档接线（序列已证㉖/变换=参数化候选——S5-2 封存注）=====
+
+/// fade 观测最大档（FADE_LEVELS[0]=77——亮度标度候选基准）。
+pub const FADE_MAX_LEVEL: u8 = 77;
+
+/// fade 档序列（game-core ㉖ 同源——渲染面直引）。
+pub use game_core::engine::FADE_LEVELS;
+
+/// fade 应用（**线性压暗变换候选**：像素×level/FADE_MAX——S5-2 封存语义
+/// 「$04 写者/数值源」未开前为候选注；L4 差异清单若证变换差异即 dated 修正）。
+/// 序列侧=已证（㉖ 7 档×4f cadence）。
+pub fn apply_fade_dim(canvas: &mut Canvas, level: u8) {
+    let l = u32::from(level.min(FADE_MAX_LEVEL));
+    for px in canvas.pixels.chunks_exact_mut(4) {
+        px[0] = ((px[0] as u32 * l) / FADE_MAX_LEVEL as u32) as u8;
+        px[1] = ((px[1] as u32 * l) / FADE_MAX_LEVEL as u32) as u8;
+        px[2] = ((px[2] as u32 * l) / FADE_MAX_LEVEL as u32) as u8;
+    }
+}
+
+// ===== L4 真差异①：BG nametable 持久化模型（条带外持久化——shop 16880/
+// clear-inject 58209 像素差根源）=====
+
+/// BG nametable 持久化模型（32×30 tile+属性表 8×8——NES 硬件定义；条带写更新
+/// 对应行，**未写区保持前帧内容**=持久化语义）。条带更新规则=R-2..R-5 数据面
+/// （decomp 支援）——现按行写接口参数化。
+pub struct BgModel {
+    /// nametable tile 索引（32×30）。
+    pub tiles: [[u8; 32]; 30],
+    /// 属性表（8×8 字节=64×64 像素调色板选择）。
+    pub attrs: [[u8; 8]; 8],
+}
+
+impl Default for BgModel {
+    fn default() -> Self {
+        BgModel { tiles: [[0; 32]; 30], attrs: [[0; 8]; 8] }
+    }
+}
+
+impl BgModel {
+    /// 条带行写（滚动更新——整行 tile 替换；条带外行持久化不动）。
+    pub fn write_strip_row(&mut self, row: usize, tiles: &[u8; 32]) {
+        if row < 30 {
+            self.tiles[row] = *tiles;
+        }
+    }
+
+    /// 条带列写（横向滚动——整列 tile 替换；条带外列持久化不动）。
+    pub fn write_strip_col(&mut self, col: usize, tiles: &[u8; 30]) {
+        if col < 32 {
+            for (r, &t) in tiles.iter().enumerate() {
+                self.tiles[r][col] = t;
+            }
+        }
+    }
+
+    /// 属性表条带写（调色板选择区更新）。
+    pub fn write_attr(&mut self, ax: usize, ay: usize, v: u8) {
+        if ay < 8 && ax < 8 {
+            self.attrs[ay][ax] = v;
+        }
+    }
+
+    /// BG 层全帧绘制（tile=CHR bank 索引直绘——decode 同源）。
+    pub fn draw_bg(&self, canvas: &mut Canvas, rom: &[u8], bank: usize, pal: &[Rgba; 4]) {
+        for (r, row) in self.tiles.iter().enumerate() {
+            for (c, &t) in row.iter().enumerate() {
+                canvas.draw_chr(rom, bank, t as usize, (c * 8) as i32, (r * 8) as i32, pal);
+            }
+        }
+    }
+}
