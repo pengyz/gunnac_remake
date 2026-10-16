@@ -713,18 +713,19 @@ pub enum ScreenStep {
 }
 
 /// 画面流单步（fail-closed：截断 None）。
-pub fn screen_step(data: &[u8], pos: usize) -> Option<(ScreenStep, usize)> {
+/// 【l4 根因修】格式=**状态机**（PPU 地址 2B 仅在流首/`FE` 后出现）——非启发式
+/// （旧 hi∈$20-23 判据误吞 tile 双字节=旗无效果根因）。
+pub fn screen_step(data: &[u8], pos: usize, expect_addr: bool) -> Option<(ScreenStep, usize)> {
     match *data.get(pos)? {
         0xFE => Some((ScreenStep::Reload, pos + 1)),
         0xFF => Some((ScreenStep::SegmentEnd, pos + 1)),
         _ => {
-            // PPU 地址 2B（首步）或 tile 码——由调用方状态机分派；此处=字节流逐读
-            let lo = *data.get(pos)?;
-            let hi = *data.get(pos + 1)?;
-            if hi >= 0x20 && hi < 0x24 {
+            if expect_addr {
+                let lo = *data.get(pos)?;
+                let hi = *data.get(pos + 1)?;
                 Some((ScreenStep::PpuAddr { ppu: u16::from_le_bytes([lo, hi]) }, pos + 2))
             } else {
-                Some((ScreenStep::Tile { code: lo }, pos + 1))
+                Some((ScreenStep::Tile { code: *data.get(pos)? }, pos + 1))
             }
         }
     }
@@ -822,15 +823,16 @@ pub fn project_screen_stream(bg: &mut BgModel, data: &[u8]) -> usize {
     let mut pos = 0;
     let mut ppu: Option<u16> = None;
     let mut written = 0;
-    while let Some((step, next)) = screen_step(data, pos) {
+    let mut expect_addr = true; // 流首=PPU 地址
+    while let Some((step, next)) = screen_step(data, pos, expect_addr) {
         pos = next;
         match step {
             ScreenStep::PpuAddr { ppu: a } => {
                 ppu = Some(a);
+                expect_addr = false;
             }
             ScreenStep::Reload => {
-                // FE：后续 PPU 地址装载由流内 PpuAddr 步承担（对格式注）
-                ppu = None;
+                expect_addr = true; // FE 后=新 PPU 地址
             }
             ScreenStep::SegmentEnd => {
                 ppu = None;

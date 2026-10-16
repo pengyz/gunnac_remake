@@ -31,30 +31,29 @@ fn main() {
     if let Some(i) = args.iter().position(|a| a == "--stream-file") {
         if let Some(sp) = args.get(i + 1) {
             if let Ok(bytes) = std::fs::read(sp) {
+                // 【l4 根因修】状态机：PPU 地址 2B 仅流首/FE 后（旧启发式误吞 tile）
                 let mut ppu: Option<u16> = None;
                 let mut pos = 0usize;
+                let mut expect_addr = true;
                 while pos < bytes.len() {
                     let b = bytes[pos];
                     pos += 1;
-                    match b {
-                        0xFE => { ppu = None; }
-                        0xFF => { ppu = None; }
-                        _ => {
-                            if pos >= bytes.len() { break; }
-                            let hi = bytes[pos];
-                            pos += 1;
-                            if (0x20..0x24).contains(&hi) {
-                                ppu = Some(u16::from_le_bytes([b, hi]));
-                            } else if let Some(a) = ppu {
-                                let off = (a as usize).wrapping_sub(0x2000);
-                                if off < 960 {
-                                    let n = (off / 960) as usize; // nametable 0（$2000 窗）
-                                    let o = off % 960;
-                                    if n < 4 { nt.tiles[n][o] = b; }
-                                }
-                                ppu = Some(a.wrapping_add(1));
-                            }
+                    if b == 0xFE { expect_addr = true; continue; }
+                    if b == 0xFF { ppu = None; continue; }
+                    if expect_addr {
+                        if pos >= bytes.len() { break; }
+                        let hi = bytes[pos];
+                        pos += 1;
+                        ppu = Some(u16::from_le_bytes([b, hi]));
+                        expect_addr = false;
+                    } else if let Some(a) = ppu {
+                        let off = (a as usize).wrapping_sub(0x2000);
+                        if off < 960 {
+                            let n = (off / 960) as usize;
+                            let o = off % 960;
+                            if n < 4 { nt.tiles[n][o] = b; }
                         }
+                        ppu = Some(a.wrapping_add(1));
                     }
                 }
             }

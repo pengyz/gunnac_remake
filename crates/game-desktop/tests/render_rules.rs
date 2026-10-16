@@ -169,18 +169,20 @@ fn text_placement_face() {
 #[test]
 fn screen_stream_replay_face() {
     use game_desktop::{screen_step, ScreenStep};
-    // [PPU 2B][tiles][FE][FF] 格式
-    let d = [0xC8, 0x20, 0x2D, 0x2D, 0xFE, 0x00, 0xFF];
-    let (s0, n0) = screen_step(&d, 0).unwrap();
+    // [PPU 2B][tiles][FE][PPU 2B][tiles][FF] 格式（状态机——l4 根因修）
+    let d = [0xC8, 0x20, 0x2D, 0x2D, 0xFE, 0x46, 0x21, 0x03, 0xFF];
+    let (s0, n0) = screen_step(&d, 0, true).unwrap();
     assert_eq!(s0, ScreenStep::PpuAddr { ppu: 0x20C8 });
-    let (s1, n1) = screen_step(&d, n0).unwrap();
+    let (s1, n1) = screen_step(&d, n0, false).unwrap();
     assert_eq!(s1, ScreenStep::Tile { code: 0x2D }, "tile 码（横线「-------」注记域）");
-    assert_eq!(screen_step(&d, n1).unwrap().0, ScreenStep::Tile { code: 0x2D });
-    assert_eq!(screen_step(&d, 4).unwrap().0, ScreenStep::Reload);
-    assert_eq!(screen_step(&d, 5).unwrap().0, ScreenStep::Tile { code: 0x00 });
-    assert_eq!(screen_step(&d, 6).unwrap().0, ScreenStep::SegmentEnd);
+    assert_eq!(screen_step(&d, n1, false).unwrap().0, ScreenStep::Tile { code: 0x2D });
+    assert_eq!(screen_step(&d, 4, false).unwrap().0, ScreenStep::Reload);
+    let (s4, n4) = screen_step(&d, 5, true).unwrap();
+    assert_eq!(s4, ScreenStep::PpuAddr { ppu: 0x2146 }, "FE 后新地址");
+    assert_eq!(screen_step(&d, n4, false).unwrap().0, ScreenStep::Tile { code: 0x03 });
+    assert_eq!(screen_step(&d, 8, true).unwrap().0, ScreenStep::SegmentEnd);
     // 截断 fail-closed
-    assert_eq!(screen_step(&[0xC8], 0), None);
+    assert_eq!(screen_step(&[0xC8], 0, true), None);
 }
 
 /// fade 线端到端组合（四件套：流→解释器→改写器→影子——R-2/R-3/R-3b/R-3c 链）。
