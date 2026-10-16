@@ -637,6 +637,8 @@ pub fn moneybag_convert_flag(f32: u8) -> u8 {
 /// A|B|START|RIGHT=`$80|$40|$10|$02`=`**$D2**`。复合注：候选甲 `$33==$22`
 /// （RIGHT|SELECT——LEFT/START 缺席）+候选乙 `$D0`（A|B|START）——Soig
 /// 「右+A/B/开始」=乙掩码+甲旗操作复合（时点分工待 S-CH-4 效果实测）。
+/// 【6b5fd30 澄清】$D2=**语义合掩码**非字面站点（ROM 全扫无 $D2 字面——两站判
+/// 形态 `$D0` 三键+9E40 右先行与之语义等价不冲突）。
 pub const CHEAT3_MONEYBAG_MASK: u8 = 0xD2;
 
 /// #3 组合判。
