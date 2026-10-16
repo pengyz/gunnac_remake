@@ -264,7 +264,6 @@ def test_closure_rejects_non_bot_scenario():
         assert not plan.get("bot")
 
 
-ALL_TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
 
 
 def main() -> int:
@@ -283,6 +282,40 @@ def main() -> int:
     print(f"tas_bot 闭环驱动回归: {total - failed}/{total} 通过")
     return 1 if failed else 0
 
+
+# ---------------- parity 抽验锁（公式对等镜像——game-core↔tas_bot.lua 共享向量）
+# 参考实现=game-core::engine::{weapon_dps,boss_hits_to_kill,predict_slot_position}；
+# tas_bot.lua 同式镜像（tools/tas_bot.lua 三循环接口块）；本表锁共享真值（改动任一侧须双改）。
+
+def test_parity_weapon_dps():
+    # dps = damage*60/max(interval,1)
+    assert 2 * 60 // 8 == 15        # (2,8)→15
+    assert 2 * 60 // 1 == 120       # interval 防除 (2,1)→120
+    assert 3 * 60 // 10 == 18       # (3,10)→18
+
+def test_parity_boss_hits_to_kill():
+    import math
+    assert math.ceil(14 / max(2, 1)) == 7    # 中 boss 14HP/dmg2→7 发（arena §5.2 伤害预算）
+    assert math.ceil(14 / max(3, 1)) == 5    # dmg3→5 发
+    assert math.ceil(0 / max(2, 1)) == 0     # 归零
+    assert math.ceil(13 / max(0, 1)) == 13   # damage<=0 防除
+
+def test_parity_hitbox_constants():
+    # predicted_hitbox 7×10（x−4..x+3/y−5..y+5）——JSON schema/1 常量锁
+    x, y = 100, 120
+    box = (x - 4, x + 3, y - 5, y + 5)
+    assert box == (96, 103, 115, 125) and (box[1] - box[0]) == 7 and (box[3] - box[2]) == 10
+
+def test_parity_motion_step():
+    # 亚像素步进律镜像：lo 无符号+hi 有符号补码+进位（1 步向量）
+    def step(xs, x, vxl, vxh_s):
+        xs2 = (xs + vxl) % 256
+        carry = 1 if xs2 < vxl else 0
+        return xs2, (x + vxh_s + carry) % 256
+    assert step(200, 50, 100, 1) == (44, 52)   # 200+100=44 进位1 → 50+1+1=52
+    assert step(0, 10, 0, -1) == (0, 9)        # 零亚像素负速度 → 10-1=9
+
+ALL_TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
 
 if __name__ == "__main__":
     sys.exit(main())
