@@ -467,7 +467,6 @@ function BOT.decide(frame, read)
       set_phase("clear", frame)
       S.clear_t0 = frame
       ev("stage_clear_gate", frame, { flags26 = s.flags26 })
-    end
     elseif s.pstate == 0 and S.stages_cleared >= 1 then
       -- shop 后备检测（relay 态相位机失灵根治——pstate==0 帧签名=shop init 同源）
       set_phase("shop", frame)
