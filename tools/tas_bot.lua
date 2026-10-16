@@ -468,6 +468,12 @@ function BOT.decide(frame, read)
       S.clear_t0 = frame
       ev("stage_clear_gate", frame, { flags26 = s.flags26 })
     end
+    elseif s.pstate == 0 and S.stages_cleared >= 1 then
+      -- shop 后备检测（relay 态相位机失灵根治——pstate==0 帧签名=shop init 同源）
+      set_phase("shop", frame)
+      S.shop_t0 = frame
+      ev("shop_init_fallback", frame, { stage = s.stage, stages_cleared = S.stages_cleared })
+    end
   elseif S.phase == "clear" then
     -- 商店 init 判定式（AD65-1 泛化：stage_no==已清关数+2 ∧ $0400:=0；stg01 特例=2）
     -- 每关末 INC $180（E37C）⇒ shop 时 stage_no=已清+2；stg08 清后无 shop（E392 $180==9 → 结局）
