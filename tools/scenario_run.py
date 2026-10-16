@@ -268,8 +268,13 @@ def parse_scenario(path: Path) -> dict:
             raise ScenarioError(f"{path}: poke 帧 {e['frame']} 超出 1..{frames}")
     if plan["bot"] is not None:
         # 纪律锁：bot 场景禁 poke（决策器无写注入能力；通关必须自然，README 写注入纪律）
-        if plan["pokes"]:
-            raise ScenarioError(f"{path}: bot 场景禁 poke（无写注入——$26 bit4 必须自然置位）")
+        # 【2026-10-16 用户裁定·不死跑到底】秘籍三址白名单特许（游戏自身机制，D4 干净）：
+        # $01B6=WEAPON 行 / $01B7=BOMBER 行 / $01BE=DEATH·NON DEATH（≠0=不死）——
+        # community-absorption-audit T13/336（A/B 级）；除此之外 poke 仍禁（$26 门不碰）。
+        CHEAT_FLAG_POKE = {"01b6", "01b7", "01be"}
+        bad = [e for e in plan["pokes"] if e["addr"] not in CHEAT_FLAG_POKE]
+        if bad:
+            raise ScenarioError(f"{path}: bot 场景禁 poke（仅秘籍三址白名单特许；越界 {bad}）")
         if not 1 <= plan["bot"]["from"] <= frames:
             raise ScenarioError(f"{path}: bot 起始帧 {plan['bot']['from']} 超出 1..{frames}")
         if not BOT_LUA.is_file():
