@@ -354,15 +354,30 @@ fn main() {
             sy = zp[0x1D];
         }
     }
+    let ntr: usize = std::env::var("RENDER_NT").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let ntr_dbg = ntr;
     if std::env::var("DBGPROBE").is_ok() || std::env::var("DBGSTREAM").is_ok() {
-        eprintln!("DBGUPLOAD buf_fill={} flag_fire={} upload_write={}（上传三级——projected 不含此路注）", buf_fill, flag_fire, upload_write);
+        let nt_nz = nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count();
+        let per_nt: Vec<(usize, usize)> = nt.tiles.iter()
+            .map(|t| (t.iter().filter(|&&x| x > 0 && x < 128).count(), t.iter().filter(|&&x| x >= 128).count()))
+            .collect();
+        eprintln!("DBGUPLOAD buf_fill={} flag_fire={} upload_write={} nt_nz={} per_nt(lo,hi)={:?}", buf_fill, flag_fire, upload_write, nt_nz, per_nt);
     }
     // 渲染：nametable 32×30 + 卷轴
     let mut canvas = Canvas::new();
-    let ntr: usize = std::env::var("RENDER_NT").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let mut draws = 0usize;
+    // 【t243 核修】2×2 nametable 视口合成（滚动 sx/sy 选择——旧读单 ntr 漏 nt2
+    // 半屏=结局卡 480 瓦缺投影根因；≥128 跳码仅 15 瓦（非主差源））。
     for ty in 0..30usize {
         for tx in 0..32usize {
-            let raw_tile = nt.tiles[ntr][ty * 32 + tx];
+            let vx = (tx as i32) * 8 + sx as i32; // 视口像素坐标（512 宽域）
+            let vy = (ty as i32) * 8 + sy as i32; // 480 高域
+            let mx = ((vx % 512) + 512) % 512;
+            let my = ((vy % 480) + 480) % 480;
+            let nsel = (mx / 256) as usize + ((my / 240) as usize) * 2;
+            let sub_x = (mx % 256) as usize / 8;
+            let sub_y = (my % 240) as usize / 8;
+            let raw_tile = nt.tiles[nsel.min(3)][sub_y * 32 + sub_x];
             // ② 小值参数族分离（t152）：0-16 簇=参数字节非 tile（AR2-D bit5 同族）——
             // 直拷制下渲染按透明（不画 glyph）；命名值仍保留在 nametable（内容层精确不动）
             // t208 ①：≥128 族=CJK glyph tile（oracle 实证：128 位置绘字）——
@@ -372,8 +387,8 @@ fn main() {
                 continue; // 擦写格不画/参数标记不画
             }
             let tile = raw_tile as usize + base * 256;
-            let px = (tx as i32) * 8 - sx as i32;
-            let py = (ty as i32) * 8 - sy as i32; // t131 实测：+8 更劣（94.17<94.50）——偏移非主因
+            let px = (tx as i32) * 8;
+            let py = (ty as i32) * 8;
             // t157 三行映射（t154 A 级）：字模族→124/126 对，游戏族→$6A(106) 对
             // ② 字模 CHR 直读（t167 A 级）：bank124 基 + tile×16 **线性区**（跨 bank 124-127 连续）
             // R16-1：恒等式保真维持（低误差域复测 pair≡linear 98.07 同值）
@@ -399,15 +414,27 @@ fn main() {
                 // < 族 A 单式 98.15/97.27——CJK 族 glyph 形状根（W73'）阻墨表生效；
                 // 保持族 A 单式（index2）为实测判优默认，二维墨表留 t204/t206 档注
                 // ③ 二维墨表落地（t204/t207）：Game 族映射=当前判优配置（lossless）
+                // 【t243 核修②】色表族按域选：字模域（bank≥124）→Cjk 族（R18-1 墨=p0
+                // 索引 1/3——Game 族 index2 单式对结局卡墨域全落黑档=canvas_nz=0 根因）
+                let fam = if bank >= 124 {
+                    game_desktop::render_rules::SpriteFamily::Cjk
+                } else {
+                    game_desktop::render_rules::SpriteFamily::Game
+                };
                 let bg_pal: [game_desktop::Rgba; 4] = [
-                    game_desktop::render_rules::ink_table(game_desktop::render_rules::SpriteFamily::Game, 0),
-                    game_desktop::render_rules::ink_table(game_desktop::render_rules::SpriteFamily::Game, 1),
-                    game_desktop::render_rules::ink_table(game_desktop::render_rules::SpriteFamily::Game, 2),
-                    game_desktop::render_rules::ink_table(game_desktop::render_rules::SpriteFamily::Game, 3),
+                    game_desktop::render_rules::ink_table(fam, 0),
+                    game_desktop::render_rules::ink_table(fam, 1),
+                    game_desktop::render_rules::ink_table(fam, 2),
+                    game_desktop::render_rules::ink_table(fam, 3),
                 ];
                 canvas.draw_chr(&rom, bank, tile % 64, px, py, &bg_pal);
+                draws += 1;
             }
         }
+    }
+    if std::env::var("DBGPROBE").is_ok() {
+        let nz = canvas.pixels.chunks_exact(4).filter(|p| p[0] | p[1] | p[2] != 0).count();
+        eprintln!("DBGDRAW draws={} canvas_nz={}", draws, nz);
     }
     // 索引侧车：逐像素 (调色板号, 像素值) + 调色板源（t99 ①反推输入）
     let mut idx_rows: Vec<String> = Vec::new();
