@@ -66,7 +66,15 @@ fn main() {
                             if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) {
                                 lb[(lan - 0x0130) as usize] = lv;
                                 // $0160 flag 非零=行上传（目的址=行缓冲尾字段 t131 4 字段）
-                                if lan == 0x0160 && lv != 0 {
+                                // 【flag 语义细化+对账注】trace 实证：v=3（EED4）=瓦写脉冲
+                                // （194892 超发 6500×）/ **v=1（BBBD）=行完成候选**（1110≈
+                                // 402 行/块×2.7 块量级双证；实测最佳 50088 同点+三带归位
+                                // [169,3392,1011]）。**A 级三件套**（f9e90b3：$0160 v=0 空/
+                                // 2 完成型/其余处理中+行尾码 $20+低半字节计数行宽 32）——
+                                // **对账**：trace v=1@BBBD vs ROM v=2 完成型=疑 $0160-0168
+                                // 行参数组多字段/写点族差（细分挂）；fail-closed 按 v=1 实测
+                                // 面接（三件套细分证后切 v=2 判定）
+                                if lan == 0x0160 && lv == 1 {
                                     if lb_addr < 3 && std::env::var("DBGPROBE").is_ok() {
                                         eprintln!("DBGLB flag#{} tail={:02x?}", lb_addr, &lb[0x1E..0x31]);
                                     }
