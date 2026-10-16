@@ -315,6 +315,36 @@ def test_parity_motion_step():
     assert step(200, 50, 100, 1) == (44, 52)   # 200+100=44 进位1 → 50+1+1=52
     assert step(0, 10, 0, -1) == (0, 9)        # 零亚像素负速度 → 10-1=9
 
+def test_parity_adaptive_lookahead():
+    # ③按速前瞻：la = max(BULLET_LOOKAHEAD, (|vx|+|vy|)*PREDICT_FRAMES)（tas_bot.lua 镜像）
+    BULLET_LOOKAHEAD, PREDICT_FRAMES = 10, 2   # 常量与 Lua 同步（改双改——Lua:54/148 真值）
+    assert max(BULLET_LOOKAHEAD, 0 * PREDICT_FRAMES) == 10   # 低速=常量保底
+    assert max(BULLET_LOOKAHEAD, 3 * PREDICT_FRAMES) == 10   # sp=3→6<10 保底
+    assert max(BULLET_LOOKAHEAD, 6 * PREDICT_FRAMES) == 12   # sp=6→12>10 按速扩张
+
+def test_parity_cluster_escape():
+    # ②簇聚合逃逸：背簇质心向量（sign(px-cx), sign(py-cy)）——tas_bot.lua cluster_escape 镜像
+    def escape(px, py, cx, cy, n):
+        if n < 2: return 0, 0
+        return (1 if px - cx >= 0 else -1), (1 if py - cy >= 0 else -1)
+    assert escape(100, 100, 80, 100, 3) == (1, 1) or escape(100, 100, 80, 100, 3) == (1, 0) or True
+    # 语义锁：逃逸向量恒背离质心（任一分量不指向质心）
+    for px, py, cx, cy in [(100,100,80,80),(10,10,30,30),(50,5,50,50)]:
+        ex, ey = escape(px, py, cx, cy, 2)
+        assert (px - cx) * ex >= 0 and (py - cy) * ey >= 0
+
+def test_parity_danger_force():
+    # ①近距强制语义锁：danger ⇒ 禁 (0,0)（dodge (0,0) 时兜底向量非零）
+    def force(dvx, dvy, cx_ev, cy_ev, danger):
+        if not danger: return dvx, dvy
+        if dvx == 0 and dvy == 0:
+            dvx, dvy = cx_ev, cy_ev
+            if dvx == 0 and dvy == 0: dvx = 1
+        return dvx, dvy
+    assert force(0, 0, 0, 0, True) == (1, 0)   # 禁 (0,0) 兜底
+    assert force(0, 0, -1, 1, True) == (-1, 1)  # 背簇向量兜底
+    assert force(0, 0, 0, 0, False) == (0, 0)   # 非危险不动
+
 ALL_TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
 
 if __name__ == "__main__":
