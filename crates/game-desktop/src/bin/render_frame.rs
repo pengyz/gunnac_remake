@@ -80,7 +80,9 @@ fn main() {
                 let mut zp8e: u8 = 0;
                 let mut zp8f: u8 = 0;
                 let mut woff: u16 = 0;
-                let mut lb_fresh = false; // 数据新鲜度（$0131-015F 写后置真——flag 仅新鲜时上传）
+                let mut lb_fresh = false;
+                let mut fill_rows: u32 = 0;
+                let mut prev_x: u16 = 0; // 数据新鲜度（$0131-015F 写后置真——flag 仅新鲜时上传）
                 // 【双路径调色板②】$0161 族=行调色板色码组（cc9fcff F0F7=调色板刷新
                 // $0161→$3F10 直写；$EC46=色码表 11B 全 NES 色码）——行上传时行调色板
                 // 随行状态（W-C1 影子上传族并接=第二路）
@@ -101,7 +103,12 @@ fn main() {
                         if (0x0130..=0x0160).contains(&lan) {
                             if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) {
                                 lb[(lan - 0x0130) as usize] = lv;
-                                if lan != 0x0160 { lb_fresh = true; }
+                                if lan != 0x0160 {
+                                    lb_fresh = true;
+                                    let xv: u16 = l.split("\"x\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse().ok()).unwrap_or(0);
+                                    if xv < prev_x { fill_rows += 1; }
+                                    prev_x = xv;
+                                }
                                 // $0160 flag 非零=行上传（目的址=行缓冲尾字段 t131 4 字段）
                                 // 【v=2 真身 b876198】$0160=**bitfield 非枚举**：bit0=v=1
                                 // 态（EC42 LDA #1）/bit1=完成（88A3 ORA $160 流字节 bit 置位
@@ -136,6 +143,7 @@ fn main() {
                                         1 => base_addr.wrapping_add((row_seq as u16).wrapping_mul(32)),
                                         2 => base_addr.wrapping_add((((29u32).saturating_sub(row_seq / 2)) as u16).wrapping_mul(32)),
                                         3 => base_addr.wrapping_add(half * 32), // 分半（双调用 dest/half 行）
+                                        4 => base_addr.wrapping_add((fill_rows as u16).wrapping_mul(32)), // x 环回行序
                                         _ => base_addr,
                                     };
                                     if (0x2000..0x3000).contains(&dst) {
