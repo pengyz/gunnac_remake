@@ -150,3 +150,63 @@ pub fn canonical_encode_segment(seg: &[ApuWrite]) -> Vec<u8> {
     }
     out
 }
+
+// ===== bank11 音频驱动面（AUD-1 七入口 A 级跳板）=====
+
+/// bank11 七入口 API 跳板（`$8000-$8015` 3B/入口 `JMP`——ROM 直读逐字节吻合；
+/// 尾 `$8015`=`RTS`）。far-call 内联参数面：`JSR $E649` 后 4B r6,r7,lo,hi——
+/// 8 点 `r6:=$0B`（bank11 映射）。
+pub const AUDIO_TRAMPOLINES: [(u16, u16, &str); 7] = [
+    (0x8000, 0x88A3, "audio_init"),   // boot 域开机初始化
+    (0x8003, 0x88A7, "api2"),         // 调用面未现
+    (0x8006, 0x890B, "api3"),         // 同上
+    (0x8009, 0x8016, "frame_body"),   // $0E 旗+JSR $81EF→APU 写簇
+    (0x800C, 0x8894, "trigger_a"),    // sfx/音乐触发口 A
+    (0x800F, 0x889B, "trigger_b"),    // 触发口 B
+    (0x8012, 0x8E2C, "main_tick"),    // 音频主 tick（帧同步消费）
+];
+
+/// 音频驱动状态（内部体=AUD-2 字段切分/AUD-3 指针表挂——入口语义先接）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AudioDriver {
+    /// init 已执行（$8000 入口）。
+    pub inited: bool,
+    /// 主 tick 计数（$8012 帧同步消费）。
+    pub tick_count: u32,
+    /// 触发计数（A/B 口）。
+    pub triggers_a: u32,
+    pub triggers_b: u32,
+}
+
+/// 音频入口派发（效果面=APU 写流产出——内部体参数化（AUD-2/3 挂）；
+/// `trigger` 参数=触发口负载（sfx/音乐 id——语义挂 AUD-2 字段切分））。
+pub fn audio_entry(
+    entry: &str,
+    driver: &mut AudioDriver,
+    trigger: u8,
+    writes: &mut ApuWriteStream,
+) -> bool {
+    match entry {
+        "audio_init" => {
+            driver.inited = true;
+            // init 效果面=APU 写簇（§1 三簇——内部体 AUD-2 挂；此处=登记性空写注）
+            true
+        }
+        "trigger_a" => {
+            driver.triggers_a += 1;
+            writes.write(driver.tick_count, 0x15, trigger); // 触发口写登记（值域 AUD-2 挂）
+            true
+        }
+        "trigger_b" => {
+            driver.triggers_b += 1;
+            writes.write(driver.tick_count, 0x15, trigger);
+            true
+        }
+        "main_tick" => {
+            driver.tick_count += 1;
+            true
+        }
+        "frame_body" | "api2" | "api3" => true, // 内部体挂（AUD-2/3）
+        _ => false,
+    }
+}

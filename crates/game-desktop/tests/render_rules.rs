@@ -258,3 +258,19 @@ fn displacement_grid_chain() {
     assert_eq!(parse_disp_grid(&[0x01]), None);
     assert_eq!(parse_disp_grid(&[0x01, 0x02, 0x03, 0x04]), None, "奇数位移对界 fail-closed");
 }
+
+/// ①内容投影管线：屏流→BgModel 全量回放。
+#[test]
+fn screen_stream_projection() {
+    use game_desktop::{project_screen_stream, BgModel};
+    // [PPU 20C8][tile 7C 7E][FE][PPU 2146][tile 03][FF]
+    let d = [0xC8, 0x20, 0x7C, 0x7E, 0xFE, 0x46, 0x21, 0x03, 0xFF];
+    let mut bg = BgModel::default();
+    let n = project_screen_stream(&mut bg, &d);
+    assert_eq!(n, 3, "三 tile 投影");
+    assert_eq!(bg.tiles[6][8], 0x7C);
+    assert_eq!(bg.tiles[6][9], 0x7E, "$2007 自增");
+    assert_eq!(bg.tiles[10][6], 0x03, "FE 后新地址投影");
+    // 持久化：未覆盖区不动
+    assert_eq!(bg.tiles[0][0], 0);
+}
