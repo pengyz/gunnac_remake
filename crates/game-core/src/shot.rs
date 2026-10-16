@@ -359,7 +359,9 @@ pub enum HitDmgPath {
     Const2,
     /// `$D69C SBC $0630,Y` 弹伤字段（spawn 写者数据驱动）。
     Field0630,
-    /// `$D705 SBC $12` 第三路（`$12` 索引源待续b——W-DMG3 续）。
+    /// `$D705 SBC $12` 第三路——【e00f941 定格】`$12`=本 routine 域内**极值选择器
+    /// 输出**（D6FB-D6FF `CMP/STA $12` 收集 `$0630,Y` 极值）**非武器索引**；D4
+    /// 复用警示（zp `$12` 跨 routine 共享族）。
     Zp12,
 }
 
