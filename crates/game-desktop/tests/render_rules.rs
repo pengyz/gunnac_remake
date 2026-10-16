@@ -144,3 +144,23 @@ fn fragment_groups_and_screen_anchors() {
     assert!(SCREEN_ANCHORS.contains(&"stage_1"));
     assert!(SCREEN_ANCHORS.contains(&"ending_robot"));
 }
+
+/// ⑥ text.csv 文本放置面。
+#[test]
+fn text_placement_face() {
+    use game_desktop::{place_text, ppu_to_nametable, BgModel, TextPlacement};
+    // PPU↔nametable 对偶（$20C8⇒(8,6)——csv 行实证）
+    assert_eq!(ppu_to_nametable(0x20C8), Some((8, 6)));
+    assert_eq!(ppu_to_nametable(0x2146), Some((6, 10)));
+    assert_eq!(ppu_to_nametable(0x2400), None, "属性区 fail-closed");
+    // 文本放置（tile 码调用方提供）
+    let mut bg = BgModel::default();
+    let p = TextPlacement {
+        group: "settings", ppu: 0x20C8, x: 8, y: 6, text: "건낙 조종실".to_string(),
+    };
+    place_text(&mut bg, &p, &[0x7C, 0x7E, 0x7C]);
+    assert_eq!(bg.tiles[6][8], 0x7C);
+    assert_eq!(bg.tiles[6][9], 0x7E);
+    assert_eq!(bg.tiles[6][10], 0x7C);
+    assert_eq!(bg.tiles[6][7], 0, "前位不动");
+}

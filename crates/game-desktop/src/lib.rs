@@ -647,3 +647,45 @@ pub const SCREEN_ANCHORS: &[&str] = &[
     "stage_1", "stage_2", "stage_3", "stage_4", "stage_5", "stage_6", "stage_7", "stage_8",
     "opening_bubble", "ending_robot", "ending_normal",
 ];
+
+// ===== ⑥ text.csv 文本放置面（168 行 PPU/x/y 全图）=====
+
+/// 文本放置项（text.csv 行——group/ppu_address/x/y/text）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextPlacement {
+    /// 语义组（settings 等——graphics.csv 同域锚）。
+    pub group: &'static str,
+    /// PPU 地址（`$2xxx` nametable 域）。
+    pub ppu: u16,
+    /// x（列）。
+    pub x: u8,
+    /// y（行）。
+    pub y: u8,
+    /// 文本（翻译面——字形→tile 映射=chr-font-map 域参数化）。
+    pub text: String,
+}
+
+/// PPU 地址→nametable 坐标（`$2000+y*32+x` 反解——text.csv x/y 对偶实证
+/// `$20C8`⇒(8,6) ✓）。
+pub fn ppu_to_nametable(ppu: u16) -> Option<(usize, usize)> {
+    let off = (ppu as usize).checked_sub(0x2000)?;
+    if off >= 960 {
+        return None;
+    }
+    Some((off % 32, off / 32))
+}
+
+/// 文本放置到 BG 模型（逐字符 tile 码调用方提供（chr-font-map 域）——fail-closed
+/// 越界裁剪）。
+pub fn place_text(bg: &mut BgModel, p: &TextPlacement, tiles: &[u8]) {
+    let (cx, cy) = match ppu_to_nametable(p.ppu) {
+        Some(c) => c,
+        None => return,
+    };
+    for (i, &t) in tiles.iter().enumerate() {
+        let col = cx + i;
+        if col < 32 && cy < 30 {
+            bg.tiles[cy][col] = t;
+        }
+    }
+}
