@@ -1050,3 +1050,28 @@ fn clear_run_deterministic_replay() {
     };
     assert_eq!(t(), t(), "确定性 replay（trace 全等）");
 }
+
+/// ㉟c bot 战斗面三接口（保命/火力/boss 输出循环）。
+#[test]
+fn bot_combat_face_interfaces() {
+    use game_core::engine::{
+        boss_hits_to_kill, predict_slot_position, predicted_hitbox, weapon_dps, ObjectSlot,
+    };
+    // 保命面：恒速 vy=$00:$90 三帧外推（亚像素 0x90×3=0x1B0 ⇒ y+1）
+    let s = ObjectSlot { y: 0x40, f588: 0x90, f5a4: 0x00, ..Default::default() };
+    let (x, y) = predict_slot_position(&s, 3);
+    assert_eq!((x, y), (0, 0x41), "预测=亚像素积分同源");
+    // 命中盒 7×10
+    assert_eq!(predicted_hitbox(0x20, 0x30), (0x1C, 0x23, 0x2B, 0x35));
+    // 火力面：3 伤/10f ⇒ 18/60f
+    let d = weapon_dps(3, 10);
+    assert_eq!(d.dps_per_60f, 18);
+    // 零速防除（interval=0 ⇒ 按 1）
+    assert_eq!(weapon_dps(2, 0).dps_per_60f, 120);
+    // boss 输出循环：HP14/3 伤 ⇒ 5 发（ceil）
+    assert_eq!(boss_hits_to_kill(14, 3), 5);
+    assert_eq!(boss_hits_to_kill(15, 3), 5);
+    assert_eq!(boss_hits_to_kill(16, 3), 6);
+    // 零伤防除
+    assert_eq!(boss_hits_to_kill(10, 0), 10);
+}
