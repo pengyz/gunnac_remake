@@ -651,19 +651,20 @@ fn soig_external_data_registry() {
     assert!(BOSS_SPAWN_CLEARS_MOBS);
 }
 
-/// ㉝ W-DMG3 命中双路机制（112d5cf dated：$6E bit7 开关——$CEA2 证伪改型）。
+/// ㉝ W-DMG3 命中三路（5e45dc5 全 SBC 穷举：Const2/Field0630/Zp12）。
 #[test]
-fn damage_apply_dual_path() {
-    use game_core::shot::damage_apply;
-    // bit7=1 ⇒ 恒定 −2（$D688 真身——1# −2HP）
-    assert_eq!(damage_apply(10, true, 0), 8);
-    assert_eq!(damage_apply(10, true, 99), 8, "字段不参与 bit7=1 路");
-    // bit7=0 ⇒ HP−=$0630 伤害字段（spawn 写者数据驱动）
-    assert_eq!(damage_apply(10, false, 3), 7, "字段 3 路（−3 族数据驱动）");
-    assert_eq!(damage_apply(10, false, 4), 6);
-    // 物撞=同双路 bit7=0 路（字段=对方 $0630）
-    assert_eq!(damage_apply(10, false, 6), 4);
-    // 饱和 0（出口 BEQ 死亡门判据）
-    assert_eq!(damage_apply(1, false, 3), 0);
-    assert_eq!(damage_apply(2, true, 0), 0);
+fn damage_apply_three_paths() {
+    use game_core::shot::{damage_apply, HitDmgPath};
+    // A 路：$D684 SBC #2 恒定（$6E bit7=1——1# 真身）
+    assert_eq!(damage_apply(10, HitDmgPath::Const2, 0), 8);
+    assert_eq!(damage_apply(10, HitDmgPath::Const2, 99), 8, "A 路字段不参与");
+    // B 路：$D69C SBC $0630 弹伤字段（spawn 写者数据驱动）
+    assert_eq!(damage_apply(10, HitDmgPath::Field0630, 3), 7, "字段 3（−3 族数据驱动）");
+    // C 路：$D705 SBC $12（第三路新——$12 索引源待续b）
+    assert_eq!(damage_apply(10, HitDmgPath::Zp12, 5), 5);
+    // 物撞=B 路（字段=对方 $0630）
+    assert_eq!(damage_apply(10, HitDmgPath::Field0630, 6), 4);
+    // 饱和 0（出口 BEQ 死亡门）
+    assert_eq!(damage_apply(1, HitDmgPath::Field0630, 3), 0);
+    assert_eq!(damage_apply(2, HitDmgPath::Const2, 0), 0);
 }

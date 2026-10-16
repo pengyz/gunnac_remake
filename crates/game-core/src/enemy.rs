@@ -218,7 +218,15 @@ impl Midboss {
         if self.hp == 0 {
             return false; // 已死不重复致死（饱和不回绕）
         }
-        self.hp = crate::shot::damage_apply(self.hp, owner_is_shot, opponent_hp); // 双路：bit7 镜像+字段
+        self.hp = crate::shot::damage_apply(
+            self.hp,
+            if owner_is_shot {
+                crate::shot::HitDmgPath::Const2
+            } else {
+                crate::shot::HitDmgPath::Field0630
+            },
+            opponent_hp,
+        ); // 三路：弹=Const2/物撞=Field0630（对方 $0630）
         self.hp == 0
     }
 }

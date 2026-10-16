@@ -267,7 +267,7 @@ pub fn combat_frame(state: &mut StageState, _fx: &mut StageEffects) {
                 if hit_resolves(sb, &enemy) {
                     // 弹命中：敌 HP−2（$D688 弹路）；弹回收（$87FD）；一框一伤
                     let hp = state.grid.slots[si].f630;
-                    let new_hp = damage_apply(hp, true, 0); // $6E bit7=1 ⇒ 恒定 −2（1# 真身）
+                    let new_hp = damage_apply(hp, crate::shot::HitDmgPath::Const2, 0); // 恒定 −2（1# 真身）
                     state.grid.slots[si].f630 = new_hp;
                     state.bullets.release(*bi as u8);
                     *sb = crate::shot::clear_hit_entry(sb);
