@@ -182,3 +182,35 @@ fn screen_stream_replay_face() {
     // 截断 fail-closed
     assert_eq!(screen_step(&[0xC8], 0), None);
 }
+
+/// fade 线端到端组合（四件套：流→解释器→改写器→影子——R-2/R-3/R-3b/R-3c 链）。
+#[test]
+fn fade_line_end_to_end() {
+    use game_desktop::{
+        rewrite_field, stream_step, PaletteShadow, StreamStep, FADE_STREAM_SEG1,
+    };
+    // 流段 1 逐字节回放→位域改写影子（值=色码，域=调色板 2bit×4）
+    let mut sh = PaletteShadow::default();
+    let mut pos = 0;
+    let mut steps = 0;
+    while let Some((step, next)) = stream_step(&FADE_STREAM_SEG1, pos) {
+        pos = next;
+        match step {
+            StreamStep::End => break,
+            StreamStep::Data { value, count } => {
+                for k in 0..count.min(32) {
+                    // 值→4 域逐域改写（模拟 8619 参数装→改写器——域序 0..3）
+                    for f in 0..4u8 {
+                        rewrite_field(&mut sh.buf[k as usize % 32], f, value & 3);
+                    }
+                }
+                steps += 1;
+            }
+            _ => {}
+        }
+    }
+    // R-3b 对格式读法（[data][count] 对）：10 字节=5 对+终止（「10 码」=字节数）
+    assert_eq!(steps, 5, "段1 五对回放（$00 终止）");
+    // 影子终态=末对值 0x06 低 2bit=10（逐域改写收敛——0x30=count 非值注）
+    assert_eq!(sh.buf[0] & 0x03, 0x02, "末值 0x06&3=02 位域收敛");
+}
