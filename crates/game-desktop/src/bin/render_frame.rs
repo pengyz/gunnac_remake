@@ -43,6 +43,8 @@ fn main() {
                 let mut projected = 0usize;
                 let mut parsed_lines = 0usize;
                 let mut ppu_writes = 0usize;
+                let dbg = std::env::var("DBGPROBE").is_ok() || std::env::var("DBGSTREAM").is_ok();
+                let dbg_latch = dbg;
                 for l in t.lines() {
                     if l.contains("\"a\":") { parsed_lines += 1; }
                     // 事件行：{"f":..,"a":"2006","v":..}——仅 $2006/$2007 PPU 面
@@ -53,12 +55,17 @@ fn main() {
                     match a {
                         "2006" => {
                             ppu_writes += 1;
+                            // 【l4 修】$2006 高字节先行（NES 协议）——旧码低字节位+
+                            // 无移位 OR=投影零落根因（0x20|0xC8=0xE8 越界跳过）
                             if latch_hi {
-                                ppu = Some(u16::from_le_bytes([0, v]));
+                                ppu = Some((v as u16) << 8);
                                 latch_hi = false;
                             } else if let Some(hi) = ppu {
                                 ppu = Some(hi | v as u16);
                                 latch_hi = true;
+                            }
+                            if dbg_latch {
+                                eprintln!("DBGLATCH a2006 v={:02x} → ppu={:04x?}", v, ppu);
                             }
                         }
                         "2007" => {
@@ -76,7 +83,6 @@ fn main() {
                         _ => {}
                     }
                 }
-                let dbg = std::env::var("DBGPROBE").is_ok() || std::env::var("DBGSTREAM").is_ok();
                 if dbg {
                     eprintln!("DBGPROBE file={} parsed_lines={} ppu_writes={} projected={} nt0_sample={:02x?}", pp, parsed_lines, ppu_writes, projected, &nt.tiles[0][0x68..0x70]);
                 }
