@@ -3,17 +3,76 @@
   "purpose": "bot 槽预测面 RAM 映射（tas_bot.lua 常量生成+scenario watch 行——公式对等镜像模式）",
   "evidence": "R-enemy-4 字段族 + motion_update（099c510 bank14:$CCD3/$CD08 亚像素对定谳）+ trace vx 16 位有符号演化实证",
   "slot_count": 28,
-  "slot_index_range": [0, 27],
+  "slot_index_range": [
+    0,
+    27
+  ],
   "slot_stride_bytes": 1,
   "fields": [
-    {"name": "x_subpixel", "addr": "0x0470", "width": 1, "signed": false, "scale": "subpixel_1_256", "family": "motion"},
-    {"name": "y_subpixel", "addr": "0x048C", "width": 1, "signed": false, "scale": "subpixel_1_256", "family": "motion"},
-    {"name": "x_coord", "addr": "0x04E0", "width": 1, "signed": false, "scale": "pixel", "family": "motion"},
-    {"name": "y_coord", "addr": "0x04FC", "width": 1, "signed": false, "scale": "pixel", "family": "motion"},
-    {"name": "vx_lo", "addr": "0x0550", "width": 1, "signed": false, "scale": "subpixel_1_256", "family": "velocity"},
-    {"name": "vx_hi", "addr": "0x056C", "width": 1, "signed": true, "scale": "pixel", "family": "velocity"},
-    {"name": "vy_lo", "addr": "0x0588", "width": 1, "signed": false, "scale": "subpixel_1_256", "family": "velocity"},
-    {"name": "vy_hi", "addr": "0x05A4", "width": 1, "signed": true, "scale": "pixel", "family": "velocity"}
+    {
+      "name": "x_subpixel",
+      "addr": "0x0470",
+      "width": 1,
+      "signed": false,
+      "scale": "subpixel_1_256",
+      "family": "motion"
+    },
+    {
+      "name": "y_subpixel",
+      "addr": "0x048C",
+      "width": 1,
+      "signed": false,
+      "scale": "subpixel_1_256",
+      "family": "motion"
+    },
+    {
+      "name": "x_coord",
+      "addr": "0x04E0",
+      "width": 1,
+      "signed": false,
+      "scale": "pixel",
+      "family": "motion"
+    },
+    {
+      "name": "y_coord",
+      "addr": "0x04FC",
+      "width": 1,
+      "signed": false,
+      "scale": "pixel",
+      "family": "motion"
+    },
+    {
+      "name": "vx_lo",
+      "addr": "0x0550",
+      "width": 1,
+      "signed": false,
+      "scale": "subpixel_1_256",
+      "family": "velocity"
+    },
+    {
+      "name": "vx_hi",
+      "addr": "0x056C",
+      "width": 1,
+      "signed": true,
+      "scale": "pixel",
+      "family": "velocity"
+    },
+    {
+      "name": "vy_lo",
+      "addr": "0x0588",
+      "width": 1,
+      "signed": false,
+      "scale": "subpixel_1_256",
+      "family": "velocity"
+    },
+    {
+      "name": "vy_hi",
+      "addr": "0x05A4",
+      "width": 1,
+      "signed": true,
+      "scale": "pixel",
+      "family": "velocity"
+    }
   ],
   "slot_addressing": {
     "formula": "field_addr(slot) = field.addr + slot_index",
@@ -27,9 +86,16 @@
     "reference_impl": "game-core::engine::motion_update / predict_slot_position（A 级参考实现+测试锁）"
   },
   "hitbox": {
-    "w": 7, "h": 10,
-    "x_offset_range": [-4, 3],
-    "y_offset_range": [-5, 5],
+    "w": 7,
+    "h": 10,
+    "x_offset_range": [
+      -4,
+      3
+    ],
+    "y_offset_range": [
+      -5,
+      5
+    ],
     "clamp": "0/FF 钳制",
     "reference_impl": "game-core::engine::predicted_hitbox / shot.rs shot_hitbox_register"
   },
@@ -37,5 +103,33 @@
     "formula": "iterate motion_rule N frames（出屏即停）",
     "reference_impl": "game-core::engine::predict_slot_position",
     "parity_mode": "Lua 同式镜像（test_tas_bot 对等抽验锁）"
+  },
+  "weapon_dps_face": {
+    "formula": "dps_per_60f = damage_per_shot * 60 / fire_interval_frames (interval>=1 防除)",
+    "inputs": {
+      "damage_per_shot": "命中路径解析值（Const2=2/Field0630=表[$4D] 值/Zp12=极值——auto_hit_path 选路）",
+      "fire_interval_frames": "调用方实测输入（射速语义未证不发明——事件面 fire_gate 间隔）"
+    },
+    "reference_impl": "game-core::engine::weapon_dps",
+    "parity_mode": "Lua 同式镜像（对等抽验锁）"
+  },
+  "boss_hits_face": {
+    "formula": "hits = ceil(boss_hp / max(damage_per_shot, 1))",
+    "inputs": {
+      "boss_hp": "RAM $064B 面读值（test-runner 消费口径）或 Soig sheet2 表",
+      "damage_per_shot": "同武器 DPS 面伤害解析"
+    },
+    "reference_impl": "game-core::engine::boss_hits_to_kill",
+    "use": "boss 输出循环倒计时（plan §4）"
+  },
+  "damage_paths": {
+    "auto_select": "game-core::shot::auto_hit_path(const2_flag, penetrating)",
+    "paths": {
+      "Const2": "$D684 SBC #2 恒定（$6E bit7=1）",
+      "Field0630": "$D69C SBC $0630,Y 弹伤字段（表[$4D] spawn 写者）",
+      "Zp12": "$D705 SBC $12 多源极值（穿透 2# 族候选）"
+    },
+    "weapon_flags_candidate": "1#=(const2,非穿透)/2#=(非const2,穿透)/3-5#=(非const2,非穿透)——数据层候选待矩阵钉正",
+    "level_tier": "$4D=关号驱动等级档（compute_4d_inputs 全链：EF49/EF81/EF59/EF45 四表）"
   }
 }
