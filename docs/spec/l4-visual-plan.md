@@ -302,3 +302,35 @@ PY
 
 **差异二分类口径**：真差异 vs 帧对齐假差异（±1 帧相位差/滚动亚像素/光标闪烁位相）——
 四分类记录（白名单豁免/调色板映射差/字体渲染差/真差异）照 diff_visual 现口径。
+
+
+## 【2026-10-16 L4 复验轮·重判数据】（test-runner，六面修后首验 16 对）
+
+### ① 复验结果（逐帧差值 before→after）
+
+| 帧族 | 样本 | before→after | 判定 |
+|---|---|---|---|
+| gameplay-stage1（无 poke 场景） | f01260/f01500/f02349 | 1509→**1019**/1994→**1490**/2305→**1753** | **六面修生效**（−24~32%；投影缺口消解主体） |
+| l4_timeline 族（注入链场景） | 12 帧 | **逐位零变** | **根因定谳见②** |
+| 冻结屏族 | stg06-late/stg08 ×3 | 16752 恒（×4 同值） | 内容级同图（OBS-1 冻结证据面稳定） |
+| 通过帧 | boot-black/stg02-start | 0 恒 | 管线稳 |
+
+### ② l4 族零变根因（像素级证据+代码级定位）
+
+**render_frame 硬编码 `analysis/phase/gameplay-stage1-text.jsonl`**（render_frame.rs:55）——
+文本放置写集 scene 特异（phase-batch 产物），analysis/phase/ **仅存 gameplay-stage1-text.jsonl**
+（stg03/stg08-timeline-text.jsonl 缺）⇒ 注入链场景重建时文本写集**用错场景源**（或缺失）——
+差异主部（投影未覆盖区=文本/nametable 内容）随之恒定。**六面修（BG 持久化/调色板/fade/关名
+合成）不涉及此源** ⇒ 零变自洽。修复路径：per-scene phase-batch 文本写集产物+render_frame
+路径参数化（port 渲染面工件）——修后同批复验即见消解。
+
+### ③ 复验轮余项（②fade 采集 ③结局卡）
+
+fade 精确窗+结局卡 5 槽待 v8c 结局段（在飞）；AREA-0/OP-ED 备胎场景待开。串行间隔教训照办
+（批跑零锁竞争 ✓ 16/16 render 全产）。
+
+### 判定
+
+- **L4 重判数据出**：真差异消解已实证（gameplay 族 24-32%）；l4 族=文本写集 scene 源缺口
+  （非渲染算法残缺）——修复点单一明确（per-scene text.jsonl+路径参数化）。
+- 帧对齐假差异持续=0。
