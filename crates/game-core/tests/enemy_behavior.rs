@@ -766,3 +766,24 @@ fn json_mirror_parity_lock() {
     assert_eq!(EF59_STAIRCASE[0], 0);
     assert_eq!(EF45_COMPENSATION[3], 5);
 }
+
+/// ㊶ bank7 八形谱（⑦⑧真身+分类表）。
+#[test]
+fn bank7_eight_forms() {
+    use game_core::enemy::{
+        slot_phase, vel_compose_4a8, vel_direct_ae94, BANK7_HANDLERS, HandlerForm,
+    };
+    // 12 体分类表（type→handler→形态）
+    assert_eq!(BANK7_HANDLERS.len(), 12);
+    assert_eq!(BANK7_HANDLERS[5], (0xA2, 0xA61D, HandlerForm::VelCompose4a8));
+    assert_eq!(BANK7_HANDLERS[6], (0xCA, 0xA6EC, HandlerForm::SubObjectGen));
+    // ⑦ 位域合成：x+v & F0 | 08
+    assert_eq!(vel_compose_4a8(0x20, 1), 0x38, "20+10=30 &F0|08=38");
+    assert_eq!(vel_compose_4a8(0x00, 0), 0x08, "0+0 &F0|08=08");
+    // ⑦ 直装（AE94 表）
+    assert_eq!(vel_direct_ae94(0), 0x18);
+    assert_eq!(vel_direct_ae94(3), 0xE8);
+    // 槽号相位（TXA&3）
+    assert_eq!(slot_phase(0), 0xCF);
+    assert_eq!(slot_phase(5), 0xD7, "5&3=1");
+}
