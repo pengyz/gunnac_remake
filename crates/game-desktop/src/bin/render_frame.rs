@@ -91,6 +91,15 @@ fn main() {
     let text_path: String = args.iter().position(|a| a == "--text-file")
         .and_then(|i| args.get(i + 1)).cloned()
         .unwrap_or_else(|| format!("analysis/phase/{}-text.jsonl", scene));
+    // 【stg02-start 回归修】per-scene 文本件缺 ⇒ 回退 legacy（gameplay-stage1-text）
+    // +警告注——共享链前缀域文本集通用（stg02-start 0→902 根因=场景件缺空集）；
+    // fail-closed 语义：回退显式警告非静默（per-scene 件齐后自动切换）
+    let text_path = if !std::path::Path::new(&text_path).exists() {
+        eprintln!("WARN text write set 缺（{}）——回退 gameplay-stage1-text.jsonl", text_path);
+        "analysis/phase/gameplay-stage1-text.jsonl".to_string()
+    } else {
+        text_path
+    };
     let raw_writes: Vec<(u32, u16, u8, u32, u32)> = std::fs::read_to_string(&text_path)
         .map(|t| t.lines().filter_map(|l| {
             let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
