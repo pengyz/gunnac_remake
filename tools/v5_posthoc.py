@@ -20,7 +20,17 @@ def load(name, suffix):
     p = TRACES / f"{name}.{suffix}"
     if not p.exists():
         return []
-    return [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+    out, bad = [], 0
+    for l in p.read_text().splitlines():
+        if not l.strip():
+            continue
+        try:
+            out.append(json.loads(l))
+        except Exception:
+            bad += 1  # 末行截断容断（中断写残行——显式计数不吞）
+    if bad:
+        print(f"  [容断] {p.name}: 跳过 {bad} 坏行（截断残行）")
+    return out
 
 
 def anchor_chain(evs):
