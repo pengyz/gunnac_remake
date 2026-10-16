@@ -49,8 +49,48 @@ fn main() {
                 let no_filter = std::env::var("NOOWF").is_ok(); // 旁路开关（覆写过滤）
                 let dbg = std::env::var("DBGPROBE").is_ok() || std::env::var("DBGSTREAM").is_ok();
                 let dbg_latch = dbg;
+                // 【t131 真语义】行缓冲镜像+逐 flag（$0160 非零）事件上传——
+                // 单 pending_row 丢行根因（4020 写/帧批=多行/帧仅存末行=散碎片）
+                let mut lb = [0u8; 0x31];
+                let mut lb_addr: usize = 0;
+                let mut zp8e: u8 = 0;
+                let mut zp8f: u8 = 0;
                 for l in t.lines() {
                     if l.contains("\"a\":") { parsed_lines += 1; }
+                    let la = match l.split("\"a\":\"").nth(1) { Some(x) => x.split('"').next().unwrap_or(""), None => continue };
+                    if let Ok(lan) = u16::from_str_radix(la, 16) {
+                        if lan == 0x008E { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8e = lv; } }
+                        if lan == 0x008F { if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) { zp8f = lv; } }
+                        if (0x0130..=0x0160).contains(&lan) {
+                            if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) {
+                                lb[(lan - 0x0130) as usize] = lv;
+                                // $0160 flag 非零=行上传（目的址=行缓冲尾字段 t131 4 字段）
+                                if lan == 0x0160 && lv != 0 {
+                                    let lo = zp8e;
+                                    let hi = zp8f;
+                                    if lb_addr < 3 && std::env::var("DBGPROBE").is_ok() {
+                                        eprintln!("DBGLB flag#{} tail={:02x?}", lb_addr, &lb[0x1E..0x31]);
+                                    }
+                                    let base_addr = ((hi as u16) << 8) | lo as u16;
+                                    if (0x2000..0x3000).contains(&base_addr) {
+                                        let rel = (base_addr - 0x2000) as usize;
+                                        for i in 0..32usize {
+                                            let off = rel + i;
+                                            let (n, o) = (off / 0x400, off % 0x400);
+                                            if n < 4 && o < 0x3C0 {
+                                                nt.tiles[n][o] = lb[i];
+                                                projected += 1;
+                                            }
+                                        }
+                                    }
+                                    // 【实证注】逐行 +32 递增反降（47857<49919）——
+                                    // 目的址=块基语义（zp $8E/$8F 每块更新 158 次 vs
+                                    // flag 63648）非逐行递增；静态块基=最佳实测（81.2%）
+                                    lb_addr += 1;
+                                }
+                            }
+                        }
+                    }
                     // 事件行：{"f":..,"a":"2006","v":..}——仅 $2006/$2007 PPU 面
                     let a = match l.split("\"a\":\"").nth(1) { Some(x) => x.split('"').next().unwrap_or(""), None => continue };
                     let v: u8 = match l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()) {
@@ -260,7 +300,8 @@ fn main() {
         // —— NMI 语义边界（帧首）：上传上一帧填充的行缓冲（读后即废）——
         // t143 对账模式：行 LUT 路径暂缓（文本层 220 真值对账）
         // t230 ①：条带上传（帧 N 填充→帧 N+1 NMI 落 nametable——持久化模型闭环）
-        if let Some((row, _attrs, lo, hi, _c)) = pending_row.take() {
+        let probe_main = args.iter().any(|a| a == "--probe-file"); // 主路在=旧单行路旁路
+        if !probe_main { if let Some((row, _attrs, lo, hi, _c)) = pending_row.take() {
             let base_addr = ((hi as u16) << 8) | lo as u16;
             if (0x2000..0x3000).contains(&base_addr) {
                 let rel = (base_addr - 0x2000) as usize;
@@ -273,7 +314,7 @@ fn main() {
                     }
                 }
             }
-        }
+        } }
         let zi = line.find("\"zp\":\"").unwrap();
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
         // —— 主循环相位：probe 写事件填充缓冲 ——
@@ -327,7 +368,9 @@ fn main() {
         }
         if wrote {
             let mut row = [0u8; 32];
-            row.copy_from_slice(&buf[0x00..0x20]);
+            // 【行窗相位】ROWWIN=k 环境变量（默认 0）——行提取窗偏移实证扫
+            let rowwin: usize = std::env::var("ROWWIN").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+            row.copy_from_slice(&buf[rowwin..rowwin + 32]);
             let addr_ok = ((addr_regs.1 as u16) << 8 | addr_regs.0 as u16) >= 0x2000;
             if !addr_ok && row.iter().any(|&v| v != 0) && std::env::var("NOHUDLUT").is_err() {
                 // ① 放置序=**降序+双写**（t109 参数表：行索引逆序映射、每行双调用——
