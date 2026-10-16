@@ -516,3 +516,30 @@ pub fn palette_record_at(records: &[u8], i: usize) -> Option<PaletteRecord> {
 pub fn descriptor_palette_base(desc: &[u8; 8]) -> u16 {
     u16::from_le_bytes([desc[2], desc[3]])
 }
+
+// ===== R-3 调色板命令流参数源（1787111——fade 序列真身=流回放）=====
+
+/// 命令流步（bank00:8530-857F 流解释器——数据+计数/`$00` 终止/BMI 跳转）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamStep {
+    /// 数据+计数（值重复 count 次——位域改写参数装）。
+    Data { value: u8, count: u8 },
+    /// 流终止（`$00`）。
+    End,
+    /// BMI 跳转（bit7=1 字节——跳转编码=R-3b 挂参数化）。
+    Jump { opcode: u8 },
+}
+
+/// 流解释器单步（fail-closed：截断 None；跳转语义待 R-3b）。
+/// 格式（R-3 A 级）：`$00`=终止/bit7=1=跳转/否则 [data][count] 对。
+pub fn stream_step(data: &[u8], pos: usize) -> Option<(StreamStep, usize)> {
+    let &b = data.get(pos)?;
+    if b == 0 {
+        return Some((StreamStep::End, pos + 1));
+    }
+    if b & 0x80 != 0 {
+        return Some((StreamStep::Jump { opcode: b }, pos + 1));
+    }
+    let &count = data.get(pos + 1)?;
+    Some((StreamStep::Data { value: b, count }, pos + 2))
+}
