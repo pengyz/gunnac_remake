@@ -30,11 +30,21 @@ fn main() {
     // 8 组 probe 区含 2006-2007（v8b2 99 万条/stg03 58 万条）——l4 主攻线）。
     if let Some(i) = args.iter().position(|a| a == "--probe-file") {
         if let Some(pp) = args.get(i + 1) {
-            if let Ok(t) = std::fs::read_to_string(pp) {
+            let t = match std::fs::read_to_string(pp) {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("ERR probe-file 读失败（{}）：{}——静默吞修正", pp, e);
+                    String::new()
+                }
+            };
+            {
                 let mut ppu: Option<u16> = None;
                 let mut latch_hi = true;
                 let mut projected = 0usize;
+                let mut parsed_lines = 0usize;
+                let mut ppu_writes = 0usize;
                 for l in t.lines() {
+                    if l.contains("\"a\":") { parsed_lines += 1; }
                     // 事件行：{"f":..,"a":"2006","v":..}——仅 $2006/$2007 PPU 面
                     let a = match l.split("\"a\":\"").nth(1) { Some(x) => x.split('"').next().unwrap_or(""), None => continue };
                     let v: u8 = match l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()) {
@@ -42,6 +52,7 @@ fn main() {
                     };
                     match a {
                         "2006" => {
+                            ppu_writes += 1;
                             if latch_hi {
                                 ppu = Some(u16::from_le_bytes([0, v]));
                                 latch_hi = false;
@@ -51,6 +62,7 @@ fn main() {
                             }
                         }
                         "2007" => {
+                            ppu_writes += 1;
                             if let Some(addr) = ppu {
                                 let off = (addr as usize).wrapping_sub(0x2000);
                                 if off < 960 {
@@ -64,8 +76,12 @@ fn main() {
                         _ => {}
                     }
                 }
-                if std::env::var("DBGSTREAM").is_ok() {
-                    eprintln!("DBGPROBE file={} projected={} nt0_sample={:02x?}", pp, projected, &nt.tiles[0][0x68..0x70]);
+                let dbg = std::env::var("DBGPROBE").is_ok() || std::env::var("DBGSTREAM").is_ok();
+                if dbg {
+                    eprintln!("DBGPROBE file={} parsed_lines={} ppu_writes={} projected={} nt0_sample={:02x?}", pp, parsed_lines, ppu_writes, projected, &nt.tiles[0][0x68..0x70]);
+                }
+                if projected == 0 {
+                    eprintln!("WARN probe 投影零写入（{}）——记录形/覆写诊断", pp);
                 }
             }
         }
