@@ -214,3 +214,28 @@ fn fade_line_end_to_end() {
     // 影子终态=末对值 0x06 低 2bit=10（逐域改写收敛——0x30=count 非值注）
     assert_eq!(sh.buf[0] & 0x03, 0x02, "末值 0x06&3=02 位域收敛");
 }
+
+/// R-5b 关名合成链（三线合龙）。
+#[test]
+fn composition_chain_face() {
+    use game_desktop::{
+        comp_step, composition_stream_ptr, f_decode, CompStep, COMP_PTR_HI, COMP_PTR_LO,
+    };
+    // 双表 ROM 吻合+指针（$518 形状 0 ⇒ $986A 流）
+    assert_eq!(composition_stream_ptr(0), Some(0x986A));
+    assert_eq!(composition_stream_ptr(7), Some(0x98EA));
+    assert_eq!(composition_stream_ptr(16), None, "越界 fail-closed");
+    assert_eq!(COMP_PTR_LO[0], 0x6A);
+    assert_eq!(COMP_PTR_HI[0], 0x98);
+    // F 编码（补码 i8）
+    assert_eq!(f_decode(0xFF), -1);
+    assert_eq!(f_decode(0xFA), -6);
+    assert_eq!(f_decode(0xF4), -12);
+    // 组合流：01 头+嵌套指针检测（$9941）
+    let stream = [0x01, 0x01, 0xFF, 0x41, 0x99];
+    assert_eq!(comp_step(&stream, 0), Some((CompStep::Header, 1)));
+    assert_eq!(comp_step(&stream, 1).unwrap().0, CompStep::Displacement { dx: 1, dy: -1 });
+    assert_eq!(comp_step(&stream, 3).unwrap().0, CompStep::Nested { ptr: 0x9941 });
+    // 截断 fail-closed
+    assert_eq!(comp_step(&[0x01], 1), None);
+}
