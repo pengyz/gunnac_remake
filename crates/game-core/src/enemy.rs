@@ -951,3 +951,25 @@ pub const DRIVER_ASSIGNMENTS: [DriverAssignment; 8] = [
     DriverAssignment { type_code: 0x17, driver: "$84D1 相位机", inner_state: true },
     DriverAssignment { type_code: 0x4E, driver: "bank4 直线", inner_state: false },
 ];
+
+// ===== 外部数据接线（tas-soig-external-data.md——B 级社区数据待复证）=====
+
+/// 特殊武器 ready timer（`27` 帧——Soig sheet1）。
+pub const SPECIAL_READY_TIMER: u16 = 27;
+
+/// 特殊武器 F/B/T/W 等级时长（帧——Soig sheet1 逐格字面：F L3=6*60-2=358/
+/// B L2=5*60-2=298 L3=7*60-2=418/T L2=6*60-2*1=358（同步）L3=7*60-2*2=416（对称）/
+/// W L1=4*60-2=238 L2=5*60-3=297 L3=6*60-5=355；L4=same as L3/L5=**crash**）。
+/// **B 级社区数据**（入结论前须我方复证——AGENTS.md §3）；L5 crash=原版 quirk
+/// 候选（复证后入 bug-ledger，D4）。
+pub const SPECIAL_WEAPON_TIMERS: [[u16; 4]; 4] = [
+    [180, 300, 358, 358], // F: 3*60 / 5*60 / 6*60-2 / L4=same
+    [240, 298, 418, 418], // B: 4*60 / 5*60-2 / 7*60-2 / L4=same
+    [300, 358, 416, 416], // T: 5*60 / 6*60-2*1 / 7*60-2*2 / L4=same
+    [238, 297, 355, 355], // W: 4*60-2 / 5*60-3 / 6*60-5 / L4=same
+];
+
+/// boss 登场=杂兵彻底消失（Soig §4 互证——**槽模型互证收档**：boss 生成条件=对象
+/// 槽占用清零（我方 28 槽模型 alloc/recycle 语义一致性 ✓）；与关末块槽扫描
+/// （$0400 slot0 门/分配器槽域）同族语义。B 级社区观察待复证。
+pub const BOSS_SPAWN_CLEARS_MOBS: bool = true;
