@@ -52,3 +52,10 @@ l4_shop-window frame=5400 base=0 scroll=(0,0) nt_nz=220 probe=0
 l4_stg03-start frame=5700 base=0 scroll=(0,132) nt_nz=220 probe=0
 l4_combat-variety frame=6500 base=0 scroll=(0,52) nt_nz=220 probe=0
 l4_late-combat frame=12000 base=0 scroll=(0,0) nt_nz=220 probe=0
+l4_stg06-late frame=22000 base=0 scroll=(0,0) nt_nz=220 probe=0
+l4_stg08-late frame=28000 base=0 scroll=(0,0) nt_nz=220 probe=0
+l4_stg07-start frame=14600 base=0 scroll=(0,144) nt_nz=220 probe=0
+l4_stg07-start frame=14600 base=0 scroll=(0,144) nt_nz=220 probe=0
+l4_stg07-combat frame=16000 base=0 scroll=(0,74) nt_nz=220 probe=0
+l4_stg08-start frame=16600 base=0 scroll=(0,0) nt_nz=220 probe=0
+l4_stg08-combat frame=18000 base=0 scroll=(0,0) nt_nz=220 probe=0
