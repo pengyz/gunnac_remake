@@ -387,8 +387,9 @@ pub const FADE_MAX_LEVEL: u8 = 77;
 /// fade 档序列（game-core ㉖ 同源——渲染面直引）。
 pub use game_core::engine::FADE_LEVELS;
 
-/// fade 应用（**线性压暗变换候选**：像素×level/FADE_MAX——S5-2 封存语义
-/// 「$04 写者/数值源」未开前为候选注；L4 差异清单若证变换差异即 dated 修正）。
+/// 【e48f5c5 dated】~~线性压暗变换候选~~ **fade 真身=批量位域改写影子后上传**
+/// （bank00:85E8-8618 位域改写器——见 rewrite_field/PaletteShadow）——本函数
+/// 保留为简化对照面（L4 差异比对候选），非真身语义。S5-2 ①续b 封存件**重开收**。
 /// 序列侧=已证（㉖ 7 档×4f cadence）。
 pub fn apply_fade_dim(canvas: &mut Canvas, level: u8) {
     let l = u32::from(level.min(FADE_MAX_LEVEL));
@@ -448,6 +449,41 @@ impl BgModel {
             for (c, &t) in row.iter().enumerate() {
                 canvas.draw_chr(rom, bank, t as usize, (c * 8) as i32, (r * 8) as i32, pal);
             }
+        }
+    }
+}
+
+// ===== W-C1 调色板三件套（e48f5c5——fade/调色真身）=====
+
+/// `$E9D2` 清域掩码（4B——字段 0..3 的 2bit 清位掩码）。
+pub const REWRITE_CLEAR: [u8; 4] = [0xFC, 0xF3, 0xCF, 0x3F];
+/// `$E9D6` 置位掩码（4B——字段 0..3 的 2bit 置位掩码）。
+pub const REWRITE_SET: [u8; 4] = [0x03, 0x0C, 0x30, 0xC0];
+/// `$E9DA` 值展开表（4B——2bit 值 0..3 展开为字节模式）。
+pub const REWRITE_EXPAND: [u8; 4] = [0x00, 0x55, 0xAA, 0xFF];
+
+/// 位域改写器（bank00:85E8-8618——`$D3+X` 每字节 **4×2bit 域逐域改写**：
+/// `shadow[x] = (shadow[x] & CLEAR[i]) | (EXPAND[v] & SET[i])`）。
+/// **fade 真身**=批量位域改写影子后上传（S5-2 ①续b $04 消费面封存件重开收）。
+pub fn rewrite_field(shadow: &mut u8, field: u8, value: u8) {
+    let i = (field & 3) as usize;
+    let v = (value & 3) as usize;
+    *shadow = (*shadow & REWRITE_CLEAR[i]) | (REWRITE_EXPAND[v] & REWRITE_SET[i]);
+}
+
+/// 影子上传（zp `$D3+` → PPU `$3Fxx`——bank15:$F04B-$F072 通道：`$2006:=$8F|$03`
+/// /`$2006:=$90`/burst `$2007`；`$7E`=上传模式分派）。渲染面=影子缓冲上传语义。
+#[derive(Debug, Clone, Default)]
+pub struct PaletteShadow {
+    /// 影子缓冲（zp `$D3+`——32B 调色板镜像候选长度注：33 色 NES 调色板族）。
+    pub buf: [u8; 32],
+}
+
+impl PaletteShadow {
+    /// 批量位域改写（fade 真身——逐字节逐域）。
+    pub fn rewrite(&mut self, x: usize, field: u8, value: u8) {
+        if x < 32 {
+            rewrite_field(&mut self.buf[x], field, value);
         }
     }
 }
