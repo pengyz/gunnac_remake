@@ -981,3 +981,70 @@ pub const SPECIAL_WEAPON_TIMERS: [[u16; 4]; 4] = [
 /// 槽占用清零（我方 28 槽模型 alloc/recycle 语义一致性 ✓）；与关末块槽扫描
 /// （$0400 slot0 门/分配器槽域）同族语义。B 级社区观察待复证。
 pub const BOSS_SPAWN_CLEARS_MOBS: bool = true;
+
+// ===== bank7 八形谱（批 3 a2e5b10——run_handler 增量）=====
+
+/// bank7 handler 形态分类（§5.4 八形谱）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HandlerForm {
+    /// ①速度对。
+    SpeedPair,
+    /// ②关号三表。
+    StageTriple,
+    /// ③$2B 帧相位。
+    FramePhase,
+    /// ④$48C 二态。
+    Bin48c,
+    /// ⑤$4C/$4D 双索引。
+    DualIndex,
+    /// ⑥D10C 回收链写。
+    RecycleChain,
+    /// ⑦$4A8 索引速度合成/直装（新）。
+    VelCompose4a8,
+    /// ⑧子对象生成器（新）。
+    SubObjectGen,
+}
+
+/// bank7 12 体（type→handler→形态——§5.4 逐指令表；枚举口径注：12 vs lead 13 差 1
+/// 照录待核）。
+pub const BANK7_HANDLERS: [(u8, u16, HandlerForm); 12] = [
+    (0x62, 0xA000, HandlerForm::DualIndex),
+    (0x64, 0xA13A, HandlerForm::DualIndex),
+    (0x65, 0xA2F4, HandlerForm::Bin48c),
+    (0xA0, 0xA3CC, HandlerForm::DualIndex),
+    (0xA1, 0xA582, HandlerForm::DualIndex),
+    (0xA2, 0xA61D, HandlerForm::VelCompose4a8),
+    (0xCA, 0xA6EC, HandlerForm::SubObjectGen),
+    (0xCB, 0xACE5, HandlerForm::Bin48c),
+    (0xCC, 0xAE3A, HandlerForm::VelCompose4a8),
+    (0xCD, 0xAEB0, HandlerForm::Bin48c),
+    (0xCE, 0xAF21, HandlerForm::Bin48c),
+    (0xCF, 0xB0C7, HandlerForm::Bin48c),
+];
+
+/// `$A6DC` 位域合成表（16B——⑦ `$A6DC,Y→ADC $04E0/AND #$F0/ORA #$08`）。
+pub const A6DC_COMPOSE: [u8; 16] = [
+    0x00, 0x10, 0x00, 0x10, 0x00, 0x00, 0x10, 0x10, 0xFF, 0x01, 0xFE, 0x02, 0xFE, 0xFE, 0xFF, 0xFF,
+];
+
+/// `$AE94` 直装表（8B——⑦ 直装变体→$04E0/$04FC）。
+pub const AE94_DIRECT: [u8; 8] = [0x18, 0x80, 0xE8, 0xE8, 0xE8, 0x80, 0x18, 0x18];
+
+/// `$AEA4` 槽号相位表（4B——`TXA&3`→相位差参）。
+pub const AEA4_SLOT_PHASE: [u8; 4] = [0xCF, 0xD7, 0xDB, 0xD7];
+
+/// ⑦ 位域合成（`ADC $04E0/AND #$F0/ORA #$08`——y 索引 $A6DC 值入 x 位域）。
+pub fn vel_compose_4a8(x: u8, y_index: u8) -> u8 {
+    let v = A6DC_COMPOSE[(y_index & 0x0F) as usize];
+    x.wrapping_add(v) & 0xF0 | 0x08
+}
+
+/// ⑦ 直装变体值（`$AE94[Y]`→$04E0/$04FC）。
+pub fn vel_direct_ae94(y: u8) -> u8 {
+    AE94_DIRECT[(y & 7) as usize]
+}
+
+/// 槽号相位（`TXA&3`→`$AEA4[phase]`——群体对象差参机制）。
+pub fn slot_phase(slot: u8) -> u8 {
+    AEA4_SLOT_PHASE[(slot & 3) as usize]
+}
