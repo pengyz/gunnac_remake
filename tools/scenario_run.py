@@ -229,6 +229,12 @@ def parse_scenario(path: Path) -> dict:
                 raise err("watch_range 起点必须 <= 止点")
             label = args[1] if len(args) == 2 else f"{a_s}-{b_s}"
             plan["watch_ranges"].append({"from": a_s, "to": b_s, "label": label})
+        elif op == "assist-mode":
+            # 辅助声明（2026-10-16 不死跑到底+战略备胎）：显式标注辅助口径（双层标注 run 级）；
+            # 声明后 poke 白名单扩 $0180 选关（备胎场景专用——bot 全程跑不声明不跳关）。
+            if len(args) != 1:
+                raise err("assist-mode 用法: assist-mode <reason>")
+            plan["assist_mode"] = args[0]
         elif op == "ramframe":
             if len(args) != 1 or args[0] not in ("on", "off"):
                 raise err("ramframe 用法: ramframe on|off")
@@ -272,7 +278,8 @@ def parse_scenario(path: Path) -> dict:
         # $01B6=WEAPON 行 / $01B7=BOMBER 行 / $01BE=DEATH·NON DEATH（≠0=不死）——
         # community-absorption-audit T13/336（A/B 级）；除此之外 poke 仍禁（$26 门不碰）。
         CHEAT_FLAG_POKE = {"01b6", "01b7", "01be"}
-        bad = [e for e in plan["pokes"] if e["addr"] not in CHEAT_FLAG_POKE]
+        allowed = CHEAT_FLAG_POKE | ({"0180"} if plan.get("assist_mode") else set())
+        bad = [e for e in plan["pokes"] if e["addr"] not in allowed]
         if bad:
             raise ScenarioError(f"{path}: bot 场景禁 poke（仅秘籍三址白名单特许；越界 {bad}）")
         if not 1 <= plan["bot"]["from"] <= frames:
