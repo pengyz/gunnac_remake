@@ -380,3 +380,30 @@ pub fn damage_apply(hp: u8, path: HitDmgPath, operand: u8) -> u8 {
     };
     u16::from(hp).saturating_sub(dmg).min(0xFF) as u8
 }
+
+// ===== $4D 等级档公式（W-DMG3 续c 定谳 A 级）=====
+
+/// `$EF59` 阶梯表（32B——bank15 $E000 窗 ROM 直读）。
+pub const EF59_STAIRCASE: [u8; 32] = [
+    0x00, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x02, 0x00, 0x00, 0x01, 0x01, 0x01, 0x02, 0x02, 0x03,
+    0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 0x00, 0x01, 0x02, 0x02, 0x03, 0x03, 0x03, 0x04,
+];
+
+/// `$EF45` 补偿表（16B——`$4C` 索引）。
+pub const EF45_COMPENSATION: [u8; 16] = [
+    0x00, 0x00, 0x03, 0x05, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01,
+];
+
+/// `$4D` 等级档公式（A 级 bank15:$EF40 尾段落穿；续c e00f941/48c43ba）：
+/// `$4D := clamp($EF59[(A&$0E)*4+$05] + $04 + $EF45[$4C], cap)`，`cap`=7
+/// （Y<2 ⇒ 6）。索引域注：`(A&$0E)*4+$05` 按字面实现——表 32B 容纳 A&$0E∈{0,2,4,6}
+/// （武器 0..3 编码形）+$05∈0..7；越界 **fail-closed None**（不发明折返）。
+/// 默认档：trace `$4D=0` 恒（全零入参 ⇒ 0）。
+pub fn compute_4d_index(a: u8, f04: u8, f05: u8, f4c: u8, y: u8) -> Option<u8> {
+    let idx = (a as usize & 0x0E) * 4 + f05 as usize;
+    let base = *EF59_STAIRCASE.get(idx)?;
+    let comp = *EF45_COMPENSATION.get(f4c as usize & 0x0F)?;
+    let val = u16::from(base) + u16::from(f04) + u16::from(comp);
+    let cap = if y < 2 { 6u16 } else { 7u16 };
+    Some(val.min(cap) as u8)
+}

@@ -668,3 +668,23 @@ fn damage_apply_three_paths() {
     assert_eq!(damage_apply(1, HitDmgPath::Field0630, 3), 0);
     assert_eq!(damage_apply(2, HitDmgPath::Const2, 0), 0);
 }
+
+/// ㉞ $4D 等级档公式（W-DMG3 续c）：阶梯/补偿表+clamp+fail-closed。
+#[test]
+fn compute_4d_formula() {
+    use game_core::shot::{compute_4d_index, EF45_COMPENSATION, EF59_STAIRCASE};
+    // 表 ROM 直读首/尾值（阶梯形态）
+    assert_eq!(EF59_STAIRCASE[0], 0);
+    assert_eq!(EF59_STAIRCASE[31], 4);
+    assert_eq!(EF45_COMPENSATION[3], 5);
+    // 默认档：全零入参 ⇒ $4D=0（trace 实证）
+    assert_eq!(compute_4d_index(0, 0, 0, 0, 0), Some(0));
+    // 阶梯行：A=2（行 1）+f05=3 ⇒ 表[11]=1；+f04=2 ⇒ 3
+    assert_eq!(compute_4d_index(2, 2, 3, 0, 2), Some(3));
+    // clamp：Y<2 钳 6
+    assert_eq!(compute_4d_index(6, 15, 7, 3, 1), Some(6), "Y<2 钳 6");
+    // clamp：Y>=2 钳 7
+    assert_eq!(compute_4d_index(6, 15, 7, 3, 2), Some(7), "Y>=2 钳 7");
+    // 越界 fail-closed（A&$0E=8 ⇒ 行溢出）
+    assert_eq!(compute_4d_index(8, 0, 0, 0, 2), None, "OOB fail-closed");
+}
