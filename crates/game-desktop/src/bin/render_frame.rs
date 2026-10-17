@@ -70,6 +70,11 @@ static FAM_MAP: [[u8; 32]; 30] = [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 ];
 
+/// 行映射表（gap 跳：模型连续行→golden 内容行——带 12-13/17-20/23-28+空 14-16/21-22）。
+static ROW_GOLDEN: [usize; 30] = [
+    0,1,2,3,4,5,6,7,8,9,10,11,12,13,13,13,13,17,18,19,20,20,20,23,24,25,26,27,28,28,
+];
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let frame: u64 = args.get(1).expect("帧号").parse().expect("帧号");
@@ -271,7 +276,10 @@ fn main() {
                                     let rowoff: i32 = std::env::var("ROWOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(2); // 【落位归正】R=2 双有 1761 最佳
                                     let base_addr = (((zp8f as u16) << 8) | zp8e as u16).wrapping_add((rowoff * 32) as u16);
                                     let dst = match rowmap {
-                                        1 => base_addr.wrapping_add((((row_seq % 30) as u16).wrapping_mul(32))), // 域内走（960 格循环）
+                                        1 => {
+                                            let rg = if std::env::var("ROWGOLD").is_ok() { ROW_GOLDEN[(row_seq % 30) as usize] } else { (row_seq % 30) as usize };
+                                            base_addr.wrapping_add((rg as u16).wrapping_mul(32)) // 域内走+行映射（gap 跳）
+                                        }
                                         2 => base_addr.wrapping_add((((29u32).saturating_sub(row_seq / 2)) as u16).wrapping_mul(32)),
                                         3 => base_addr.wrapping_add(half * 32), // 垂直半（zp 步进 64=双行对）
                                         4 => base_addr.wrapping_add((fill_rows as u16).wrapping_mul(32)), // x 环回行序
