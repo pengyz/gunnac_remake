@@ -192,7 +192,7 @@ fn main() {
                                     // 【量正达成】默认 rowmap=1 全走（7685≈7680 量正+双有 1302）
                                     let rowmap: u32 = std::env::var("ROWMAP").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
                                     // 【归位实证】ROWOFF=-2 双有 1718 最佳（七阶形进）
-                                    let rowoff: i32 = std::env::var("ROWOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(-2);
+                                    let rowoff: i32 = std::env::var("ROWOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(2); // 【落位归正】R=2 双有 1761 最佳
                                     let base_addr = (((zp8f as u16) << 8) | zp8e as u16).wrapping_add((rowoff * 32) as u16);
                                     let dst = match rowmap {
                                         1 => base_addr.wrapping_add((((row_seq % 30) as u16).wrapping_mul(32))), // 域内走（960 格循环）
@@ -208,7 +208,7 @@ fn main() {
                                         // 垂直镜像 nt2→nt0/nt3→nt1（zp 走双表=内容分半根）
                                         // 【列归位实证】COLOFF=4 双有 2204 最佳（八阶形进）
                                         // 【族修后精调】COLOFF=8 diff 9727 最佳（9 点扫）
-                                        let coloff: i32 = std::env::var("COLOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
+                                        let coloff: i32 = std::env::var("COLOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(4); // 【落位归正】C=4 双有 1761 最佳
                                         // 【值域语义试】PAIRV=1：16B=8×(码,属)对——
                                         // 偶字节=码/奇字节=属（R-2b 候选假说）
                                         if std::env::var("FUSE2").is_ok() {
