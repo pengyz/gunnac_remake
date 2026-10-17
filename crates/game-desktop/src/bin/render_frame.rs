@@ -50,6 +50,8 @@ fn main() {
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
     let mut nt = Nametable::default();
     let mut row_pals: std::collections::HashMap<usize, [u8; 4]> = Default::default(); // 行调色板（双路径②）
+    eprintln!("DBGENV FLAGUPLOAD={:?} ROWMAP={:?} TEXTFALLBACK={:?}",
+        std::env::var("FLAGUPLOAD"), std::env::var("ROWMAP"), std::env::var("TEXTFALLBACK"));
     // 【主源切换】probe 捕获写集回放（$2006/$2007 协议解释→nametable——真投影面：
     // 8 组 probe 区含 2006-2007（v8b2 99 万条/stg03 58 万条）——l4 主攻线）。
     if let Some(i) = args.iter().position(|a| a == "--probe-file") {
@@ -434,6 +436,8 @@ fn main() {
             let (_f, addr, val, grp) = text_writes[text_i];
             if grp != last_grp {
                 ppu_addr_latch_high = true; // R3-1：每组新鲜锁存（修相位错位）
+                ppu_addr = 0; // 【跨组残留修】组界=地址全清（inv 切换即锁存起点——
+                              // 残留旧 lo/hi 位=写散布根因候选（lead 终修令））
                 last_grp = grp;
             }
             text_i += 1;
