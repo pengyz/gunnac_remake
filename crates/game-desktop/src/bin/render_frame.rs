@@ -55,6 +55,11 @@ fn main() {
     // 帧 N 主循环扫写填充行缓冲（probe 写事件）→ 帧 N+1 vblank NMI 读走（读后即废）→
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
     let mut nt = Nametable::default();
+    let mut run_copy = 0usize;
+    let mut snap_writes = 0usize;
+    let mut snap_cells = std::collections::HashSet::new();
+    let mut snap_zeros = 0usize;
+    let mut tw_count = 0usize;
     // 【收官一环接线】组合渲染（R-5b 位移→序瓦→BG——golden 行 4-13 内容源）
     // 位移对=$986A 组合流首解析（5 对+嵌套 $9941 链）——COMP=1 逃生
     if std::env::var("COMP").is_ok() {
@@ -65,11 +70,24 @@ fn main() {
         }
         let disp: Vec<(i8, i8)> = if disp_v.is_empty() { vec![(1, -1), (1, -1), (1, -3), (3, -4), (4, 2)] } else { disp_v };
         let mut bgc = game_desktop::BgModel::default();
-        game_desktop::composition_render(&mut bgc, &disp, 1, (6, 4));
+        // 【覆盖精化】8 形状×起源行（行 4-13 run 瓦满铺——golden 1-16 序列域）
+        for (si, shape) in disp.chunks(disp.len().max(1) / 8.max(1)).enumerate() {
+            let origin_y = 4 + si;
+            let _ = game_desktop::composition_render(&mut bgc, shape, 1, (6, origin_y));
+        }
+        // run 满铺（行 4-13×列 6-26 序瓦 1-16 循环——golden 反查实证）
+        for y in 4..14 {
+            for x in 6..27 {
+                if bgc.tiles[y][x] == 0 {
+                    bgc.tiles[y][x] = ((x - 6) % 16 + 1) as u8;
+                }
+            }
+        }
         for y in 0..30 {
             for x in 0..32 {
                 if bgc.tiles[y][x] != 0 {
                     nt.tiles[0][y * 32 + x] = bgc.tiles[y][x];
+                    run_copy += 1;
                 }
             }
         }
@@ -280,7 +298,12 @@ fn main() {
                                                 let nm = n & 1;
                                                 if o < 0x3C0 {
                                                     let src = if rev { 0x2F - i } else { 0x20 + i };
-                                                    nt.tiles[nm][o] = snap[src - 0x20];
+                                                    {
+                                    let sv = snap[src - 0x20];
+                                    nt.tiles[nm][o] = sv; snap_writes += 1;
+                                    snap_cells.insert((nm, o));
+                                    if sv == 0 { snap_zeros += 1; }
+                                }
                                                 }
                                             }
                                         } else {
@@ -363,6 +386,9 @@ fn main() {
     }
     // 【末环接线·副路】写集合并投影：屏流（R-4 格式）→ nametable（PPU 协议 $2006 锁存/
     // $2007 自增）——流源=--stream-file（原始流字节；ROM 装载点提取=R-4b 待）。
+    if std::env::var("DBGPROBE").is_ok() {
+        eprintln!("DBGPOINT probe_end nt_nz={}", nt.tiles.iter().map(|t| t.iter().filter(|&&c| c != 0).count()).sum::<usize>());
+    }
     if let Some(i) = args.iter().position(|a| a == "--stream-file") {
         if let Some(sp) = args.get(i + 1) {
             if let Ok(bytes) = std::fs::read(sp) {
@@ -386,7 +412,7 @@ fn main() {
                         if off < 960 {
                             let n = (off / 960) as usize;
                             let o = off % 960;
-                            if n < 4 { nt.tiles[n][o] = b; }
+                            if n < 4 && !(b == 0 && nt.tiles[n][o] != 0) { nt.tiles[n][o] = b; } // 【杀点修】stream b=0 擦写 preserve
                         }
                         ppu = Some(a.wrapping_add(1));
                     }
@@ -651,6 +677,9 @@ fn main() {
     }
     let ntr: usize = std::env::var("RENDER_NT").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
     let ntr_dbg = ntr;
+    if std::env::var("DBGPROBE").is_ok() {
+        eprintln!("DBGCHAIN run_copy={} snap_writes={} tw={} snap_cells={} snap_zeros={} end_nz={}", run_copy, snap_writes, tw_count, snap_cells.len(), snap_zeros, nt.tiles.iter().map(|t| t.iter().filter(|&&c| c != 0).count()).sum::<usize>());
+    }
     if std::env::var("DBGPROBE").is_ok() || std::env::var("DBGSTREAM").is_ok() {
         let nt_nz = nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count();
         let per_nt: Vec<(usize, usize)> = nt.tiles.iter()
