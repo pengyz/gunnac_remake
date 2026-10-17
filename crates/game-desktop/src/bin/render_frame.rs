@@ -153,11 +153,15 @@ fn main() {
                                     };
                                     if (0x2000..0x3000).contains(&dst) {
                                         let rel = (dst - 0x2000) as usize;
-                                        for i in 0..32usize {
+                                        // 【值归正真落】输出表 $0150-$015F（lb[0x20..0x30]——
+                                        // 瓦码真区；混杂区 $0131-014F=他字段）+【镜像合并】
+                                        // 垂直镜像 nt2→nt0/nt3→nt1（zp 走双表=内容分半根）
+                                        for i in 0..16usize {
                                             let off = rel + i;
                                             let (n, o) = (off / 0x400, off % 0x400);
-                                            if n < 4 && o < 0x3C0 {
-                                                nt.tiles[n][o] = lb[i];
+                                            let nm = n & 1;
+                                            if o < 0x3C0 {
+                                                nt.tiles[nm][o] = lb[0x20 + i];
                                             }
                                         }
                                     }
