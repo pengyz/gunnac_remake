@@ -412,7 +412,10 @@ fn main() {
                         if off < 960 {
                             let n = (off / 960) as usize;
                             let o = off % 960;
-                            if n < 4 && !(b == 0 && nt.tiles[n][o] != 0) { nt.tiles[n][o] = b; } // 【杀点修】stream b=0 擦写 preserve
+                            // 【fill 语义定谳】0x10/0x20/0x30=噪声平面填充值（非内容——
+                            // test-runner 平面填充实证）+0=擦写——均 preserve（不覆非零内容）
+                            let noise = b == 0 || b == 0x10 || b == 0x20 || b == 0x30;
+                            if n < 4 && !(noise && nt.tiles[n][o] != 0) { nt.tiles[n][o] = b; }
                         }
                         ppu = Some(a.wrapping_add(1));
                     }
