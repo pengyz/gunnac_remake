@@ -159,8 +159,10 @@ fn main() {
                                         // 【值归正真落】输出表 $0150-$015F（lb[0x20..0x30]——
                                         // 瓦码真区；混杂区 $0131-014F=他字段）+【镜像合并】
                                         // 垂直镜像 nt2→nt0/nt3→nt1（zp 走双表=内容分半根）
+                                        // 【列归位实证】COLOFF=4 双有 2204 最佳（八阶形进）
+                                        let coloff: i32 = std::env::var("COLOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(4);
                                         for i in 0..16usize {
-                                            let off = rel + i;
+                                            let off = (rel as i64 + coloff as i64 + i as i64) as usize;
                                             let (n, o) = (off / 0x400, off % 0x400);
                                             let nm = n & 1;
                                             if o < 0x3C0 {
