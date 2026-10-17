@@ -174,8 +174,12 @@ fn main() {
                 let x = ox as i64 + dx as i64;
                 let y = oy as i64 + dy as i64;
                 if x >= 0 && x < 32 && y >= 0 && y < 30 {
-                    let slot = if s1 > s0 { s0 + (di as u8 % (s1 - s0 + 1)) } else { s0 };
-                    let code = snap[slot as usize % 16];
+                    // 【槽区间精化】SLOTEND env：0=闭（+1）/1=开（s1-s0）
+                    let span = if std::env::var("SLOTEND").is_ok() { s1 - s0 } else { s1 - s0 + 1 };
+                    let slot = if s1 > s0 { s0 + (di as u8 % span.max(1)) } else { s0 };
+                    // 【位移序码源】码=content（snap[位移序]）非 snap[slot]（placement）——
+                    // 两轴分离（slot=placement/码=content——R-5b-3 注实证）
+                    let code = snap[di % 16];
                     if code != 0 {
                         bgc.tiles[y as usize][x as usize] = code;
                     }
