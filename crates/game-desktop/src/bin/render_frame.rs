@@ -142,7 +142,8 @@ fn main() {
                                     // 【内容落位②】行序变体（ROWMAP env）：0=静态块基
                                     // 1=块内递增 2=反序+半速（t109 降序+双写注：行索引逆序
                                     // 映射+每行双调用——hud_row_seq/2 同式）
-                                    let rowmap: u32 = std::env::var("ROWMAP").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+                                    // 【量正达成】默认 rowmap=1 全走（7685≈7680 量正+双有 1302）
+                                    let rowmap: u32 = std::env::var("ROWMAP").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
                                     let base_addr = ((zp8f as u16) << 8) | zp8e as u16;
                                     let dst = match rowmap {
                                         1 => base_addr.wrapping_add((row_seq as u16).wrapping_mul(32)),
