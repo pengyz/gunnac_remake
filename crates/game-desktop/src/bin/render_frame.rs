@@ -325,7 +325,9 @@ fn main() {
     // 【t228 ①持久化模型】nametable 写入即保持到被覆写——**全写流时序回放**
     // （替换七段滤表模型：4719px 主根=被滤掉的条带写入）；t130 后写胜自然成立
     let mut text_writes: Vec<(u32, u16, u8, u32)> = raw_writes.iter()
-        .map(|(f, a, v, _inv, _seg)| (*f, *a, *v, 0u32))
+        // 【锁存组界修】grp=inv（组界=inv 切换点（lead 定谳）——旧 grp=0 恒值=
+        // inv/seg 丢弃=锁存永不重置=**写散布根因**（R3-1 每组新鲜锁存失效））
+        .map(|(f, a, v, inv, _seg)| (*f, *a, *v, *inv))
         .collect();
     text_writes.sort_by_key(|w| w.0);
     let text_writes = text_writes;
