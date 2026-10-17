@@ -50,6 +50,7 @@ fn main() {
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
     let mut nt = Nametable::default();
     let mut row_pals: std::collections::HashMap<usize, [u8; 4]> = Default::default(); // 行调色板（双路径②）
+    let mut lb_fresh = false; // 新鲜度门（main 域——组界重置）
     eprintln!("DBGENV FLAGUPLOAD={:?} ROWMAP={:?} TEXTFALLBACK={:?}",
         std::env::var("FLAGUPLOAD"), std::env::var("ROWMAP"), std::env::var("TEXTFALLBACK"));
     // 【主源切换】probe 捕获写集回放（$2006/$2007 协议解释→nametable——真投影面：
@@ -82,7 +83,6 @@ fn main() {
                 let mut zp8e: u8 = 0;
                 let mut zp8f: u8 = 0;
                 let mut woff: u16 = 0;
-                let mut lb_fresh = false;
                 let mut fill_rows: u32 = 0;
                 let mut prev_x: u16 = 0; // 数据新鲜度（$0131-015F 写后置真——flag 仅新鲜时上传）
                 // 【双路径调色板②】$0161 族=行调色板色码组（cc9fcff F0F7=调色板刷新
@@ -128,13 +128,11 @@ fn main() {
                                     if std::env::var("DBGPROBE").is_ok() && lb_addr < 5 {
                                         eprintln!("DBGFLAG hit#{} lb_fresh={} rowmap_env={:?}", lb_addr, lb_fresh, std::env::var("ROWMAP"));
                                     }
-                                    if !lb_fresh { /* 新鲜度门跳过注 */ }
                                     if lb_fresh {
-                                    // 【配对精化】x=12/244 交替=真对（558/509 均分实锤）
-                                    // ——half 按 x 值非奇偶（x=244⇒第二半）
-                                    let xv: u16 = l.split("\"x\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse().ok()).unwrap_or(0);
-                                    let half = if xv >= 244 { 1 } else { 0 };
-                                    lb_fresh = false;
+                                    // 【半行实证回退】奇偶 half=8046/864（最佳）——x 配对
+                                    // 实测 7877/824 劣（x=12/244 交替但值非半行标）回退
+                                    let half = (lb_addr & 1) as u16;
+                                    /* 闩语义：写过即真（脉冲全放行——test-runner 修法） */
                                     if lb_addr < 3 && std::env::var("DBGPROBE").is_ok() {
                                         eprintln!("DBGLB flag#{} tail={:02x?}", lb_addr, &lb[0x1E..0x31]);
                                     }
@@ -443,8 +441,9 @@ fn main() {
             let (_f, addr, val, grp) = text_writes[text_i];
             if grp != last_grp {
                 ppu_addr_latch_high = true; // R3-1：每组新鲜锁存（修相位错位）
-                ppu_addr = 0; // 【跨组残留修】组界=地址全清（inv 切换即锁存起点——
-                              // 残留旧 lo/hi 位=写散布根因候选（lead 终修令））
+                ppu_addr = 0; // 【跨组残留修】组界=地址全清（inv 切换即锁存起点）
+                lb_fresh = true; // 【新鲜度门修】组界=重置 fresh（DBGFLAG 定谳：
+                                 // 门只放行首组——每 inv 组未重置=次组全拦）
                 last_grp = grp;
             }
             text_i += 1;
