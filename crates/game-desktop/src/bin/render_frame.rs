@@ -565,6 +565,9 @@ fn main() {
                         ppu_addr = ((val as u16) << 8) | (ppu_addr & 0x00FF);
                     } else {
                         ppu_addr = (ppu_addr & 0xFF00) | val as u16;
+                        if ppu_addr < 0x2000 {
+                            ppu_addr = ppu_addr.wrapping_add(0x2000); // 组址基修（偏移形+基）
+                        }
                     }
                     ppu_addr_latch_high = !ppu_addr_latch_high;
                 }
@@ -723,6 +726,9 @@ fn main() {
                     [[0, 0, 0, 255], nes_rgb(rec[0]), nes_rgb(rec[1]), nes_rgb(rec[2])]
                 } else if std::env::var("RECPAL").is_ok() {
                     rec_pal
+                } else if std::env::var("WHITE13").is_ok() {
+                    // 【R6 ①色序】白主色序（golden 白文本——1/3 双白/0/2 黑）
+                    [[0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255], [0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255]]
                 } else {
                     let fam = if bank >= 124 { game_desktop::render_rules::SpriteFamily::Cjk } else { game_desktop::render_rules::SpriteFamily::Game };
                     [
