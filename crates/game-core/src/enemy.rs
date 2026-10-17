@@ -1048,3 +1048,51 @@ pub fn vel_direct_ae94(y: u8) -> u8 {
 pub fn slot_phase(slot: u8) -> u8 {
     AEA4_SLOT_PHASE[(slot & 3) as usize]
 }
+
+// ===== E-W07 boss 行为面（291a7ab——节拍计数器状态参数化）=====
+
+/// boss 行为状态（E-W07 ①：**节拍计数器驱动**（$C5DF：$6A0/$6BC 周期+CLC 转换点）
+/// + HP 表重装制（$ADED[$4D] 初/$ADE5[$4C] 重装——多相 HP=表切换非阈值）+ $D0 状态维
+/// + 64f 退场倒数）。phase=**节拍计数器状态**（非 HP 阈值——fail-closed 注）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BossBehavior {
+    /// 节拍计数器（$C5DF 本体——$6A0/$6BC 周期递减）。
+    pub beat: u16,
+    /// 周期（$6BC——节拍装载值）。
+    pub cycle: u16,
+    /// 状态维（$D0——相位上限 5 候选（trace 确认挂））。
+    pub phase: u8,
+    /// HP 表切换（$ADED[$4D] 初/$ADE5[$4C] 重装——多相 HP=表切换）。
+    pub hp_table: u8,
+    /// 退场倒数（64f）。
+    pub exit_countdown: u8,
+    /// 死亡门（$ADCF：HP==0→$ADF2 死亡态参流——分离）。
+    pub dead: bool,
+}
+
+/// boss 行为步（节拍计数器状态驱动——CLC 到点转换；fail-closed：转换判据
+/// （$6A0/$6BC 周期语义细节）挂 trace 确认；单相直通注）。
+pub fn boss_behavior_step(b: &mut BossBehavior, hp: u8) {
+    if b.dead {
+        return;
+    }
+    if hp == 0 {
+        // $ADCF 死亡门分离（HP==0→$ADF2 死亡态参流）
+        b.dead = true;
+        b.exit_countdown = 64;
+        return;
+    }
+    // 节拍递减（$6BC 周期）
+    if b.beat > 0 {
+        b.beat -= 1;
+    } else {
+        b.beat = b.cycle; // CLC 到点=重装+相位转换候选（$D0 上限 5 挂）
+        if b.phase < 5 {
+            b.phase += 1;
+        }
+    }
+    // HP 表重装制（$ADED 初/$ADE5 重装——表切换非阈值）
+    if b.phase >= 2 {
+        b.hp_table = 1; // 重装族（$ADE5[$4C]）——表值挂 trace
+    }
+}
