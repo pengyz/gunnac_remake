@@ -170,7 +170,31 @@ fn main() {
                                         let coloff: i32 = std::env::var("COLOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
                                         // 【值域语义试】PAIRV=1：16B=8×(码,属)对——
                                         // 偶字节=码/奇字节=属（R-2b 候选假说）
-                                        if std::env::var("FUSE").is_ok() { let rowf = (rel / 32) as i64;
+                                        if std::env::var("FUSE2").is_ok() {
+                                            // 【融合终形】attrs 常写（FLIP 9071 域）+
+                                            // 文本行（rel/32 行 7-8）三跳瓦（font 族）
+                                            let rowf = (rel / 32) as usize;
+                                            for i in 0..8usize {
+                                                let vi = lb[0x20 + i * 2];
+                                                let off = (rel as i64 + coloff as i64 + i as i64) as usize;
+                                                let (n, o) = (off / 0x400, off % 0x400);
+                                                let nm = n & 1;
+                                                let attr_i = (o / 64) as usize;
+                                                if attr_i < 64 && nm < 4 {
+                                                    nt.attrs[nm][attr_i] = vi;
+                                                }
+                                                if (7..=8).contains(&rowf) {
+                                                    let rec = palette_record_rgb(vi);
+                                                    for (j, &ch) in rec.iter().enumerate() {
+                                                        let off2 = (rel as i64 + coloff as i64 + (i * 3 + j) as i64) as usize;
+                                                        let (n2, o2) = (off2 / 0x400, off2 % 0x400);
+                                                        if o2 < 0x3C0 {
+                                                            nt.tiles[n2 & 1][o2] = ch;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else if std::env::var("FUSE").is_ok() { let rowf = (rel / 32) as i64;
                                             // 【融合令】值域分流：0-31=pattrs（palette 索引
                                             // ——FLIP 9071 域）/32+=三跳字符（形 548 域）
                                             for i in 0..8usize {
@@ -765,7 +789,11 @@ fn main() {
     let _ = (SCREEN_W, SCREEN_H);
 }
 
-/// $BEFB 3B palette 记录表（32 项×3B=96B ROM 直读——R-2b 值域 0-31=索引）。
+/// 【F-A103 dated 更正】~~$BEFB 3B palette 记录表（32 项×3B=96B）~~ **96B 口径
+/// 超读**：前 32B=真数据+后 64B=码流混入（'32 项×3B'误读）。**真表结构**=
+/// $BF0B/$BF13 双并列字节表（$4D 索引——$BF13→STA $0630=W-DMG3 互证）；
+/// 或动态基 $7A:$7B 重推（$BEFB 仅候选窗）。影响面有界（默认路 FLIP 不经此表）。
+/// （原 96B 字节保留为  窗直读注——真消费形=双字节表查。）
 pub const PALETTE_RECORDS: [u8; 96] = [
     0x10, 0x80, 0xF0, 0x10, 0xF0, 0x10, 0x80, 0xF0, 0x30, 0x30, 0x30, 0x88,
     0x88, 0xE0, 0xE0, 0xE0, 0x22, 0x22, 0x22, 0x41, 0x41, 0x23, 0x23, 0x07,
@@ -777,7 +805,8 @@ pub const PALETTE_RECORDS: [u8; 96] = [
     0x28, 0x83, 0x09, 0x02, 0x9D, 0x34, 0x05, 0x20, 0x51, 0xCC, 0x4C, 0x74,
 ];
 
-/// 记录查表（索引→RGB——W-C1 ③ $0150+X×3+基址）。
+/// 【F-A103 注】记录查表（旧 index×3 形=超读注——真消费形=$BF0B/$BF13 双字节表
+/// （$4D 索引）；本函数保留为 $BEFB 窗直读注（三跳变体实验面））。
 pub fn palette_record_rgb(index: u8) -> [u8; 3] {
     let i = (index as usize & 31) * 3;
     [PALETTE_RECORDS[i], PALETTE_RECORDS[i + 1], PALETTE_RECORDS[i + 2]]
