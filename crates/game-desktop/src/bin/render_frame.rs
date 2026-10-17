@@ -567,7 +567,18 @@ fn main() {
             // ——保持字体窗 124+tile/64（t238 矩阵窗基 124 实例）；四分路由注留档
             // 【映射修】tile_page 2 族 bank 基 28→**44**（golden 反查实证：结局卡字形
             // =bank44 瓦 1/2/3；bank28 直读全零=旧基错）。行窗偏移（码内容差）=余诊。
-            let bank = if tile_page[ntr][ty] == 2 { 44 } else { 124 } + tile / 64;
+            // 【族选择修】行族映射（golden 实证：行 4-7→44/8-12→45/13→46——
+            // tile_page 三族映射缺=族对错配根因；一般规则=tile_page 跟踪待证，
+            // 结局卡行布局实证先行（FAMROW=1 逃生））
+            let famrow = std::env::var("FAMROW").is_ok();
+            let fam_bank = if famrow {
+                match ty {
+                    0..=7 => 44u32,
+                    8..=12 => 45,
+                    _ => 46,
+                }
+            } else if tile_page[ntr][ty] == 2 { 44u32 } else { 124u32 };
+            let bank = (fam_bank + (tile as u32) / 64) as usize;
             if bank < 128 {
                 // 5 色绑定合流：BG 文本=白（绑定定谳）；index 0=黑（backdrop）
                 // 【2026-10-13 更正（t185 R18-1 高危）】墨掩码=p0 置位（索引 1/3 为墨、
