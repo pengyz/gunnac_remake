@@ -170,7 +170,22 @@ fn main() {
                                         let coloff: i32 = std::env::var("COLOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
                                         // 【值域语义试】PAIRV=1：16B=8×(码,属)对——
                                         // 偶字节=码/奇字节=属（R-2b 候选假说）
-                                        if true { // 【翻转实证】值→attrs（palette 索引域 0-31）——9071 最佳
+                                        if std::env::var("TRIHOP").is_ok() {
+                                            // 【三跳终令】值→3B 记录→3 字符码→字形瓦
+                                            // （staff 文本真身——STU/Y00/000 域实证）
+                                            for i in 0..8usize {
+                                                let vi = lb[0x20 + i * 2] as usize;
+                                                let rec = palette_record_rgb(vi as u8);
+                                                for (j, &ch) in rec.iter().enumerate() {
+                                                    let off = (rel as i64 + coloff as i64 + (i * 3 + j) as i64) as usize;
+                                                    let (n, o) = (off / 0x400, off % 0x400);
+                                                    let nm = n & 1;
+                                                    if o < 0x3C0 {
+                                                        nt.tiles[nm][o] = ch; // 字符码=字形瓦（font 域）
+                                                    }
+                                                }
+                                            }
+                                        } else if true { // 【翻转实证】值→attrs（palette 索引域 0-31）——9071 最佳
                                             // 【翻转验】值→palette 记录索引非瓦码
                                             // （R-2b：×3=W-C1 ③ palette 表）——写 attrs
                                             // （调色板选择）非 tiles（tiles=text replay 域）
@@ -640,7 +655,7 @@ fn main() {
                 // 【记录查表精化】attr（FLIP 值）→组→3B 记录色（$BEFB 32 项）——
                 // NES attr 语义（2bit/块→组 0-3→4 色=组*4+pixel）
                 let attr_v = nt.attrs[0][((ty / 4) % 8) * 8 + ((tx / 4) % 8)];
-                let grp = (attr_v & 3) as u8;
+                let grp = match std::env::var("GRPSEL").ok().and_then(|v| v.parse::<u8>().ok()).unwrap_or(0) { 1 => (attr_v >> 2) as u8, 2 => (attr_v >> 4) as u8, _ => (attr_v & 3) as u8 };
                 let rec_pal: [game_desktop::Rgba; 4] = [
                     nes_rgb_poc(grp * 4),
                     nes_rgb_poc(grp * 4 + 1),
