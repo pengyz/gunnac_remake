@@ -716,6 +716,11 @@ fn main() {
                 let bg_pal: [game_desktop::Rgba; 4] = if std::env::var("PALROW").is_ok() {
                     let row_pal = row_pals.get(&ty).copied().unwrap_or([0x0F, 0x30, 0x10, 0x00]);
                     [nes_rgb(row_pal[0]), nes_rgb(row_pal[1]), nes_rgb(row_pal[2]), nes_rgb(row_pal[3])]
+                } else if std::env::var("RECP3").is_ok() {
+                    // 【R6 ①修】记录=3 色三元组（pixel 1/2/3=记录 3 色/pixel 0=黑底）
+                    // ——attr=记录索引→bg_pal=[黑,rec0,rec1,rec2]
+                    let rec = palette_record_rgb(attr_v);
+                    [[0, 0, 0, 255], nes_rgb(rec[0]), nes_rgb(rec[1]), nes_rgb(rec[2])]
                 } else if std::env::var("RECPAL").is_ok() {
                     rec_pal
                 } else {
