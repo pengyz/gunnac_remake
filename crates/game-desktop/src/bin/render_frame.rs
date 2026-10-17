@@ -430,7 +430,9 @@ fn main() {
                                                     let src = if rev { 0x2F - i } else { 0x20 + i };
                                                     {
                                     let sv = snap[src - 0x20];
-                                    nt.tiles[nm][o] = sv; snap_writes += 1;
+                                    if std::env::var("TBLDRV").is_err() {
+                                        nt.tiles[nm][o] = sv; snap_writes += 1;
+                                    }
                                     snap_cells.insert((nm, o));
                                     if sv == 0 { snap_zeros += 1; }
                                 }
