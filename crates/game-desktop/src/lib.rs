@@ -874,3 +874,41 @@ pub fn composition_render(
     }
     n
 }
+
+/// R-5b-2 网格链走（块=[位移对×n][计数][链 lo,hi]——链走收集位移全集）。
+pub fn grid_chain_displacements(rom: &[u8], start: u16, max_blocks: usize) -> Vec<(i8, i8)> {
+    let mut out = Vec::new();
+    let mut addr = start;
+    let mut seen = std::collections::HashSet::new();
+    for _ in 0..max_blocks {
+        if !seen.insert(addr) {
+            break; // 自引用/环止
+        }
+        let off = 0x10 + 2 * 0x2000 + (addr as usize).saturating_sub(0x8000);
+        if off + 3 > rom.len() {
+            break;
+        }
+        // 扫块：位移对序到 [count,lo,hi] 尾（hi∈$98-99 或块尾 3B）
+        let mut pos = off;
+        let mut pairs = 0;
+        while pos + 3 <= rom.len() && pairs < 16 {
+            let a = rom[pos];
+            let b = rom[pos + 1];
+            let c = rom[pos + 2];
+            if c == 0x99 || c == 0x98 {
+                // [?, lo, hi] 链尾
+                let chain = u16::from_le_bytes([b, c]);
+                out.push(((a as i8), (rom[pos + 1] as i8)));
+                addr = chain;
+                break;
+            }
+            out.push((a as i8, b as i8));
+            pos += 2;
+            pairs += 1;
+        }
+        if pairs >= 16 {
+            break;
+        }
+    }
+    out
+}

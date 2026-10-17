@@ -55,8 +55,25 @@ fn main() {
     // 帧 N 主循环扫写填充行缓冲（probe 写事件）→ 帧 N+1 vblank NMI 读走（读后即废）→
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
     let mut nt = Nametable::default();
+    // 【收官一环接线】组合渲染（R-5b 位移→序瓦→BG——golden 行 4-13 内容源）
+    // 位移对=$986A 组合流首解析（5 对+嵌套 $9941 链）——COMP=1 逃生
+    if std::env::var("COMP").is_ok() {
+        // 链走位移全集（R-5b-2 网格链——$986A 流+嵌套 $9941 链）
+        let disp_v = game_desktop::grid_chain_displacements(&rom, 0x986A, 8);
+        let disp: Vec<(i8, i8)> = if disp_v.is_empty() { vec![(1, -1), (1, -1), (1, -3), (3, -4), (4, 2)] } else { disp_v };
+        let mut bgc = game_desktop::BgModel::default();
+        game_desktop::composition_render(&mut bgc, &disp, 1, (6, 4));
+        for y in 0..30 {
+            for x in 0..32 {
+                if bgc.tiles[y][x] != 0 {
+                    nt.tiles[0][y * 32 + x] = bgc.tiles[y][x];
+                }
+            }
+        }
+    }
     let mut row_pals: std::collections::HashMap<usize, [u8; 4]> = Default::default(); // 行调色板（双路径②）
     let mut lb_fresh = false; // 新鲜度门（main 域——组界重置）
+    let mut snap = [0u8; 16]; // 【fill 快照】输出表填码时捕获（flag 用快照）
     eprintln!("DBGENV FLAGUPLOAD={:?} ROWMAP={:?} TEXTFALLBACK={:?}",
         std::env::var("FLAGUPLOAD"), std::env::var("ROWMAP"), std::env::var("TEXTFALLBACK"));
     // 【主源切换】probe 捕获写集回放（$2006/$2007 协议解释→nametable——真投影面：
@@ -111,6 +128,9 @@ fn main() {
                         if (0x0130..=0x0160).contains(&lan) {
                             if let Some(lv) = l.split("\"v\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse::<u8>().ok()) {
                                 lb[(lan - 0x0130) as usize] = lv;
+                                if (0x0150..=0x015F).contains(&lan) && lv != 0 {
+                                    snap[(lan - 0x0150) as usize] = lv; // fill 快照（非零保留——清零不覆）
+                                }
                                 if lan != 0x0160 {
                                     lb_fresh = true;
                                     let xv: u16 = l.split("\"x\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse().ok()).unwrap_or(0);
@@ -234,7 +254,7 @@ fn main() {
                                                     }
                                                 }
                                             }
-                                        } else if true { // 【翻转实证】值→attrs（palette 索引域 0-31）——9071 最佳
+                                        } else if std::env::var("FLIPOFF").is_ok() { // FLIP 逃生（默认关——值=瓦码）
                                             // 【翻转验】值→palette 记录索引非瓦码
                                             // （R-2b：×3=W-C1 ③ palette 表）——写 attrs
                                             // （调色板选择）非 tiles（tiles=text replay 域）
@@ -247,17 +267,17 @@ fn main() {
                                                     nt.attrs[nm][attr_i] = lb[0x20 + i * 2];
                                                 }
                                             }
-                                        } else if true { // 【值域语义】PAIRV 默认开（8×(码,属)对——9358 最佳）
+                                        } else if true { // 【值域语义】全 16 瓦读（输出表纯 1-16 族——test-runner 实证）
                                             // 【R-2b 序两形】REVORD=1 倒拷形（初始化 $15F 起
                                             // ——83A4 源表 16B 倒拷）vs 顺进形（84E6 流字节）
                                             let rev = std::env::var("REVORD").is_ok();
-                                            for i in 0..8usize {
+                                            for i in 0..16usize {
                                                 let off = (rel as i64 + coloff as i64 + i as i64) as usize;
                                                 let (n, o) = (off / 0x400, off % 0x400);
                                                 let nm = n & 1;
                                                 if o < 0x3C0 {
-                                                    let src = if rev { 0x2F - i * 2 } else { 0x20 + i * 2 };
-                                                    nt.tiles[nm][o] = lb[src];
+                                                    let src = if rev { 0x2F - i } else { 0x20 + i };
+                                                    nt.tiles[nm][o] = snap[src - 0x20];
                                                 }
                                             }
                                         } else {
@@ -266,7 +286,7 @@ fn main() {
                                             let (n, o) = (off / 0x400, off % 0x400);
                                             let nm = n & 1;
                                             if o < 0x3C0 {
-                                                nt.tiles[nm][o] = lb[0x20 + i];
+                                                nt.tiles[nm][o] = snap[i];
                                             }
                                         }
                                         }
@@ -655,8 +675,11 @@ fn main() {
             // t208 ①：≥128 族=CJK glyph tile（oracle 实证：128 位置绘字）——
             // t152 参数族仅 0-16 簇（菜单期）；高值族渲染修正
             // ③条带码四分路由（t243）：0 擦写/<64 图形符号/64-127 文本/≥128 参数标记
+            // 【收官修 dated】~~0-17 参数族不画~~ **误杀图形族**（输出表 1-16=图形码
+            // ——t243 <64=图形（应绘）；t152 0-16 参数簇=菜单期域非结局卡域）——
+            // 回退 0=擦写/>=128=参数（原规则）
             if raw_tile == 0 || raw_tile >= 128 {
-                continue; // 擦写格不画/参数标记不画
+                continue;
             }
             let tile = raw_tile as usize + base * 256;
             let px = (tx as i32) * 8;
