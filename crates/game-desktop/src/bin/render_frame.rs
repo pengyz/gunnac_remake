@@ -144,7 +144,9 @@ fn main() {
                                     // 映射+每行双调用——hud_row_seq/2 同式）
                                     // 【量正达成】默认 rowmap=1 全走（7685≈7680 量正+双有 1302）
                                     let rowmap: u32 = std::env::var("ROWMAP").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
-                                    let base_addr = ((zp8f as u16) << 8) | zp8e as u16;
+                                    // 【归位实证】ROWOFF=-2 双有 1718 最佳（七阶形进）
+                                    let rowoff: i32 = std::env::var("ROWOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(-2);
+                                    let base_addr = (((zp8f as u16) << 8) | zp8e as u16).wrapping_add((rowoff * 32) as u16);
                                     let dst = match rowmap {
                                         1 => base_addr.wrapping_add((row_seq as u16).wrapping_mul(32)),
                                         2 => base_addr.wrapping_add((((29u32).saturating_sub(row_seq / 2)) as u16).wrapping_mul(32)),
