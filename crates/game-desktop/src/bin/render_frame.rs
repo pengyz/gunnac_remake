@@ -96,13 +96,31 @@ fn main() {
     let mut tw_count = 0usize;
     // 【收官一环接线】组合渲染（R-5b 位移→序瓦→BG——golden 行 4-13 内容源）
     // 位移对=$986A 组合流首解析（5 对+嵌套 $9941 链）——COMP=1 逃生
+    if std::env::var("QUAD").is_ok() {
+        // 【四象限组合】CJK 码→2×2 碎片（R-5b 四象限复用——码*4+16..19 起碎片）
+        for cy in (17..29).step_by(2) {
+            for cx in (6..27).step_by(2) {
+                let c = nt.tiles[0][cy * 32 + cx];
+                if c != 0 {
+                    let base = 16 + (c as usize % 48) * 4;
+                    for (q, (dy, dx)) in [(0, 0), (0, 1), (1, 0), (1, 1)].iter().enumerate() {
+                        let ny = cy + dy;
+                        let nx = cx + dx;
+                        if ny < 30 && nx < 32 {
+                            nt.tiles[0][ny * 32 + nx] = ((base + q) % 64) as u8;
+                        }
+                    }
+                }
+            }
+        }
+    }
     if std::env::var("R4B").is_ok() {
         // 【精确映射收官】R-4b 流→nametable（七条规则：lo,hi/码流/FE/FF/字面直连）
         let mut pairs = Vec::new();
         for sa in [0xA31Fu16, 0xA129, 0xA0D9, 0xA194] {
             pairs.extend(game_desktop::r4b_stream_parse(&rom, sa, 2048));
         }
-        let r4off: i32 = std::env::var("R4BOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+        let r4off: i32 = std::env::var("R4BOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(5); // 文本行 +5 对齐
         let r4rev = std::env::var("R4BREV").is_ok();
         for (addr, code) in &pairs {
             // 【镜像行序】R4BREV=1 逆序形（行镜像：12→21/13→20…）vs 正序
