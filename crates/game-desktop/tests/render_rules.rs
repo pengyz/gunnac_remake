@@ -276,3 +276,21 @@ fn screen_stream_projection() {
     // 持久化：未覆盖区不动
     assert_eq!(bg.tiles[0][0], 0);
 }
+
+/// 收官一环：组合渲染器（位移位置+序瓦）。
+#[test]
+fn composition_renderer() {
+    use game_desktop::{composition_render, BgModel};
+    let mut bg = BgModel::default();
+    let disp = [(0i8, 0i8), (1, 0), (2, 0), (0, 1)];
+    let n = composition_render(&mut bg, &disp, 1, (6, 4));
+    assert_eq!(n, 4);
+    assert_eq!(bg.tiles[4][6], 1);
+    assert_eq!(bg.tiles[4][7], 2, "序瓦 run");
+    assert_eq!(bg.tiles[4][8], 3);
+    assert_eq!(bg.tiles[5][6], 4, "位移 (0,1)");
+    // 越界 fail-closed
+    let mut bg2 = BgModel::default();
+    let n2 = composition_render(&mut bg2, &[(-1, 0), (0, -1)], 1, (0, 0));
+    assert_eq!(n2, 0, "越界不写");
+}

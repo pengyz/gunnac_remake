@@ -852,3 +852,25 @@ pub fn project_screen_stream(bg: &mut BgModel, data: &[u8]) -> usize {
     }
     written
 }
+
+/// 组合渲染器（R-4b/R-5b 全链：位移位置+序瓦——组合流产物）。
+/// golden 行 4-13 混合域内容=组合流产物：位移对→位置+序瓦（tile run）→BG。
+pub fn composition_render(
+    bg: &mut BgModel,
+    displacements: &[(i8, i8)],
+    base_tile: u8,
+    origin: (usize, usize),
+) -> usize {
+    let mut n = 0;
+    let mut tile = base_tile;
+    for &(dx, dy) in displacements {
+        let x = origin.0 as i64 + dx as i64;
+        let y = origin.1 as i64 + dy as i64;
+        if x >= 0 && x < 32 && y >= 0 && y < 30 {
+            bg.tiles[y as usize][x as usize] = tile;
+            tile = tile.wrapping_add(1); // 序瓦（run）
+            n += 1;
+        }
+    }
+    n
+}
