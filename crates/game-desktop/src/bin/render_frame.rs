@@ -30,6 +30,12 @@ fn nes_rgb(code: u8) -> game_desktop::Rgba {
     [c[0], c[1], c[2], 255]
 }
 
+/// 记录查表 RGB（$BEFB 3B 记录→Rgba——R-2b 值域查表）。
+fn nes_rgb_poc(index: u8) -> game_desktop::Rgba {
+    let c = palette_record_rgb(index);
+    [c[0], c[1], c[2], 255]
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let frame: u64 = args.get(1).expect("帧号").parse().expect("帧号");
@@ -631,9 +637,21 @@ fn main() {
                 // 【消融定谳】row_pals 值域未解（pal_state=15→NES 黑=内容黑化根因——
                 // EC46 映射/字段角色待证）——ink_table 族表回退（7877≈golden 7680 面）
                 // PALROW=1 逃生阀（row_pals 试）
+                // 【记录查表精化】attr（FLIP 值）→组→3B 记录色（$BEFB 32 项）——
+                // NES attr 语义（2bit/块→组 0-3→4 色=组*4+pixel）
+                let attr_v = nt.attrs[0][((ty / 4) % 8) * 8 + ((tx / 4) % 8)];
+                let grp = (attr_v & 3) as u8;
+                let rec_pal: [game_desktop::Rgba; 4] = [
+                    nes_rgb_poc(grp * 4),
+                    nes_rgb_poc(grp * 4 + 1),
+                    nes_rgb_poc(grp * 4 + 2),
+                    nes_rgb_poc(grp * 4 + 3),
+                ];
                 let bg_pal: [game_desktop::Rgba; 4] = if std::env::var("PALROW").is_ok() {
                     let row_pal = row_pals.get(&ty).copied().unwrap_or([0x0F, 0x30, 0x10, 0x00]);
                     [nes_rgb(row_pal[0]), nes_rgb(row_pal[1]), nes_rgb(row_pal[2]), nes_rgb(row_pal[3])]
+                } else if std::env::var("RECPAL").is_ok() {
+                    rec_pal
                 } else {
                     let fam = if bank >= 124 { game_desktop::render_rules::SpriteFamily::Cjk } else { game_desktop::render_rules::SpriteFamily::Game };
                     [
@@ -703,4 +721,22 @@ fn main() {
     let mut log = std::fs::OpenOptions::new().create(true).append(true).open(repo_root.join("oracle/screens/actual/.render.log")).unwrap();
     writeln!(log, "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={}", nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count(), probe.len()).unwrap();
     let _ = (SCREEN_W, SCREEN_H);
+}
+
+/// $BEFB 3B palette 记录表（32 项×3B=96B ROM 直读——R-2b 值域 0-31=索引）。
+pub const PALETTE_RECORDS: [u8; 96] = [
+    0x10, 0x80, 0xF0, 0x10, 0xF0, 0x10, 0x80, 0xF0, 0x30, 0x30, 0x30, 0x88,
+    0x88, 0xE0, 0xE0, 0xE0, 0x22, 0x22, 0x22, 0x41, 0x41, 0x23, 0x23, 0x07,
+    0x04, 0x04, 0x04, 0x05, 0x05, 0x06, 0x06, 0x07, 0xA9, 0x13, 0x9D, 0xC4,
+    0x04, 0xA4, 0x4D, 0xB9, 0x0B, 0xBF, 0x9D, 0x4C, 0x06, 0xB9, 0x13, 0xBF,
+    0x9D, 0x30, 0x06, 0xA9, 0x24, 0x9D, 0x18, 0x05, 0xBC, 0x8C, 0x04, 0xD0,
+    0x24, 0xBD, 0xA8, 0x04, 0x20, 0x22, 0xD4, 0x20, 0x63, 0xCB, 0xA9, 0x40,
+    0xA0, 0x04, 0x20, 0x9D, 0xCD, 0xB9, 0xD2, 0xB4, 0x9D, 0x84, 0x06, 0xB9,
+    0x28, 0x83, 0x09, 0x02, 0x9D, 0x34, 0x05, 0x20, 0x51, 0xCC, 0x4C, 0x74,
+];
+
+/// 记录查表（索引→RGB——W-C1 ③ $0150+X×3+基址）。
+pub fn palette_record_rgb(index: u8) -> [u8; 3] {
+    let i = (index as usize & 31) * 3;
+    [PALETTE_RECORDS[i], PALETTE_RECORDS[i + 1], PALETTE_RECORDS[i + 2]]
 }
