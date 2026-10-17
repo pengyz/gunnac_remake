@@ -162,6 +162,22 @@ fn main() {
                                         // 【列归位实证】COLOFF=4 双有 2204 最佳（八阶形进）
                                         // 【族修后精调】COLOFF=8 diff 9727 最佳（9 点扫）
                                         let coloff: i32 = std::env::var("COLOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
+                                        // 【值域语义试】PAIRV=1：16B=8×(码,属)对——
+                                        // 偶字节=码/奇字节=属（R-2b 候选假说）
+                                        if true { // 【值域语义】PAIRV 默认开（8×(码,属)对——9358 最佳）
+                                            // 【R-2b 序两形】REVORD=1 倒拷形（初始化 $15F 起
+                                            // ——83A4 源表 16B 倒拷）vs 顺进形（84E6 流字节）
+                                            let rev = std::env::var("REVORD").is_ok();
+                                            for i in 0..8usize {
+                                                let off = (rel as i64 + coloff as i64 + i as i64) as usize;
+                                                let (n, o) = (off / 0x400, off % 0x400);
+                                                let nm = n & 1;
+                                                if o < 0x3C0 {
+                                                    let src = if rev { 0x2F - i * 2 } else { 0x20 + i * 2 };
+                                                    nt.tiles[nm][o] = lb[src];
+                                                }
+                                            }
+                                        } else {
                                         for i in 0..16usize {
                                             let off = (rel as i64 + coloff as i64 + i as i64) as usize;
                                             let (n, o) = (off / 0x400, off % 0x400);
@@ -169,6 +185,7 @@ fn main() {
                                             if o < 0x3C0 {
                                                 nt.tiles[nm][o] = lb[0x20 + i];
                                             }
+                                        }
                                         }
                                     }
                                     row_pals.insert(row_seq as usize, pal_state);
