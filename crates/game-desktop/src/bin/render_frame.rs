@@ -164,7 +164,20 @@ fn main() {
                                         let coloff: i32 = std::env::var("COLOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
                                         // 【值域语义试】PAIRV=1：16B=8×(码,属)对——
                                         // 偶字节=码/奇字节=属（R-2b 候选假说）
-                                        if true { // 【值域语义】PAIRV 默认开（8×(码,属)对——9358 最佳）
+                                        if true { // 【翻转实证】值→attrs（palette 索引域 0-31）——9071 最佳
+                                            // 【翻转验】值→palette 记录索引非瓦码
+                                            // （R-2b：×3=W-C1 ③ palette 表）——写 attrs
+                                            // （调色板选择）非 tiles（tiles=text replay 域）
+                                            for i in 0..8usize {
+                                                let off = (rel as i64 + coloff as i64 + i as i64) as usize;
+                                                let (n, o) = (off / 0x400, off % 0x400);
+                                                let nm = n & 1;
+                                                let attr_i = (o / 64) as usize; // 32px 块组
+                                                if attr_i < 64 && nm < 4 {
+                                                    nt.attrs[nm][attr_i] = lb[0x20 + i * 2];
+                                                }
+                                            }
+                                        } else if true { // 【值域语义】PAIRV 默认开（8×(码,属)对——9358 最佳）
                                             // 【R-2b 序两形】REVORD=1 倒拷形（初始化 $15F 起
                                             // ——83A4 源表 16B 倒拷）vs 顺进形（84E6 流字节）
                                             let rev = std::env::var("REVORD").is_ok();
