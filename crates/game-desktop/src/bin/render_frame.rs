@@ -102,7 +102,11 @@ fn main() {
             for cx in (6..27).step_by(2) {
                 let c = nt.tiles[0][cy * 32 + cx];
                 if c != 0 {
-                    let base = 16 + (c as usize % 48) * 4;
+                    // 【碎片序】QBASE env：0=码*4+16（假说）/1=码+16（直序）/2=R-5b 流序
+                    let base = match std::env::var("QBASE").ok().and_then(|v| v.parse::<u8>().ok()).unwrap_or(0) {
+                        1 => 16 + (c as usize % 48),
+                        _ => 16 + (c as usize % 48) * 4,
+                    };
                     for (q, (dy, dx)) in [(0, 0), (0, 1), (1, 0), (1, 1)].iter().enumerate() {
                         let ny = cy + dy;
                         let nx = cx + dx;
@@ -120,7 +124,7 @@ fn main() {
         for sa in [0xA31Fu16, 0xA129, 0xA0D9, 0xA194] {
             pairs.extend(game_desktop::r4b_stream_parse(&rom, sa, 2048));
         }
-        let r4off: i32 = std::env::var("R4BOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(5); // 文本行 +5 对齐
+        let r4off: i32 = std::env::var("R4BOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(7); // 9987 最佳 // 文本行 +5 对齐
         let r4rev = std::env::var("R4BREV").is_ok();
         for (addr, code) in &pairs {
             // 【镜像行序】R4BREV=1 逆序形（行镜像：12→21/13→20…）vs 正序
