@@ -159,9 +159,12 @@ fn main() {
         let disp: Vec<(i8, i8)> = if disp_v.is_empty() { vec![(1, -1), (1, -1), (1, -3), (3, -4), (4, 2)] } else { disp_v };
         let mut bgc = game_desktop::BgModel::default();
         // 【覆盖精化】8 形状×起源行（行 4-13 run 瓦满铺——golden 1-16 序列域）
-        for (si, shape) in disp.chunks(disp.len().max(1) / 8.max(1)).enumerate() {
-            let origin_y = 4 + si;
-            let _ = game_desktop::composition_render(&mut bgc, shape, 1, (6, origin_y));
+        // 【形起源表】八形状各自起源（golden 拟合推导——众数起源）
+        let origins: [(usize, usize); 8] = [(10, 3), (12, 8), (14, 6), (14, 12), (16, 12), (10, 7), (17, 11), (16, 2)];
+        let per = disp.len().max(1) / 8.max(1);
+        for (si, shape) in disp.chunks(per).enumerate() {
+            let (ox, oy) = origins.get(si).copied().unwrap_or((6, 4));
+            let _ = game_desktop::composition_render(&mut bgc, shape, (si * 16 + 1) as u8, (ox, oy));
         }
         // 【组合纯形】无满铺（位移点 run=组合产物——gap=非位移点=空 ✓ golden ?? 空）
         for y in 0..30 {
