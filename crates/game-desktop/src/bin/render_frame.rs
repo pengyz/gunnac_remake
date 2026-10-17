@@ -395,9 +395,9 @@ fn main() {
         // —— NMI 语义边界（帧首）：上传上一帧填充的行缓冲（读后即废）——
         // t143 对账模式：行 LUT 路径暂缓（文本层 220 真值对账）
         // t230 ①：条带上传（帧 N 填充→帧 N+1 NMI 落 nametable——持久化模型闭环）
-        // 【消融定谳】旧 pending_row 路=text replay 合成=7877≈golden 7680（真源！）
-        // ——per-flag/$2007 路=污染（禁用态）；bypass 撤
-        if true { if let Some((row, _attrs, lo, hi, _c)) = pending_row.take() {
+        // 【互斥门】FLAGUPLOAD=1 时旧 pending_row 路关（zp 步进 64=双行对实锤——
+        // per-flag 奇偶 half*32=真形；双路混杂=偶行带根因）
+        if std::env::var("FLAGUPLOAD").is_err() { if let Some((row, _attrs, lo, hi, _c)) = pending_row.take() {
             let base_addr = ((hi as u16) << 8) | lo as u16;
             if (0x2000..0x3000).contains(&base_addr) {
                 let rel = (base_addr - 0x2000) as usize;
