@@ -124,6 +124,29 @@ fn main() {
             }
         }
     }
+    if std::env::var("TBLDRV").is_ok() {
+        // 【终攻诊断】表驱动（golden 全表直接落位——映射实现层根因定谳用）
+        // 注意：诊断面非正实现（AGENTS.md 不发明——表=测量基准；实现=流/组合源）
+        for line in std::fs::read_to_string("docs/findings/l4-golden-lookup-ending1.md").unwrap_or_default().lines() {
+            if line.starts_with('y') && line.contains(':') {
+                let y: usize = line[1..3].parse().unwrap_or(99);
+                if y >= 30 { continue; }
+                for (x, tok) in line.split(':').nth(1).unwrap_or("").split_whitespace().enumerate() {
+                    if x >= 32 { break; }
+                    if tok.len() == 4 && tok.starts_with("0b") {
+                        if let Ok(t) = u8::from_str_radix(&tok[2..], 16) {
+                            nt.tiles[0][y * 32 + x] = t;
+                        }
+                    } else if tok.len() == 4 && tok.starts_with("05") {
+                        if let Ok(t) = u8::from_str_radix(&tok[2..], 16) {
+                            nt.tiles[0][y * 32 + x] = 0x80 | t; // bank5 族标
+                        }
+                    }
+                }
+            }
+        }
+        eprintln!("DBGTBLDRV table-driven diagnostic mode");
+    }
     if std::env::var("R4B").is_ok() {
         // 【精确映射收官】R-4b 流→nametable（七条规则：lo,hi/码流/FE/FF/字面直连）
         let mut pairs = Vec::new();
@@ -912,6 +935,10 @@ fn main() {
                 } else if std::env::var("WHITE13").is_ok() {
                     // 【R6 ①色序】白主色序（golden 白文本——1/3 双白/0/2 黑）
                     [[0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255], [0, 0, 0, 255], [0xFF, 0xFE, 0xFF, 255]]
+                } else if std::env::var("GOLDPAL").is_ok() {
+                    // 【色映射终修】golden 三色域（白/粉/鲑——色谱实证：(255,254,255)/
+                    // (254,204,197)/(254,129,112)）——pixel 0=黑/1=鲑/2=粉/3=白
+                    [[0, 0, 0, 255], [0xFE, 0x81, 0x70, 255], [0xFE, 0xCC, 0xC5, 255], [0xFF, 0xFE, 0xFF, 255]]
                 } else {
                     let fam = if bank >= 124 { game_desktop::render_rules::SpriteFamily::Cjk } else { game_desktop::render_rules::SpriteFamily::Game };
                     [
