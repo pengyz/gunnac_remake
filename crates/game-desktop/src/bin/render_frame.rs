@@ -59,7 +59,10 @@ fn main() {
     // 位移对=$986A 组合流首解析（5 对+嵌套 $9941 链）——COMP=1 逃生
     if std::env::var("COMP").is_ok() {
         // 链走位移全集（R-5b-2 网格链——$986A 流+嵌套 $9941 链）
-        let disp_v = game_desktop::grid_chain_displacements(&rom, 0x986A, 8);
+        let mut disp_v = Vec::new();
+        for sa in [0x986Au16, 0x986F, 0x987A, 0x9885, 0x989D, 0x98B2, 0x98D2, 0x98EA] {
+            disp_v.extend(game_desktop::grid_chain_displacements(&rom, sa, 4));
+        }
         let disp: Vec<(i8, i8)> = if disp_v.is_empty() { vec![(1, -1), (1, -1), (1, -3), (3, -4), (4, 2)] } else { disp_v };
         let mut bgc = game_desktop::BgModel::default();
         game_desktop::composition_render(&mut bgc, &disp, 1, (6, 4));
@@ -174,7 +177,7 @@ fn main() {
                                     let rowoff: i32 = std::env::var("ROWOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(-2);
                                     let base_addr = (((zp8f as u16) << 8) | zp8e as u16).wrapping_add((rowoff * 32) as u16);
                                     let dst = match rowmap {
-                                        1 => base_addr.wrapping_add((row_seq as u16).wrapping_mul(32)),
+                                        1 => base_addr.wrapping_add((((row_seq % 30) as u16).wrapping_mul(32))), // 域内走（960 格循环）
                                         2 => base_addr.wrapping_add((((29u32).saturating_sub(row_seq / 2)) as u16).wrapping_mul(32)),
                                         3 => base_addr.wrapping_add(half * 32), // 垂直半（zp 步进 64=双行对）
                                         4 => base_addr.wrapping_add((fill_rows as u16).wrapping_mul(32)), // x 环回行序
@@ -681,7 +684,10 @@ fn main() {
             if raw_tile == 0 || raw_tile >= 128 {
                 continue;
             }
-            let tile = raw_tile as usize + base * 256;
+            // 【码→瓦映射定】码-95=瓦（96→1/113→18=golden 1-16 域——text 族码→
+            // graphics 瓦）；码<96 直用（graphics 族）
+            let mapped = if raw_tile >= 96 { raw_tile.wrapping_sub(95) } else { raw_tile };
+            let tile = mapped as usize + base * 256;
             let px = (tx as i32) * 8;
             let py = (ty as i32) * 8;
             // t157 三行映射（t154 A 级）：字模族→124/126 对，游戏族→$6A(106) 对
