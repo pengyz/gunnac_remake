@@ -68,8 +68,10 @@ fn main() {
         for sa in [0xA31Fu16, 0xA129, 0xA0D9, 0xA194] {
             pairs.extend(game_desktop::r4b_stream_parse(&rom, sa, 2048));
         }
+        let r4off: i32 = std::env::var("R4BOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
         for (addr, code) in &pairs {
-            if (0x2000..0x3000).contains(addr) {
+            let addr = (*addr as i64 + (r4off * 32) as i64) as u16;
+            if (0x2000..0x3000).contains(&addr) {
                 let off = (addr - 0x2000) as usize;
                 let (n, o) = (off / 0x400, off % 0x400);
                 if n < 4 && o < 0x3C0 {
@@ -83,7 +85,7 @@ fn main() {
         // 链走位移全集（R-5b-2 网格链——$986A 流+嵌套 $9941 链）
         let mut disp_v = Vec::new();
         for sa in [0x986Au16, 0x986F, 0x987A, 0x9885, 0x989D, 0x98B2, 0x98D2, 0x98EA] {
-            disp_v.extend(game_desktop::grid_chain_displacements(&rom, sa, 4));
+            disp_v.extend(game_desktop::grid_chain_displacements(&rom, sa, 16));
         }
         let disp: Vec<(i8, i8)> = if disp_v.is_empty() { vec![(1, -1), (1, -1), (1, -3), (3, -4), (4, 2)] } else { disp_v };
         let mut bgc = game_desktop::BgModel::default();
