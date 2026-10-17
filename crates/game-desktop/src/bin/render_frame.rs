@@ -147,7 +147,7 @@ fn main() {
                                     let dst = match rowmap {
                                         1 => base_addr.wrapping_add((row_seq as u16).wrapping_mul(32)),
                                         2 => base_addr.wrapping_add((((29u32).saturating_sub(row_seq / 2)) as u16).wrapping_mul(32)),
-                                        3 => base_addr.wrapping_add(half * 32), // 分半（双调用 dest/half 行）
+                                        3 => base_addr.wrapping_add(half * 16), // 16 瓦半行（输出表）
                                         4 => base_addr.wrapping_add((fill_rows as u16).wrapping_mul(32)), // x 环回行序
                                         _ => base_addr,
                                     };
