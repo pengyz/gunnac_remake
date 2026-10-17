@@ -94,6 +94,7 @@ fn main() {
     // 帧 N 主循环扫写填充行缓冲（probe 写事件）→ 帧 N+1 vblank NMI 读走（读后即废）→
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
     let mut nt = Nametable::default();
+    let mut snap = [0u8; 16]; // 【fill 快照】输出表填码时捕获（flag 用快照）
     let mut run_copy = 0usize;
     let mut snap_writes = 0usize;
     let mut snap_cells = std::collections::HashSet::new();
@@ -162,9 +163,24 @@ fn main() {
         // 【形起源表】八形状各自起源（golden 拟合推导——众数起源）
         let origins: [(usize, usize); 8] = [(10, 3), (12, 8), (14, 6), (14, 12), (16, 12), (10, 7), (17, 11), (16, 2)];
         let per = disp.len().max(1) / 8.max(1);
+        // 【终实装】两轴映射（R-5b-3：位移对→槽区间 placement+码值序=slot 值）——
+        // 槽区间参数（00,02/04,06/08,0a/0c,0c 族）→输出表 slot 值（$0150-015F）
+        let slot_ranges: [(u8, u8); 8] = [(0, 2), (4, 6), (4, 6), (12, 12), (8, 10), (0, 2), (2, 2), (4, 6)];
+        let per = disp.len().max(1) / 8.max(1);
         for (si, shape) in disp.chunks(per).enumerate() {
             let (ox, oy) = origins.get(si).copied().unwrap_or((6, 4));
-            let _ = game_desktop::composition_render(&mut bgc, shape, (si * 16 + 1) as u8, (ox, oy));
+            let (s0, s1) = slot_ranges.get(si).copied().unwrap_or((0, 0));
+            for (di, &(dx, dy)) in shape.iter().enumerate() {
+                let x = ox as i64 + dx as i64;
+                let y = oy as i64 + dy as i64;
+                if x >= 0 && x < 32 && y >= 0 && y < 30 {
+                    let slot = if s1 > s0 { s0 + (di as u8 % (s1 - s0 + 1)) } else { s0 };
+                    let code = snap[slot as usize % 16];
+                    if code != 0 {
+                        bgc.tiles[y as usize][x as usize] = code;
+                    }
+                }
+            }
         }
         // 【组合纯形】无满铺（位移点 run=组合产物——gap=非位移点=空 ✓ golden ?? 空）
         for y in 0..30 {
@@ -178,7 +194,7 @@ fn main() {
     }
     let mut row_pals: std::collections::HashMap<usize, [u8; 4]> = Default::default(); // 行调色板（双路径②）
     let mut lb_fresh = false; // 新鲜度门（main 域——组界重置）
-    let mut snap = [0u8; 16]; // 【fill 快照】输出表填码时捕获（flag 用快照）
+
     eprintln!("DBGENV FLAGUPLOAD={:?} ROWMAP={:?} TEXTFALLBACK={:?}",
         std::env::var("FLAGUPLOAD"), std::env::var("ROWMAP"), std::env::var("TEXTFALLBACK"));
     // 【主源切换】probe 捕获写集回放（$2006/$2007 协议解释→nametable——真投影面：
