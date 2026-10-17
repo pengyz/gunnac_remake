@@ -170,7 +170,32 @@ fn main() {
                                         let coloff: i32 = std::env::var("COLOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
                                         // 【值域语义试】PAIRV=1：16B=8×(码,属)对——
                                         // 偶字节=码/奇字节=属（R-2b 候选假说）
-                                        if std::env::var("TRIHOP").is_ok() {
+                                        if std::env::var("FUSE").is_ok() { let rowf = (rel / 32) as i64;
+                                            // 【融合令】值域分流：0-31=pattrs（palette 索引
+                                            // ——FLIP 9071 域）/32+=三跳字符（形 548 域）
+                                            for i in 0..8usize {
+                                                let vi = lb[0x20 + i * 2];
+                                                let off = (rel as i64 + coloff as i64 + i as i64) as usize;
+                                                let (n, o) = (off / 0x400, off % 0x400);
+                                                let nm = n & 1;
+                                                if std::env::var("BOTH").is_ok() { let attr_i = (o / 64) as usize; if attr_i < 64 && nm < 4 { nt.attrs[nm][attr_i] = vi; } let rec = palette_record_rgb(vi); for (j, &ch) in rec.iter().enumerate() { let off2 = (rel as i64 + coloff as i64 + (i * 3 + j) as i64) as usize; let (n2, o2) = (off2 / 0x400, off2 % 0x400); if o2 < 0x3C0 { nt.tiles[n2 & 1][o2] = ch; } } } else if !(7..=8).contains(&(rowf as usize)) || vi < 32 {
+                                                    let attr_i = (o / 64) as usize;
+                                                    if attr_i < 64 && nm < 4 {
+                                                        nt.attrs[nm][attr_i] = vi;
+                                                    }
+                                                } else {
+                                                    let rec = palette_record_rgb(vi);
+                                                    for (j, &ch) in rec.iter().enumerate() {
+                                                        let off2 = (rel as i64 + coloff as i64 + (i * 3 + j) as i64) as usize;
+                                                        let (n2, o2) = (off2 / 0x400, off2 % 0x400);
+                                                        let nm2 = n2 & 1;
+                                                        if o2 < 0x3C0 {
+                                                            nt.tiles[nm2][o2] = ch;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else if std::env::var("TRIHOP").is_ok() {
                                             // 【三跳终令】值→3B 记录→3 字符码→字形瓦
                                             // （staff 文本真身——STU/Y00/000 域实证）
                                             for i in 0..8usize {
@@ -624,7 +649,9 @@ fn main() {
             // 结局卡行布局实证先行（FAMROW=1 逃生））
             let famrow = std::env::var("FAMROW").is_ok();
             let fam_bank = if famrow {
+                // 【font 域扩】文本行 7-8→124 族（三跳字符字形域——融合破点）
                 match ty {
+                    7..=8 => 124u32,
                     0..=7 => 44u32,
                     8..=12 => 45,
                     _ => 46,
