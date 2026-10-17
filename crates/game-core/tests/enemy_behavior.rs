@@ -787,3 +787,27 @@ fn bank7_eight_forms() {
     assert_eq!(slot_phase(0), 0xCF);
     assert_eq!(slot_phase(5), 0xD7, "5&3=1");
 }
+
+/// ㊷ E-W07 boss 行为步（节拍计数器状态参数化）。
+#[test]
+fn boss_behavior_beat_step() {
+    use game_core::enemy::{boss_behavior_step, BossBehavior};
+    let mut b = BossBehavior { cycle: 3, beat: 0, ..Default::default() };
+    // 节拍到点=相位转换（非 HP 阈值）
+    boss_behavior_step(&mut b, 100);
+    assert_eq!(b.phase, 1, "CLC 到点+1");
+    assert_eq!(b.beat, 3, "周期重装");
+    // 节拍递减
+    boss_behavior_step(&mut b, 100);
+    assert_eq!(b.beat, 2);
+    // 死亡门分离（HP==0）
+    let mut b2 = BossBehavior { cycle: 3, ..Default::default() };
+    boss_behavior_step(&mut b2, 0);
+    assert!(b2.dead);
+    assert_eq!(b2.exit_countdown, 64, "64f 退场倒数");
+    // HP 表切换（相位 2+）
+    let mut b3 = BossBehavior { cycle: 0, beat: 0, ..Default::default() };
+    boss_behavior_step(&mut b3, 50);
+    boss_behavior_step(&mut b3, 50);
+    assert_eq!(b3.hp_table, 1, "重装族切换（相位 2）");
+}
