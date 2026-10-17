@@ -124,7 +124,12 @@ fn main() {
                                 // **对账**：trace v=1@BBBD vs ROM v=2 完成型=疑 $0160-0168
                                 // 行参数组多字段/写点族差（细分挂）；fail-closed 按 v=1 实测
                                 // 面接（三件套细分证后切 v=2 判定）
-                                if lan == 0x0160 && lv == 1 && lb_fresh && std::env::var("FLAGUPLOAD").is_ok() {
+                                if lan == 0x0160 && lv == 1 && std::env::var("FLAGUPLOAD").is_ok() {
+                                    if std::env::var("DBGPROBE").is_ok() && lb_addr < 5 {
+                                        eprintln!("DBGFLAG hit#{} lb_fresh={} rowmap_env={:?}", lb_addr, lb_fresh, std::env::var("ROWMAP"));
+                                    }
+                                    if !lb_fresh { /* 新鲜度门跳过注 */ }
+                                    if lb_fresh {
                                     // 【配对精化】x=12/244 交替=真对（558/509 均分实锤）
                                     // ——half 按 x 值非奇偶（x=244⇒第二半）
                                     let xv: u16 = l.split("\"x\":").nth(1).and_then(|x| x.split(&[',','}'][..]).next()).and_then(|x| x.parse().ok()).unwrap_or(0);
@@ -161,6 +166,7 @@ fn main() {
                                     row_pals.insert(row_seq as usize, pal_state);
                                     row_seq += 1;
                                     lb_addr += 1;
+                                    }
                                 }
                             }
                         }
@@ -338,6 +344,7 @@ fn main() {
 
     let mut text_i = 0usize;
     let mut last_grp: u32 = u32::MAX;
+    let mut nt_select: usize = 0; // PPUCTRL nametable select（$2000 bits 0-1）
     let mut ppu_addr: u16 = 0;
     let mut tile_page = [[0u8; 32]; 4]; // 1=字模页族（f1207 前装载），2=游戏页族（$6A）
     let mut ppu_addr_latch_high = true;
@@ -452,6 +459,11 @@ fn main() {
                     }
                     ppu_addr_latch_high = !ppu_addr_latch_high;
                 }
+                0x2000 => {
+                    // 【wiring 修②】PPUCTRL nametable select（bits 0-1）——render
+                    // nsel 基（结局卡内容在 nt2 选中域=旧渲恒 nt0=漏渲根因）
+                    nt_select = (val & 3) as usize;
+                }
                 0x2007 => {
                     if (0x2000..0x3000).contains(&ppu_addr) {
                         let rel = (ppu_addr - 0x2000) as usize;
@@ -522,7 +534,7 @@ fn main() {
             let vy = (ty as i32) * 8 + sy as i32; // 480 高域
             let mx = ((vx % 512) + 512) % 512;
             let my = ((vy % 480) + 480) % 480;
-            let nsel = (mx / 256) as usize + ((my / 240) as usize) * 2;
+            let nsel = (((mx / 256) as usize) + ((my / 240) as usize) * 2 + nt_select) % 4;
             let sub_x = (mx % 256) as usize / 8;
             let sub_y = (my % 240) as usize / 8;
             let raw_tile = nt.tiles[nsel.min(3)][sub_y * 32 + sub_x];
