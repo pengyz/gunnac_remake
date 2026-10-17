@@ -766,7 +766,7 @@ fn main() {
                         let (n, off) = (rel / 0x400, rel % 0x400);
                         if n < 4 {
                             if off < 0x3C0 {
-                                if !(val == 0 && nt.tiles[n][off] != 0) {
+                                if std::env::var("TBLDRV").is_err() && !(val == 0 && nt.tiles[n][off] != 0) {
                                     nt.tiles[n][off] = val; // 【杀点修二】零码 preserve（637 行实锤）
                                 }
                                 // t157 ② 切换时机：装载帧 <f1207（首切换帧）=字模族
