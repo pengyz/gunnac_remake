@@ -69,8 +69,16 @@ fn main() {
             pairs.extend(game_desktop::r4b_stream_parse(&rom, sa, 2048));
         }
         let r4off: i32 = std::env::var("R4BOFF").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+        let r4rev = std::env::var("R4BREV").is_ok();
         for (addr, code) in &pairs {
-            let addr = (*addr as i64 + (r4off * 32) as i64) as u16;
+            // 【镜像行序】R4BREV=1 逆序形（行镜像：12→21/13→20…）vs 正序
+            let addr = if r4rev {
+                let r = ((*addr as i64 - 0x2000) / 32) as i64;
+                let nr = 33 - r + r4off as i64; // 逆序镜像（行 12→21 域）
+                ((nr * 32 + ((*addr as i64 - 0x2000) % 32)) + 0x2000) as u16
+            } else {
+                (*addr as i64 + (r4off * 32) as i64) as u16
+            };
             if (0x2000..0x3000).contains(&addr) {
                 let off = (addr - 0x2000) as usize;
                 let (n, o) = (off / 0x400, off % 0x400);
@@ -727,7 +735,8 @@ fn main() {
             // 【收官修 dated】~~0-17 参数族不画~~ **误杀图形族**（输出表 1-16=图形码
             // ——t243 <64=图形（应绘）；t152 0-16 参数簇=菜单期域非结局卡域）——
             // 回退 0=擦写/>=128=参数（原规则）
-            if raw_tile == 0 || raw_tile >= 128 {
+            // 【fill 族分离】08=fill 主导（90 格）非内容——跳码（内容码域 01-3d 留）
+            if raw_tile == 0 || raw_tile == 8 || raw_tile >= 128 {
                 continue;
             }
             // 【码→瓦映射定】码-95=瓦（96→1/113→18=golden 1-16 域——text 族码→
