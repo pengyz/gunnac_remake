@@ -439,6 +439,8 @@ fn main() {
             text_i += 1;
             match addr {
                 0x2006 => {
+                    // 【字节序定】hi 先（对值域实证：0x20-25=nametable hi/0x93-96=CHR hi
+                    // ——均 hi 先 ✓ lo 先实验回退）
                     if ppu_addr_latch_high {
                         ppu_addr = ((val as u16) << 8) | (ppu_addr & 0x00FF);
                     } else {
