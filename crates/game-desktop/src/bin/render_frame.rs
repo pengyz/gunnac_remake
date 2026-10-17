@@ -797,7 +797,13 @@ fn main() {
             let fam_bank = if std::env::var("FAMMAP").is_ok() {
                 let fm = FAM_MAP[ty.min(29)][tx.min(31)];
                 if fm == 5 { 5u32 } else if fm != 0 { 44u32 } else if famrow {
-                    match ty { 7..=8 => 124u32, 0..=7 => 44u32, 8..=12 => 45, _ => 46 }
+                    match ty {
+                        // 【R-6b CJK 族】文本行→bank 112+（0x3C110 窗 48 瓦名族）
+                        7..=8 => 112u32,
+                        0..=7 => 44u32,
+                        8..=12 => 45,
+                        _ => 112u32, // 文本带 17-28=CJK 族
+                    }
                 } else { 44u32 }
             } else if famrow {
                 // 【font 域扩】文本行 7-8→124 族（三跳字符字形域——融合破点）
