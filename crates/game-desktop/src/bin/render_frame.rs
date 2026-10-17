@@ -62,6 +62,23 @@ fn main() {
     let mut tw_count = 0usize;
     // 【收官一环接线】组合渲染（R-5b 位移→序瓦→BG——golden 行 4-13 内容源）
     // 位移对=$986A 组合流首解析（5 对+嵌套 $9941 链）——COMP=1 逃生
+    if std::env::var("R4B").is_ok() {
+        // 【精确映射收官】R-4b 流→nametable（七条规则：lo,hi/码流/FE/FF/字面直连）
+        let mut pairs = Vec::new();
+        for sa in [0xA31Fu16, 0xA129, 0xA0D9, 0xA194] {
+            pairs.extend(game_desktop::r4b_stream_parse(&rom, sa, 2048));
+        }
+        for (addr, code) in &pairs {
+            if (0x2000..0x3000).contains(addr) {
+                let off = (addr - 0x2000) as usize;
+                let (n, o) = (off / 0x400, off % 0x400);
+                if n < 4 && o < 0x3C0 {
+                    nt.tiles[n & 1][o] = *code;
+                }
+            }
+        }
+        eprintln!("DBGR4B pairs={}", pairs.len());
+    }
     if std::env::var("COMP").is_ok() {
         // 链走位移全集（R-5b-2 网格链——$986A 流+嵌套 $9941 链）
         let mut disp_v = Vec::new();
@@ -75,14 +92,7 @@ fn main() {
             let origin_y = 4 + si;
             let _ = game_desktop::composition_render(&mut bgc, shape, 1, (6, origin_y));
         }
-        // run 满铺（行 4-13×列 6-26 序瓦 1-16 循环——golden 反查实证）
-        for y in 4..14 {
-            for x in 6..27 {
-                if bgc.tiles[y][x] == 0 {
-                    bgc.tiles[y][x] = ((x - 6) % 16 + 1) as u8;
-                }
-            }
-        }
+        // 【组合纯形】无满铺（位移点 run=组合产物——gap=非位移点=空 ✓ golden ?? 空）
         for y in 0..30 {
             for x in 0..32 {
                 if bgc.tiles[y][x] != 0 {

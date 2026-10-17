@@ -912,3 +912,41 @@ pub fn grid_chain_displacements(rom: &[u8], start: u16, max_blocks: usize) -> Ve
     }
     out
 }
+
+/// R-4b 流解析器（七条规则定谳：段首 lo,hi 小端/码流逐字节（写序=显序）/
+/// FE lo,hi=地址重设/FF=段终/重复瓦=字面直连/特殊瓦族 2D=横线 20=空格 F6-F8=图形
+/// 高码 00=填充）——码→nametable 精确映射（写落真源）。
+pub fn r4b_stream_parse(rom: &[u8], stream_addr: u16, max_bytes: usize) -> Vec<(u16, u8)> {
+    let base = 0x10 + 2 * 0x2000 + (stream_addr as usize).saturating_sub(0x8000);
+    let mut out = Vec::new();
+    let mut pos = base;
+    let mut ppu_addr = 0u16;
+    let mut started = false;
+    let end = (base + max_bytes).min(rom.len());
+    while pos + 1 < end {
+        let a = rom[pos];
+        let b = rom[pos + 1];
+        if a == 0xFF {
+            break; // 段终
+        }
+        if a == 0xFE {
+            ppu_addr = u16::from_le_bytes([b, rom[pos + 2.min(rom.len() - pos - 1)]]); // lo,hi 小端
+            // 注：FE 后字节=新址 lo（hi=次字节）——pos 步进 3
+            pos += 3;
+            started = true;
+            continue;
+        }
+        if !started {
+            // 段首地址 lo,hi（小端）
+            ppu_addr = u16::from_le_bytes([a, b]);
+            started = true;
+            pos += 2;
+            continue;
+        }
+        // 码流逐字节（写序=显序）
+        out.push((ppu_addr, a));
+        ppu_addr = ppu_addr.wrapping_add(1);
+        pos += 1;
+    }
+    out
+}
