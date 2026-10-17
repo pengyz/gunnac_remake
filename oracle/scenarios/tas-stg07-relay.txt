@@ -1,3 +1,4 @@
+# 【TEST-ONLY】本场景含不死三址 poke（$01BE/$01B6/$01B7=游戏原生秘籍机制运行时激活）——assist 标注面专用；正式游戏代码（crates/）零实现零残留（用户裁定 2026-10-17）
 # 场景：tas-stg07-relay（v7·关 7 接力）（v6·关 5 接力——关 1-4 锚已在袋；assist-mode 选关）（第五跑·全程预算 300000f——Soig 166215×裕度）（第四跑·不死跑到底——用户裁定 assisted） —— 真机 bot 八关全程（通关令二线 · (c) 全程跑+逐关窗）
 # 口径：bot（tools/tas_bot.lua CFG.stages_total=8）自 stg01 起点接管，相位自推进八关
 #   （combat→clear→shop→下一关…→stg08 清 ⇒ done 结局观测窗）；**无 poke 无条件指令**。
