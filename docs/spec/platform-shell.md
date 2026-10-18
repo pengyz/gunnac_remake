@@ -32,16 +32,17 @@ shell/win（平台实现 1：Win32——平台依赖（windows-rs）仅此 crate
 
 | 件 | 设计 |
 |---|---|
-| 窗口 | Win32 CreateWindowExW + 消息泵（windows-rs——依赖限定本 crate）|
-| 帧驱动 | 60Hz 固定步（QPC 计时+Sleep 节流）→ game-core 状态推进（stage_tick 族）→ 渲染合成 → present |
-| 帧呈现 | 256×240 RGBA → StretchDIBits 整数倍缩放（GDI DIB——保比例黑边） |
-| 输入 | WM_KEYDOWN/UP → Buttons 映射（Z/X/Enter/RShift/方向键 预定） |
-| 音频 | waveOut（Win32 基础面）消费 ApuWrite 流→PCM（合成器未证期=静音占位显式） |
-| 存储 | %APPDATA%/gunnac/ 存档文件（Storage trait） |
+| 窗口 | **winit（跨平台）**+softbuffer CPU 帧缓冲（game-desktop 同族）——无须交叉工具，Linux/Windows 同源编译 |
+| 帧驱动 | 60Hz 固定步（Instant 节流）→ game-core 状态推进（stage_tick 族）→ 渲染合成 → present |
+| 帧呈现 | 256×240 RGBA → blit 整数倍缩放（保比例黑边——game-desktop blit_scaled 语义） |
+| 输入 | 键盘事件 → Buttons 映射（Z/X/Enter/RShift/方向键 预定）——winit 键盘面 |
+| 音频 | **跨平台音频面**（cpal 族优先；离线缓存缺=静音占位显式+trait 缝留）消费 ApuWrite 流→PCM（合成器未证期占位） |
+| 存储 | 目录解析 cfg 差异（Windows=%APPDATA%/gunnac/；Linux=~/\.local/share/gunnac/）——Storage trait |
+| **OS 差异** | cfg(windows)/cfg(unix) 差异实现点=存储路径/音频后端（若有 OS 特定面）——差异实现非分叉 |
 | 游戏宿主 | title→设置→八关→结局 状态机（game-core flow/stage 状态接线——已证 F1-F13 边集） |
 
 ## 4. 工程纪律
-- 平台依赖（windows-rs）**仅 shell/win**；game-core/game-platform 零依赖照守
+- 平台依赖（winit/softbuffer/音频 crate）**仅 shell/win**；game-core/game-platform 零依赖照守；**跨平台库实现+cfg 差异**（用户裁定 2026-10-18：无须交叉工具，Linux/Windows 同源开发验证）
 - TDD：trait 契约测试（game-platform）+ shell 冒烟自测（窗口创建/帧循环/输入映射单元级）
 - 双关照旧：实现→对拍（cargo test 全集+gates 12/12）→独立对抗复核
-- Windows 目标编译验证：x86_64-pc-windows-gnu 交叉 check（Linux 宿主 CI 面）；真机运行验证=用户侧
+- 编译验证：本机 cargo check/test 直接过（跨平台库）；真机运行验证=Windows/Linux 桌面用户侧
