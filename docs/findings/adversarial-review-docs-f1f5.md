@@ -88,7 +88,9 @@ docs-links → PASS（319 个 md / 359 条本地链接全部有效）
 
 ## 7. 复核边界
 
-1. 只复核 task-27 的 2 docs 改动（HEAD `167d8a9` 工作区）；未重审 task-18/21 实现（此前 task-25 已 pass）。
+1. 只复核 task-27 的 2 docs 改动（复核开始时 HEAD `167d8a9`）；未重审 task-18/21 实现（此前 task-25 已 pass）。
+   - **并发时点注**：复核期间 HEAD 由 `167d8a9` 前进到 `c8ada9b`（`git show --stat c8ada9b` = 仅新增 `docs/findings/adversarial-review-playable-a.md`，**无代码/测试变更** ⇒ 本文 §1/§2 实测值不变；文档内"task-27 收口时点 HEAD `167d8a9`"仍成立）。
+   - **暂存区注（复核方未操作 git）**：复核结束时 `git diff --cached --name-status` 显示 `A docs/findings/adversarial-review-docs-f1f5.md` + `M` 两份被审 docs（并发方暂存）。若按暂存区提交，请确认取工作区最新版本（本文件末尾并发注为暂存后追加）。
 2. F4 的"解码错误"行为以当前 `tools/diff_visual.py`（未改）为准；tools 侧修复属另卡，本复核不动 tools。
 3. 未实跑 GUI / release（不在本 docs 卡范围）。
 4. 建议（非阻塞）：F1 那句若在本次提交前顺手修正最好；若不改，请在后续 tools 卡把解码错误纳入 `STRICT: FAIL` 后再同步 docs（避免文档与行为长期不一致）。
