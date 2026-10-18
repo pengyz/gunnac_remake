@@ -44,3 +44,62 @@ pub fn storage_dir() -> std::path::PathBuf {
         std::path::PathBuf::from("gunnac")
     }
 }
+
+// ===== ②五件深实（窗口/帧驱动/呈现——platform-shell.md §3）=====
+
+/// 60Hz 帧驱动节流（Instant 节流——固定步）。
+pub struct FrameDriver {
+    last: std::time::Instant,
+    accum: std::time::Duration,
+}
+
+impl FrameDriver {
+    pub fn new() -> Self {
+        FrameDriver { last: std::time::Instant::now(), accum: std::time::Duration::ZERO }
+    }
+    /// 帧推进（60Hz 固定步——返回应推进的帧数）。
+    pub fn tick(&mut self) -> u32 {
+        let now = std::time::Instant::now();
+        self.accum += now - self.last;
+        self.last = now;
+        let frame = std::time::Duration::from_millis(FRAME_MS);
+        let mut n = 0;
+        while self.accum >= frame {
+            self.accum -= frame;
+            n += 1;
+        }
+        n.min(4) // 追帧上限（防 spiral of death）
+    }
+}
+
+/// blit 整数倍缩放（256×240 RGBA→窗口（保比例黑边——game-desktop view_rect 同语义））。
+pub fn blit_scaled(
+    canvas: &[u8], // 256*240*4
+    out: &mut [u32], // 窗口像素（softbuffer ARGB）
+    win_w: u32, win_h: u32,
+) -> (u32, u32, u32, u32) {
+    let (ox, oy, w, h) = view_rect(win_w, win_h);
+    for y in 0..h {
+        for x in 0..w {
+            let sx = (x * 256 / w) as usize;
+            let sy = (y * 240 / h) as usize;
+            let si = (sy * 256 + sx) * 4;
+            let di = ((oy + y) * win_w + ox + x) as usize;
+            if si + 3 < canvas.len() && di < out.len() {
+                let (r, g, b) = (canvas[si] as u32, canvas[si + 1] as u32, canvas[si + 2] as u32);
+                out[di] = 0xFF00_0000 | (r << 16) | (g << 8) | b;
+            }
+        }
+    }
+    (ox, oy, w, h)
+}
+
+/// 整数倍缩放视口（shell 侧——game-desktop view_rect 同语义）。
+pub fn view_rect(win_w: u32, win_h: u32) -> (u32, u32, u32, u32) {
+    let (sw, sh) = (256u32, 240u32);
+    let scale = std::cmp::max(1, std::cmp::min(win_w / sw, win_h / sh));
+    let (w, h) = (sw * scale, sh * scale);
+    let ox = win_w.saturating_sub(w) / 2;
+    let oy = win_h.saturating_sub(h) / 2;
+    (ox, oy, w, h)
+}

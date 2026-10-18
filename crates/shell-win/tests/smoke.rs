@@ -25,3 +25,30 @@ fn storage_path() {
 fn frame_interval() {
     assert_eq!(shell_win::FRAME_MS, 16, "60Hz 帧间隔");
 }
+
+/// ②帧驱动（60Hz 固定步+追帧上限）。
+#[test]
+fn frame_driver_tick() {
+    let mut d = shell_win::FrameDriver::new();
+    let n = d.tick();
+    assert!(n <= 4, "追帧上限");
+}
+
+/// ②blit 整数缩放（视口+像素）。
+#[test]
+fn blit_integer_scale() {
+    let canvas = vec![0x80u8; 256 * 240 * 4];
+    let mut out = vec![0u32; 512 * 480];
+    let (ox, oy, w, h) = shell_win::blit_scaled(&canvas, &mut out, 512, 480);
+    assert_eq!((w, h), (512, 480), "2 倍整数缩放");
+    assert_eq!((ox, oy), (0, 0), "居中偏移");
+    assert_eq!(out[0] & 0xFF, 0x80, "像素 blit");
+}
+
+/// ②视口（保比例黑边）。
+#[test]
+fn view_rect_aspect() {
+    let (ox, oy, w, h) = shell_win::view_rect(800, 600);
+    assert_eq!((w, h), (512, 480), "2 倍（min(800/256,600/240)=2）");
+    assert_eq!((ox, oy), (144, 60), "黑边居中");
+}
