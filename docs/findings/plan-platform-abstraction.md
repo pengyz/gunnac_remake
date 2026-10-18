@@ -238,6 +238,36 @@ Android 落地清单（后续任务卡逐项验收）：
 5. `test(platform)`：Mock platform 300 帧确定性 + 零平台依赖契约扫描。
 6. `docs(spec)`：platform-shell.md 分层图/平台矩阵/Android 落地清单/状态回填；本方案 §9 回填。
 
-## 9. 实施状态（实施后回填）
+## 9. 实施状态（2026-10-18 回填）
 
-（待回填：commit 列表、`cargo test --workspace`/`gates check` 输出摘要、300 帧签名值、遗留缺口。）
+**结论**：v1 交付完成（game-platform 缝补全 + game-shell 平台无关宿主 + 契约门禁 + 规格升版）。
+
+**commit 列表（本任务写范围）**
+
+| commit | 主题 |
+|---|---|
+| `0809317` | `docs(platform)`：本方案（未证域声明 + mock 契约测试设计） |
+| `c43f08d` | `feat(platform)`：trait 缝补全（AssetSource/Lifecycle·AppEvent/Renderer size·resize/画布常量）+ 契约测试 |
+| `98ad36c` | `feat(platform)`：新增 game-shell crate（固定步/输入消解/宿主状态机/tick 序列/渲染合成/音频/资产·存档·生命周期；含 contract/mock_platform 测试） |
+| `docs(spec)`（本回填同 commit） | platform-shell.md v2 分层图/平台矩阵/Android 落地清单/状态回填 |
+
+> 偏差说明：实施把「crate 骨架」「tick/渲染/音频」「契约测试」合为 1 个 feat commit（同逻辑变更、
+> 测试与实现同步落地）；其余按 §8 计划执行。
+
+**门禁输出摘要（本机，复现见 platform-shell.md §9）**
+
+- `cargo test -p game-platform`：trait_contract 10 + trait_shapes 2 + dependency_contract 2，全绿。
+- `cargo test -p game-shell`：单元 34 + contract 2 + mock_platform 3，全绿。
+- mock 300 帧两次运行全等；签名（2026-10-18 记录值）：
+  `host=0xefe39a9ba5e7c5b0 canvas=0x963ac9a776a57625 advanced_frames=290 storage_len=24`
+  （suspend 窗口 10 帧不推进⇒290；事件 44 条全在已证边集；终态 `Ending`/关号 8/all_clear）。
+- `cargo test --workspace` + `python gates/cli.py check`：见交付汇报（CHECK: PASS）。
+- `rust_test_count` 因新增测试高于基线（只升不降=WARN 非 FAIL）；基线上调属 `data/status/`（本任务红线外），
+  已报 Lead 处置。
+
+**遗留缺口（与 §6 一致，未实现/未声称）**：关卡数据装载（`StageState` 仍为空，`stage_clear_requested`
+只能由门禁测试以显式已证写点触发）、音频生产侧（AUD-2/3）、玩家射击/投放接线、菜单输入派发、
+死亡窗/GAME OVER 菜单自动接线、Android 实现（仅清单）、`shell-win` 主循环接线（task-1）。
+
+**风险**：`Renderer::size/resize` 采用默认方法是为不打断写范围外的 `game-desktop::Canvas`；
+若后续裁定"必须强制实现"，需改 `game-desktop`（需用户/Lead 批准，非本任务写范围）。
