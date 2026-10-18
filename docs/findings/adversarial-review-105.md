@@ -31,3 +31,33 @@
 核心合同面（core/platform 零外部依赖）**守恒无回退** ✓。
 （口径注：平台库现于 shell-win+game-desktop 两处——desktop=先存工具壳，spec §4"仅 shell/win"
 按正式壳口径；核心合同不受影响，若要字面收紧宜将 desktop 归类注一词。）
+
+---
+
+## 段 B：②trait 实现 vs 契约测试锁 + ⑤宿主真边——**对表全合+真边非发明** ✅
+
+### B.1 ② 实现面 vs 契约测试锁（mock 对表）——**六 trait 对表全合** ✅
+
+| 面 | 契约锁（mock 断言） | 实现面 | 对表 |
+|---|---|---|---|
+| Renderer | `canvas_mut().len()==256×240×4`+present 计数 | shell `blit_scaled` 消费 256×240 RGBA（同面） | ✓ |
+| Audio | 流序保持（`(1,0x4000,0x30),(1,0x4001,0x08),(2,0x4015,0x0F)`+帧序 [1,2]） | `AudioSink.writes` 同序 Vec<(u32,u16,u8)> | ✓ **流序锁同形** |
+| Storage | slot0 往返+slot1 空 None+**越界槽拒** | Storage trait 形（#104 已核最小面） | ✓ 往返/边界双锁 |
+| Clock/GameRng | 确定性锁（同输入→同 mock 态/同种子→同序列） | 虚拟时钟/确定性契约 | ✓ |
+
+**契约面四套实跑全绿**：trait_contract **5**/trait_shapes **2**/full_flow **3**/smoke **5**（含
+smoke_input_mapping_contract）——"13/13"=被审时点三面合计口径；我方实跑零红 ✓
+（计数口径差 13 vs 15=smoke 5 件归属面分法，实质全绿不受影响）。
+**域声明补全**：mock 用 reg=0x4000/0x4001/0x4015 **u16 全地址** ⇒ #104 微注②解——
+trait u16 域=APU 全寄存器地址（game-core u8 偏移→u16 全址=实现侧换算），域语义已明。
+
+### B.2 ⑤ 宿主接线真边（F1-F13 边集非发明）——**真边锁于 game-core harness，shell 骨架=真子集** ✅
+- **真边集本体**：game-core `full_flow.rs` harness（2426d38）逐关断言**段锚四连序**
+  （shop/Transition→StageStart→Combat→StageClear）+结局入口=**AllClear（$180==9→$95F9
+  语义，l5-all-clear R-l5-4）**——与我 #96 段A ⑤ ROM 面（E02C-E031/$95F9/8E4E）**互证** ✓✓；
+- **shell 骨架边**：Title→Stage(1)→…→Stage(8)→Ending→Title（press_start 驱动）——
+  四条边**全部为真流宏观边**（title 起跑/清关进关/八关毕入结局/结局归零重启=E02C 复位族），
+  **无发明边** ✓（触发简化 press_start=harness 契约面② 声明口径，非边集发明）。
+
+### B.3 中间记数
+①五件+④守恒（段A）+②对表+⑤真边（本段）——四靶收口；③APU 四件 ROM 重导=段C。
