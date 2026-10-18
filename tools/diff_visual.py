@@ -223,7 +223,7 @@ def main() -> int:
     lines.append("## 白名单候选（未启用）")
     lines.append("W-C1 调色板映射（强候选）/ W-C2 汉化字形 / W-C3 文本渲染 / W-C4 色彩空间 / W-C5 扫描线分割——")
     lines.append("见 docs/spec/l4-visual-plan.md §2；启用逐条需用户确认 + gates/visual_whitelist.json 登记。")
-    REPORT.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+    REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     # 白名单申请清单（t96 ④）：残余=纯平台差异候选——申请单列，未批前不启用
     if DIFF_DIR.is_dir() and not WHITELIST.is_file():
         app = SCREENS / "whitelist-application.md"
