@@ -52,3 +52,17 @@ fn view_rect_aspect() {
     assert_eq!((w, h), (512, 480), "2 倍（min(800/256,600/240)=2）");
     assert_eq!((ox, oy), (144, 60), "黑边居中");
 }
+
+/// ③音频件（ApuWrite 流消费+静音占位显式）。
+#[test]
+fn audio_sink_stream() {
+    let mut a = shell_win::AudioSink::new();
+    a.write_apu(0, 0x4000, 0xAD);
+    a.write_apu(1, 0x4002, 0xFF);
+    assert_eq!(a.writes.len(), 2, "流消费");
+    assert_eq!(a.writes[0], (0, 0x4000, 0xAD), "三元组");
+    assert!(a.silent, "静音占位显式（合成器未证）");
+    let pcm = a.synth_pcm(10);
+    assert_eq!(pcm.len(), 10, "PCM 面");
+    assert!(pcm.iter().all(|&s| s == 0), "静音期零样本");
+}

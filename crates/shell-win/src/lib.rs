@@ -103,3 +103,40 @@ pub fn view_rect(win_w: u32, win_h: u32) -> (u32, u32, u32, u32) {
     let oy = win_h.saturating_sub(h) / 2;
     (ox, oy, w, h)
 }
+
+// ===== ③音频件（APU 合成模型驱动——platform-shell.md §3）=====
+
+/// 音频件（ApuWrite 流消费→PCM——合成器未证期=流透传/静音占位显式）。
+pub struct AudioSink {
+    pub writes: Vec<(u32, u16, u8)>, // ApuWrite 流（(frame,reg,value)——L-Audio 同源）
+    pub silent: bool,                 // 静音占位（合成器未证期显式）
+}
+
+impl AudioSink {
+    pub fn new() -> Self {
+        AudioSink { writes: Vec::new(), silent: true } // 静音占位显式（合成器未证）
+    }
+    /// ApuWrite 流消费（game-platform::Audio trait 面）。
+    pub fn write_apu(&mut self, frame: u32, reg: u16, value: u8) {
+        self.writes.push((frame, reg, value));
+    }
+    /// 帧推进（60Hz——PCM 合成随合成器证成升级）。
+    pub fn end_frame(&mut self, _frame: u32) {}
+    /// PCM 合成（APU 合成模型驱动——音调式/duty/影子——合成器未证期=静音返回）。
+    pub fn synth_pcm(&self, _samples: usize) -> Vec<i16> {
+        if self.silent {
+            vec![0i16; _samples] // 静音占位（显式）
+        } else {
+            vec![0i16; _samples] // 合成器证成后升级（apu_pitch_model/duty 驱动）
+        }
+    }
+}
+
+impl game_platform::Audio for AudioSink {
+    fn write_apu(&mut self, frame: u32, reg: u16, value: u8) {
+        AudioSink::write_apu(self, frame, reg, value);
+    }
+    fn end_frame(&mut self, frame: u32) {
+        AudioSink::end_frame(self, frame);
+    }
+}
