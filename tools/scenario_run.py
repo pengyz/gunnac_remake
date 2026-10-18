@@ -19,7 +19,8 @@
 - frame 在 inputPolled 回调递增：第 N 次 poll = 帧 N，schedule[N] 的按键在该帧注入；
 - press <f> <btn> = 帧 f..f+press_len-1 按住（press_len 默认 2），之后释放；
 - hold <a-b> <btn> = 帧 a..b（含）按住，帧 b+1 释放；
-- endFrame（帧 N 渲染完成后）写 trace 行 / 截图 / RAM dump；frame == frames 时写 DONE 并停机。
+- endFrame（帧 N 渲染完成后）写 trace 行 / 截图 / RAM dump；frame >= frames 或 bot 早停时写 DONE
+  并停机（task-105：bot 跳帧/分叉可 overshoot ⇒ DONE 记实际帧；task-110：完成判据以 DONE 为准）。
 
 输出（均可用 --out/--shots 覆盖，默认 analysis/ 与 shots/）：
     analysis/traces/<name>.frames.jsonl    逐帧状态向量（w=watch 字节/range hex，可选 ram 全量）
@@ -449,6 +450,51 @@ def normalize_paths_in_outputs(name: str) -> None:
                 )
 
 
+def done_ok(manifest: dict) -> bool:
+    """采集完成判据（task-110：**以 DONE 为准**，plan frames 仅是上限）。
+
+    - `done` 非空且未 `timed_out`；
+    - 磁盘已写 trace_lines > 0；
+    - DONE 自带 `trace_lines`（task-105 新格式）⇒ 必须等于磁盘行数
+      （bot 早停 `trace_lines<plan` / overshoot `trace_lines>plan` 均属合法完成）；
+    - legacy DONE 无 `trace_lines` 字段 ⇒ 回退旧判据 `trace_lines == plan.frames`；
+    - **`done.frame_errors == 0`**（task-105 pcall 韧性后异常被计数而非静默；legacy 无字段视为 0）
+      —— 有帧级异常即视为降级完成，不接受为 PASS。
+    """
+    done = manifest.get("done")
+    if done is None or manifest.get("timed_out", False):
+        return False
+    n_lines = int(manifest.get("trace_lines", 0) or 0)
+    if n_lines <= 0:
+        return False
+    try:
+        if int(done.get("frame_errors", 0) or 0) != 0:
+            return False
+        if "trace_lines" in done:
+            done_lines = int(done["trace_lines"])
+            return n_lines == done_lines
+    except (TypeError, ValueError):
+        return False
+    return n_lines == int(manifest.get("frames", -1))
+
+
+def first_lua_error(manifest: dict) -> str | None:
+    """取 lua.log 首条逐帧异常行（task-110 F1：FAIL/DEGRADED 时打印 frame_errors 与首条错误）。"""
+    trace = (manifest.get("outputs") or {}).get("trace")
+    if not trace:
+        return None
+    log_path = Path(str(trace).replace(".frames.jsonl", ".lua.log"))
+    try:
+        with open(log_path, encoding="utf-8") as f:
+            for line in f:
+                if ("endFrame error" in line or "inputPolled error" in line
+                        or "wants_stop error" in line):
+                    return line.strip()
+    except OSError:
+        return None
+    return None
+
+
 def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = True) -> dict:
     spath = scenario_path_of(name_or_path)
     plan = parse_scenario(spath)
@@ -682,7 +728,7 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     lock_f.close()
     if archived:
         print(f"  已归档旧产物: {archived}（run 隔离，防踩踏）")
-    ok = done_info is not None and not timed_out and n_lines > 0
+    ok = done_ok(manifest)
     print(f"== scenario run: {name} ==")
     print(f"  DSL: {manifest['scenario']} sha256={manifest['scenario_sha256'][:16]}…")
     normalize_paths_in_outputs(name)
@@ -740,31 +786,39 @@ def main() -> int:
             # F90-1（task-90 复核）：run 分支不再固定 return 0——未完成（done=None / timed_out /
             # 截断 trace）必须非零退出，供 P0-0 自动化与 CI 判失败（不能只看 timed_out：
             # Mesen2 testRunner 100s 自停时 timed_out 仍为 false）。
-            ok = (
-                m.get("done") is not None
-                and not m.get("timed_out", False)
-                and int(m.get("trace_lines", 0)) == int(m.get("frames", -1))
-            )
-            if not ok:
+            # task-110：判据以 DONE 为准（bot 早停/overshoot 合法 ⇒ 不因 trace_lines!=plan 误判）。
+            if not done_ok(m):
+                done = m.get("done") or {}
+                err = first_lua_error(m)
                 print(
-                    "RUN: FAIL（done={} timed_out={} trace_lines={}/frames={}）".format(
+                    "RUN: FAIL（done={} timed_out={} trace_lines={}/frames={} done_trace_lines={} frame_errors={}）".format(
                         m.get("done") is not None,
                         m.get("timed_out"),
                         m.get("trace_lines"),
                         m.get("frames"),
+                        done.get("trace_lines"),
+                        int(done.get("frame_errors", 0) or 0),
                     )
                 )
+                if err:
+                    print(f"  首条帧级异常：{err}")
                 return 1
             return 0
         if args.cmd == "run-all":
             failed = []
+            degraded = []
             for p in sorted(SCENARIO_DIR.glob("*.txt")):
                 m = run_scenario(p, args.timeout)
-                if not (
-                    m["done"] and not m["timed_out"]
-                    and int(m.get("trace_lines", 0)) == int(m.get("frames", -1))
-                ):
+                if not done_ok(m):
                     failed.append(m["scenario"])
+                    done = m.get("done") or {}
+                    fe = int(done.get("frame_errors", 0) or 0)
+                    if done and fe > 0:
+                        err = first_lua_error(m)
+                        degraded.append((m["scenario"], fe, err))
+            if degraded:
+                for nm, fe, err in degraded:
+                    print(f"RUN-ALL: DEGRADED {nm} frame_errors={fe}" + (f" 首条={err}" if err else ""))
             if failed:
                 print(f"RUN-ALL: 未完成 {failed}")
                 return 1
