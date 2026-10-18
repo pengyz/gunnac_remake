@@ -1141,3 +1141,17 @@ fn audio_channel_params() {
     assert_eq!(audio_field_split(0x00), (0, 0));
     assert_eq!(audio_field_split(0xFF), (0x1F, 0x07));
 }
+
+/// APU 合成模型（五线——音调式/duty/影子/triangle）。
+#[test]
+fn apu_synthesis_model() {
+    use game_core::{apu_duty_form, apu_pitch_model, apu_pulse_shadow, apu_triangle_fields};
+    assert_eq!(apu_pitch_model(0x03, 0x02), 0x05, "16 音阶加 transpose");
+    assert_eq!(apu_pitch_model(0x83, 0x00), 0x83, "八度旗 bit7 保");
+    assert_eq!(apu_duty_form(0xAD), 1, "duty 高 2 位（0xAD>>5&3=1）");
+    assert_eq!(apu_duty_form(0x60), 3, "duty 最大形");
+    let p = apu_pulse_shadow([1, 2, 3, 4]);
+    assert_eq!(p[0], (0x4000, 1), "影子→寄存器");
+    let t = apu_triangle_fields(0x30, 0xFF, 0x08);
+    assert_eq!(t[1], (0x400A, 0xFF), "三角周期低");
+}

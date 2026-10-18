@@ -235,3 +235,30 @@ pub const AUDIO_INDIRECT_CONSUMERS: u8 = 13;
 pub fn audio_field_split(composite: u8) -> (u8, u8) {
     (composite & 0x1F, composite >> 5) // (音调, 独立参)
 }
+
+// ===== APU 合成模型（9d661b6 五线 A 级——Audio PCM 面输入）=====
+
+/// 音调合成式（五线①：$03E3+transpose($0A)→AND #$0F（16 音阶）+$80 八度旗）。
+/// 三参数音高模型：音阶（0-15）+八度旗（bit7）+transpose。
+pub fn apu_pitch_model(scale_base: u8, transpose: u8) -> u8 {
+    let combined = scale_base.wrapping_add(transpose) & 0x0F; // 16 音阶
+    let octave = if scale_base.wrapping_add(transpose) & 0x80 != 0 { 0x80 } else { 0 };
+    combined | octave
+}
+
+/// duty 4 形（五线③：$8AD7 高 2 位 ROL→pulse $4000 bits 7-6）。
+/// 返回 duty 形（0-3）——音色。
+pub fn apu_duty_form(composite: u8) -> u8 {
+    (composite >> 5) & 0x03 // 高 2 位=duty 4 形
+}
+
+/// pulse 影子族映射（五线④：$0309+X→$4000+X 倒序 X=4→0——控制/扫频/周期低/高）。
+pub fn apu_pulse_shadow(shadow: [u8; 4]) -> [(u16, u8); 4] {
+    // $4000+X（X=0..3）：控制/扫频/周期低/周期高——倒序循环注（实装序=fail-closed）
+    [(0x4000, shadow[0]), (0x4001, shadow[1]), (0x4002, shadow[2]), (0x4003, shadow[3])]
+}
+
+/// triangle 三字段（五线⑤：$0311→$4008 线性计数/$0313→$400A 周期低/$0314→$400B 高）。
+pub fn apu_triangle_fields(linear: u8, period_lo: u8, period_hi: u8) -> [(u16, u8); 3] {
+    [(0x4008, linear), (0x400A, period_lo), (0x400B, period_hi)]
+}
