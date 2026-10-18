@@ -479,6 +479,26 @@ def done_ok(manifest: dict) -> bool:
     return n_lines == int(manifest.get("frames", -1))
 
 
+def clear_mesen_resume_state(rom: Path) -> list[str]:
+    """清除 Mesen2 的 recent-game resume 状态（跨 run 污染源，task-133/F134-1 第二源）。
+
+    Mesen2 GUI 退出时会把 resume state **内嵌**写进 `RecentGames/<rom>.rgd`（内含
+    `Savestate.mss`），下一次启动同一 ROM 可能自动恢复该状态 ⇒ trace 第二跑/跨模式出现不同
+    sha（实测 title-menu run1=c4d6…、run2=57e2…；删除 .rgd 后恢复一致）。采集前显式删除，
+    不碰 settings.json；返回被删除文件（便于报告留痕）。
+    """
+    if os.name != "nt":
+        return []
+    home = Path(os.environ.get("GUNNAC_MESEN_HOME",
+                               str(Path(os.environ.get("USERPROFILE", "")) / "Documents" / "Mesen2")))
+    removed: list[str] = []
+    for pat in (home / "RecentGames" / f"{rom.stem}.rgd",):
+        if pat.is_file():
+            pat.unlink()
+            removed.append(str(pat))
+    return removed
+
+
 def first_lua_error(manifest: dict) -> str | None:
     """取 lua.log 首条逐帧异常行（task-110 F1：FAIL/DEGRADED 时打印 frame_errors 与首条错误）。"""
     trace = (manifest.get("outputs") or {}).get("trace")
@@ -595,6 +615,10 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     # Mesen2 testRunner 自带超时（源码 TestRunnerTimeout 默认 100s）——长场景（stg08 34000f 等）
     # 必须在命令行显式给 `--timeout=<秒>`，否则会在 ~100s 处被强停（trace 截断、DONE 不落）。
     mesen_timeout_s = max(120, int(timeout_s) + 120)
+    # 跨 run 状态污染防护（task-133/F134-1 第二源）：删除 Mesen2 recent-game resume state。
+    removed_states = clear_mesen_resume_state(ROM)
+    if removed_states:
+        print(f"  [清场] 删除 Mesen2 resume 状态: {', '.join(Path(p).name for p in removed_states)}")
     try:
         if HEADLESS:
             proc = subprocess.Popen(

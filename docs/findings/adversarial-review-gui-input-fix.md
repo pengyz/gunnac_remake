@@ -165,3 +165,39 @@ headless 后再 GUI   = c4d6a83f（恢复一致）
   （Lead 4 连测已覆盖 speed=1000 下 c4d6；speed=100 下历史 c4d6 亦可作对照）。
 - task-133 重采仍应按本报告 F134-1/F134-4：**连续 GUI + 每场景两跑 sha + 输入有效性断言**（title 无
   controller watch，用 gameplay 的 controller/action/坐标四链），并在报告中标注旧 headless 结论 superseded。
+
+## 追加 2（2026-10-18，F134-1 第二污染源：RecentGames/.rgd resume state）
+
+> Lead/l4-analyst 定位第二源并处置；本节只读复核（Mesen 正被 l4 task-133 占用，未跑）。
+
+### 根因
+- Mesen2 GUI 退出时把 **resume state 内嵌写进** `%USERPROFILE%\Documents\Mesen2\RecentGames\
+  gunnac_cn.rgd`（内含 `Savestate.mss`）；下次启动同一 ROM **自动恢复上次状态**。
+- 与上一节 autosave `.mss` 叠加：仅删/关 autosave 不够，`.rgd` 仍可跨 run 带状态 ⇒ l4 实测
+  **GUI title run1=`c4d6a83f`、run2=`57e25e3d`**（第二跑被 resume 污染）；删除 `.rgd` 后恢复。
+- 处置：删除遗留 `.rgd` + `SaveStates/gunnac_cn_11.mss`（备份 `.bak-capturepollution`）；
+  `scenario_run.py` **每次 spawn 前自动清** `RecentGames/<rom>.rgd`；Lead 验证 **GUI title ×3 全部 c4d6a83f**。
+
+### 只读复核（当前工作树/配置）
+- `tools/scenario_run.py:482-499` 新增 `clear_mesen_resume_state(rom)`：
+  - 仅 `os.name == "nt"`；按 `GUNNAC_MESEN_HOME`（默认 `%USERPROFILE%\Documents\Mesen2`）；
+  - 删除 `RecentGames/<rom.stem>.rgd`；返回已删路径用于留痕；**不碰 settings.json**。
+- `scenario_run.py:618-621` 在 `subprocess.Popen` **之前**调用；删除成功打印
+  `[清场] 删除 Mesen2 resume 状态: gunnac_cn.rgd`；对 GUI/headless 两分支都生效 ✅。
+- 当前文件状态（l4 task-133 正在跑，故 `.rgd` 又被 Mesen 写回属预期；**下次 spawn 会再清**）：
+  ```
+  RecentGames/gunnac_cn.rgd                       9874B  20:13:48（l4 当前 run 写回，非清理失效）
+  RecentGames/gunnac_cn.rgd.bak-capturepollution  9887B  20:12:41（已备份）
+  SaveStates/gunnac_cn_11.mss.bak-capturepollution 14239B 20:12:41（已备份；无活动 .mss）
+  settings.json：EnableAutoSaveState=false / EnableRewind=false /
+                 EmulationSpeed=1000 / AllowIoOsAccess=true
+  ```
+- Lead 记录：删除 `.rgd` + `.mss` 后 **GUI title ×3 = c4d6a83f**；headless 对照仍 `62c9ea09`；
+  ⇒ **第二污染源处置与 3 连测自洽**。本复核未独立跑（锁由 task-133 持有）；task-137 需在批次结束后
+  自行做 title-menu ×3/两跑 sha 点验并确认日志含 `[清场]`。
+
+### 残余建议
+- 清理函数只删 `.rgd`；若某次崩溃留下活动 `SaveStates/*.mss`，autosave 已关但建议启动前一并清理
+  （或把清理列表扩为 `.rgd + 对应 .mss`），避免旧 `.mss` 被手动/异常路径加载。
+- task-137 复核时把“当前 `.rgd` 存在”与“清理失效”区分：**看本次 spawn 日志是否打印 `[清场]` 且下一跑 sha 一致**，
+  不能仅凭运行中 `.rgd` 存在判 failure。
