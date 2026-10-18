@@ -36,6 +36,17 @@ local function log(s)
   if f then f:write(s .. "\n") f:close() end
 end
 
+-- task-145：脚本装载时刻的游戏 frameCount（取证 GUI 模式装载/注册相对开机相位差）。
+-- 约定：`load_game_frame > 1` ⇒ 脚本在游戏已开机数帧后才装载（GUI 晚装模式，实测=3）⇒ 需相位对齐；
+--           ≤1/nil ⇒ 脚本先于/同时开机装载（headless testRunner 实测=1），无需相位对齐（gate=0）。
+local load_game_frame = nil
+do
+  local sok, st = pcall(emu.getState)
+  local lfc = (sok and st) and (st.frameCount or nil) or nil
+  if type(lfc) == "number" then load_game_frame = lfc end
+  log("script load: game_frame=" .. tostring(lfc == nil and "?" or lfc))
+end
+
 local function hex2(n) return string.format("%02X", n) end
 
 local function jstr(s)
@@ -49,6 +60,16 @@ local frame = 0
 local nTrace, nCap, nShot = 0, 0, 0
 local doneWritten = false -- DONE 幂等（task-105：overshoot/bot_stop 后可能再来 endFrame）
 local frameErrors = 0 -- 逐帧工作体 pcall 错误计数（task-105：错误不阻断 DONE）
+local first_poll_fc = nil -- task-145：场景起始（首条计数帧）的游戏 frameCount
+
+-- task-145 相位对齐：GUI 晚装模式下 inputPolled 回调注册发生在开机后的可变帧（随脚本大小/
+-- 磁盘缓存变化）⇒ 首帧相对开机存在 ±N 帧偏移（跨脚本早期帧相位差根因）。对齐规则：仅当
+-- `load_game_frame > 1`（GUI 晚装；headless testRunner 实测装载帧=1）时统一等到游戏
+-- frameCount ≥ PHASE_ALIGN_FRAME 才开始计数/注入输入（跳过装载期已跑帧、不注入，不改变
+-- 游戏状态）；headless 完全不变（装载帧=1 ⇒ 不对齐）。
+local PHASE_ALIGN_FRAME = 7
+local phase_align_checked = false
+local phase_align_gate = nil
 
 -- ---------------- 输入计划展开为逐帧按键表
 local schedule = {}
@@ -184,7 +205,29 @@ local function finalize(bot_stop, why)
 end
 
 emu.addEventCallback(function()
+  -- task-145 相位对齐（见上）：晚装模式统一对齐到游戏帧 PHASE_ALIGN_FRAME 起点。
+  if not phase_align_checked then
+    phase_align_checked = true
+    if load_game_frame and load_game_frame > 1 then
+      phase_align_gate = PHASE_ALIGN_FRAME
+      log("phase align: late-load mode (script_load_game_frame=" .. tostring(load_game_frame)
+        .. "), align_gate=" .. tostring(PHASE_ALIGN_FRAME))
+    else
+      phase_align_gate = 0
+    end
+  end
+  if phase_align_gate and phase_align_gate > 0 then
+    local sok, st = pcall(emu.getState)
+    local gfc = (sok and st) and (st.frameCount or 0) or 0
+    if gfc < phase_align_gate then return end
+  end
   frame = frame + 1
+  if frame == 1 then
+    local sok, st = pcall(emu.getState)
+    first_poll_fc = (sok and st) and (st.frameCount or -1) or -1
+    log("scenario start: game_frame=" .. tostring(first_poll_fc)
+      .. " align_gate=" .. tostring(phase_align_gate))
+  end
   -- task-105 韧性：单帧异常（bot 决策/录制/poke）不得中断收尾——逐帧工作体全 pcall，
   -- 错误计数进 DONE；终止判定（inputPolled 兜底）始终执行。
   local ok, err = pcall(function()
