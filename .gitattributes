@@ -1,0 +1,18 @@
+# 行尾纪律（D3 字节级真相）：全仓库统一 LF 存储与检出。
+# 背景：Windows 系统级 core.autocrlf=true 会把文本检出为 CRLF，而 gates/cli.py 的
+# sha256 门禁按磁盘原始字节校验（rom-integrity / seed-integrity / baseline-integrity）。
+# 该属性使锚点在任何平台的检出字节都等于仓库内 LF blob，杜绝误报。
+* text=auto eol=lf
+
+# 二进制资产：显式声明，禁止任何换行/编码转换
+*.nes binary
+*.bin binary
+*.chr binary
+*.png binary
+*.gif binary
+*.jpg binary
+*.jpeg binary
+*.wav binary
+*.zip binary
+*.gz binary
+*.idb binary
