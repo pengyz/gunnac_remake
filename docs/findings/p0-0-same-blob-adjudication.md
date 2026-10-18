@@ -164,3 +164,13 @@ PY
       `p0-0-render-run1.md` 的注记/§5 同步；
 - [x] `analysis/`、`target/`、`shots/` 未入库；未跑 Mesen/gates；
 - [x] docs-links PASS（374 md/459 链接；platform-verifier task-128 复核 pass）。
+
+## 9. 【2026-10-18 task-143 dated 注】GUI trace 版：actual 6-group 不再成立（旧结论属 headless superseded 语境）
+
+> GUI 重采 trace（输入生效）重渲 18 对后：**actual_unique=14**，actual 同 blob 组只剩 **2 组**：
+> ①四联 `l4_stg06-late`/`l4_stg08-combat`/`l4_stg08-late`/`l4_stg08-start` = `406f3962…`（仍为真实同画面：Mesen 源截图
+> 同屏 `62a8ef06…` + 新 trace）；②`l4_ending-4`/`l4_ending-5` = `5aa8a4f8…`（assisted 来源）。
+> **旧 headless 版的 actual 6-group（含 `l4_stg07-combat`/`l4_stg07-start`）不再成立**——新 trace 下二者已不同图
+> （`65de647d…`/`c9070704…`）；旧 6-group 属"headless 输入失效 + 冻结 trace"语境，**作为历史记录保留不删**，
+> 但不得再用于 GUI 版 actual 去重/基线口径。四联同 blob 的 OBS-1「真实同画面」结论对 GUI 版仍成立（源截图证据未变）。
+> 最新口径与行号见 `docs/findings/p0-0-readjudication-gui.md` §3/§4 与手册 §7.5 task-143 注。

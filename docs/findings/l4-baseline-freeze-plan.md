@@ -1380,6 +1380,13 @@ if __name__ == "__main__":
 > 5 对（#6-#10）不重渲/不 staging、旧 expected 保留；§7b「actual 两两不同」核对**当前不适用**（无 actual）。
 > 差异像素重裁表见 `docs/findings/p0-0-readjudication.md` §2（#6-#10 均 `blocked`）；**P0-0 不得宣称全绿**。
 
+> **【2026-10-18 task-143 GUI 重裁·最新】** GUI trace 版（task-138 二进制 `00c29d6a…`）重渲 18 对后：
+> 组 D = **2 sourced**（#9 ending-4 / #10 ending-5，C1/C3 f33000+ 命中 `6ff345dc`，`trigger=assisted`）+ **4 blocked:no-source**
+> （#6 fade-clear / #7 ending-1 / #8 ending-2 / #11 ending-3；dense overlay 133 张 any-frame 零命中，负证据）。
+> **ending-4/5 的 actual 已渲**（g_run1/g_run2 确定性；vs 旧 expected diff 8427/8427）；**4 blocked 不渲/不 staging**。
+> 旧 headless 版「actual 同 blob / OBS-1 五帧」语境 **superseded**（差异见 `docs/findings/p0-0-readjudication-gui.md` §4）。
+> 证据：`p0-0-readjudication-gui.md` §2/§4；`target/p0-0/render/g-manifest-v2.json`（gitignored）。
+
 **§7a（§5 之前，expected 侧）**：
 - **现状（A）**：五张 actual 同 blob（TBLDRV=1 共用 ending-1 golden 表）；expected-4/5 同文件。
 - **动作（重裁后）**：用 **§3.6 命中来源**在 `{30000,31500,33000,34500,36000}` 的 capture 与旧 expected-1..5
@@ -1409,6 +1416,9 @@ documented duplicate（静态同图），必须已在 manifest `dedupe.documente
 （**2026-10-18 定谳：现状已落 `blocked:no-source`、不 staging；`s5-full-inject` 尚未采集。**）
 > **【2026-10-18 task-130】#11 维持 `blocked:no-source`**（P0-0-2 无 actual；旧 expected `14802bcf…` 保留）；
 > 重裁逐对状态见 `docs/findings/p0-0-readjudication.md` §2 #11。
+
+> **【2026-10-18 task-143】** #11 fade-clear 维持 `blocked:no-source`：dense 133 张 any-frame 零命中 `14802bcf…`
+> （recapture §5.2 负证据）；GUI 版 4 blocked 之一，不渲。
 
 ### 7.5 去重判据与登记（**F2/F8/B2：按 manifest 22 名过滤 + 按组核对 + 重复 ⊆ manifest**）
 
@@ -1467,6 +1477,14 @@ manifest `dedupe.documented_duplicates` 找到同 name 集**（expected 重复�
 > **registry 扩展**：actual 6-group **不是** mapping 四联组（4 名）子集 ⇒ wrapper `registry_ok` 需允许
 > actual-only 组显式登记（`adjudicated_by=task-126`），否则会误判异常；expected 四联同 blob 仍属「expected
 > 待 §7.2 重采」不得与 actual 同 blob 混用。公式核对：expected 17 = 22−5；actual 11 = 16 rendered−5。
+
+> **【2026-10-18 task-143 GUI 去重实况·最新】** GUI trace 版 18 对 rendered：**expected_unique=13**
+> （3 组：`title-menu_f00180_boot-black`↔`l4_stg02-start`（`788d6984…`）；四联 4 张 `62a8ef06…`；`l4_ending-4/5`（`6ff345dc…`））、
+> **actual_unique=14**（2 组：四联 4 张=`406f3962…`；ending-4/5=`5aa8a4f8…`）。
+> **旧 headless actual 6-group 不再成立**：`l4_stg07-combat`（`65de647d…`）/`l4_stg07-start`（`c9070704…`）已不同图——
+> 旧 6-group 是 headless 输入失效下的渲染巧合，属 **superseded 语境**；四联 actual 同 blob 与 Mesen 源截图同屏（预期四联
+> `62a8ef06…`）一致，登记 documented_duplicates。公式：18 rendered = 14 unique + reductions 4（四联 3 + ending 1）；
+> expected 13 = 18 − 5。wrapper registry 需按 actual 组（四联 4 / ending-2）与 expected 组分别对账。
 
 ### 7.6 trigger 标注纪律
 
@@ -1712,6 +1730,14 @@ PY
 > （actual 6-group=真实 OBS-1 冻结屏，登记 documented_duplicates、不剔除）。
 > ⇒ **本清单在组 D 取得合法来源 + expected 5 对重采安装前维持不通过；P0-0 不得宣称全绿**。
 > 逐对证据：`docs/findings/p0-0-readjudication.md` §2/§3；manifest：`target/p0-0/render/manifest.json`。
+
+> **【2026-10-18 task-143 GUI 版现状·最新；替代 task-130 数字】** 22 对 = **18 可渲**（16 canonical + ending-4/5 assisted）
+> + **4 组 D blocked:no-source**；**5 对 `replaced-invalid-asset`**（#14 stg02-start + 四联 #16/#19/#20/#21；
+> expected 待 §7.2 重采）——**16 canonical 中 5 对 expected 待重采**（AR144-1/task-146 口径统一）。
+> 18 对 diff：min **0**（title，像素级 0）/ median **9766** / max **58159**（clear-inject）/ sum **242,555**，
+> **0/18 actual==expected sha** ⇒ **L4 0 容差未达成、不得宣称 L4 通过**（P0-1 修复目标）。
+> 去重 expected_unique=13 / actual_unique=14（见 §7.5）。**P0-0 全绿判定=否**（4 blocked + **5 对 expected 待重采** + 18 对 diff>0）。
+> 证据：`docs/findings/p0-0-readjudication-gui.md` §2/§3；manifest `target/p0-0/render/g-manifest-v2.json`。
 
 ### 8.3 与 R8 / 门禁的交互（引用复核 §7）
 
