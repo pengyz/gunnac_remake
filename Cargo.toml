@@ -7,6 +7,7 @@ members = [
   "crates/shell-win",
     "crates/game-core",
     "crates/game-platform",
+    "crates/game-shell",
     "crates/game-oracle",
 ]
 

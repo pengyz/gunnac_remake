@@ -1,0 +1,10 @@
+[package]
+name = "game-shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# 平台无关宿主层：只允许依赖纯逻辑/纯契约 crate（零平台依赖由 tests/contract.rs 机器把关）。
+[dependencies]
+game-core = { path = "../game-core" }
+game-platform = { path = "../game-platform" }

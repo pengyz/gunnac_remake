@@ -460,6 +460,14 @@ name = "game-platform"
 version = "0.1.0"
 
 [[package]]
+name = "game-shell"
+version = "0.1.0"
+dependencies = [
+ "game-core",
+ "game-platform",
+]
+
+[[package]]
 name = "gethostname"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
