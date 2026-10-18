@@ -43,3 +43,13 @@ status: confirmed
 - commit `54f2809`（`git log --diff-filter=A -- data/status/coverage_map.json` 首次入库于此，
   实为 t34 审计产物）+ t34 任务输出
 - 族内互链：Mesen 共写输出 gotcha、read_image 错序 gotcha（并行不可信家族）
+
+> 【2026-10-18 复发留痕·Lead 记录】多 agent 并行施工时本条**再次连续触发两次**，均未重写历史、按本条纪律留痕：
+> - `ddb1558`（shell 卡 task-18 提交）误含 platform-porter 的 task-9 `platform-shell.md` 主体（§3 模块表/tick 序列）；
+>   task-9 最终稿已另存 `target/t9-platform-shell-final.md` 供归属补救。
+> - `96415c1`（Lead 提交平台复审 docs）误含 platform-porter 已暂存的 task-9 代码
+>   （game-shell host/input/lib/render + `tests/stg01_replay.rs` + Cargo 变更，1213 insertions）。
+>   **教训**：即使 `git add` 只给精确 pathspec，`git commit` 仍会提交**整个暂存区**；
+>   并行环境下提交前必须 `git diff --cached --name-only` 核对，或改用
+>   `git commit -m … -- <pathspec>` 直提（绕过他人暂存内容）。
+> - 处置：两 commit 内容正确、归属已在各自复核报告/轮次汇报中注明，不 reset/rebase。
