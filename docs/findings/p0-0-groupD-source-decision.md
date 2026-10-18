@@ -34,7 +34,12 @@
 
 > C3 的 `overshoot=true/frames_actual=120001/trace_lines=120000/finalize_by=inputPolled-overshoot` 同时是
 > **capture.lua task-105 修复生效的实车证据**（旧版：119994/120000 无 DONE；新版正常收尾）。
-> C2 的 `frame_errors=142149` 属 decomp-verifier F1 类（bot 逐帧 nil hp 等错误仍完成），本报告按 DEGRADED 记录。
+> C2 的 `frame_errors=142149` 属 decomp-verifier F1 类（bot 逐帧 nil hp 等错误仍完成），本报告按 DEGRADED 记录；
+> 根因（platform-porter task-121 定位并修复）：`tas-stg07-relay.lua.log` 首条错误 =
+> `inputPolled error at frame 1260: attempt to perform arithmetic on a nil value (local 'hp')` ——
+> `tools/tas_bot.lua` 的 `stg01-clear` 读 hp 为 nil；修复后 bot-short `frame_errors=0`（非 bot title sha 不变）。
+> **C2/C3/I5 将在 bot 修复（task-121）+ capture.lua 修复后重跑**；若重跑仍 blob 0/6，则维持本裁定并附
+> "修复后仍无来源"负证据（重跑数据另记，不替换本报告已记录的首轮证据）。
 
 ## 2. §3.6 三判据逐对结果
 
