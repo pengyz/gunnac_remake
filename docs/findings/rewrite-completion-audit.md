@@ -375,6 +375,15 @@
 | **P2** | **调色板映射（W-C1）** | 已证：8 色实测表（A 级，`multicolor-palette-truth.md`）；未证：完整 NES 调色板↔Rust RGB 映射、whitelist 决策 | NES PPU palette 域（Mesen2 截图实采）；`l4-visual-plan.md` §2 W-C1/C4 | `multicolor-palette-truth.md`；`l4-visual-plan.md` §2；`visual-report.md` "调色板映射未证" | 中（全局色偏，L4 阻塞） | **decomp-analyst + verifier**：范围 = PPU palette 快照×64 索引 + Rust 映射表；完成判据 = 64 条 A 级 RGB 表 + boot-black/字体帧 0 色差 + 决定"共用映射表 vs 白名单"并留用户确认记录 |
 | **P3** | **RNG 真身**（代码占位） | 已证：状态机定位 `zp $2B/$2C/$2D`、`bank15:$EC12` 算术、骰子 helper **`bank14:$D422` / `bank15:$EC1F`**（A 级；`$D422∈$C000-$DFFF`=bank14 窗口，`$EC12/$EC1F∈$E000-$FFFF`=bank15 窗口）；未证：Rust 侧实现（`LcgRng` 显式占位） | `bank15:$EC12`（`$2C := ($2C+$2D+1) EOR $2B`，`$2D++`）；`bank14:$D422`（骰子）；`bank15:$EC1F`（RNG 二形） | `b2-tas-input.md` §6；`behavior-vm-handlers.md` §3.1；`arena-discriminant.md` §2.6 | 低（不影响可玩，影响行为保真/确定性） | **porter**：范围 = `GameRng` 实现替换 LCG（trait 形状不动）；完成判据 = `bank15:$EC12` L2 用例 ≥2（穷举位组合）+ 2 场景 L3 对拍 `rng_2b/2c/2d` 0 mismatch + 占位注删除 |
 
+> 【2026-10-18 后续裁定·引用同步注（W-C1/W-C4 白名单候选撤销）】上表 **P0「L4 像素一致性」行**
+> （"范围 = W-C1 调色板映射 + …"）与 **P2「调色板映射（W-C1）」行**（末句"决定'共用映射表 vs 白名单'
+> 并留用户确认记录"）已被同日用户裁定更新：**W-C1/W-C4 白名单候选撤销**——11,156 个双非黑异色像素
+> 两侧颜色 100% 落在 `crates/game-desktop/src/bin/render_frame.rs:19-28` 的 64 色 P 表内 ⇒ **非平台差异**，
+> 残余=调色板索引绑定（ink/attr/$3F00），白名单决策项关闭（不启用、`gates/visual_whitelist.json` 仍无条目）。
+> 证据：`docs/findings/l4-zero-tolerance-attack-plan.md` §0/§3.2（C7 命令 §7）、
+> `docs/findings/adversarial-review-l4-attack-plan.md` §1.6 独立复现；落地标注见
+> `docs/spec/l4-visual-plan.md` §2 撤销注。本注系定稿后的 dated 引用同步，**不删改**上表历史主张。
+
 **旧任务书两处纠偏（证据在本节）**：
 - "H-01 弹丸行为"：H-01（炸弹字母/武器槽语义名）已在 t25/t35 收口（`ram-watch-s3.md` §9.1、`upgrade-branch-h02.md`）；弹丸系统已成 spec+L2+Rust，真正残项见上表 **P2 弹丸行为残项** 行（`shot-system.md` §5 A2/A3/A4/A5 + `$925F` 副作用 + type3/4/6 齐射逐型参数）。
 - "商店消费侧"：整域**不是未证**——扣减/封顶/不足已 A 级 + L2 15 例；未证的是 4 条残项（P2）。
