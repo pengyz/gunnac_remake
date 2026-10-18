@@ -7,7 +7,12 @@ status: confirmed
 
 ## 现象
 
-多段式坑（环境层 + 配置层 + 超时层），都会让采集**看起来在跑、实际没产物/产物被截断**：
+多段式坑（环境层 + 配置层 + 超时层 + **输入层**），都会让采集**看起来在跑、实际没产物/产物被截断/语义无效**：
+
+> **【2026-10-18 追加·输入层（独立第三/四根因）】** headless **testRunner 模式下 `emu.setInput` 不生效**
+> ⇒ 采集 DONE/trace 满行但**输入未注入、语义无效**（游戏停开场），含输入场景必须走 GUI 模式——
+> 见 [gotcha-mesen2-testrunner-setinput-noop.md](gotcha-mesen2-testrunner-setinput-noop.md)。
+> 本条与 IO 开关、100s 超时截断是**彼此独立**的根因，排查时都要过一遍。
 
 1. **本机 WSL2 Ubuntu 22.04 里跑 Linux 版 Mesen2 2.1.1 的 testRunner 调用：崩**——
    `terminate called after throwing an instance of 'std::bad_cast'`，**exit 134**（SIGABRT / core dumped）。

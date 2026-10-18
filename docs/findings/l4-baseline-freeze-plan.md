@@ -1,5 +1,11 @@
 # L4 P0-0 基线冻结执行手册（task-16）——可复现 22 对基线的采集/渲染/资产裁定/冻结
 
+> 【2026-10-18 更正·superseded（采集环境 / 组 D 定谳部分）】本手册 §3.6/§3.7/§7.x/§8.2 中基于
+> **headless(testRunner) 采集**的组 D 定谳与采集环境结论：该模式 `emu.setInput` **不生效** ⇒ **输入未注入、
+> 语义无效**；**相关定谳（含组 D `blocked:no-source`、四联"直入"判定）待 task-133（GUI 模式）重采后复核**；
+> 原数字/结论保留作历史（见各节 dated 指针 + 知识库
+> [gotcha-mesen2-testrunner-setinput-noop](../knowledge/gotcha-mesen2-testrunner-setinput-noop.md)）。
+
 > 日期：2026-10-18｜角色：decomp-analyst（取证/方案）｜状态：**方案就绪；环境已就绪（2026-10-18 Windows headless 已打通，见 §1/§16）⇒ 可启动 P0-0-0→P0-0-1**
 > 上游方案：[l4-zero-tolerance-attack-plan.md](l4-zero-tolerance-attack-plan.md)（commit `0cf42f0`，§5.0 六步清单）
 > 复审报告：[adversarial-review-l4-attack-plan.md](adversarial-review-l4-attack-plan.md)（task-24 复审 pass；§7 R1-R8）
@@ -717,6 +723,9 @@ probe_match \t det \t blob_eq \t status \t duplicate_of \t reuse`
 >    `analysis/repro/p0-0-groupD/decision.json`（`"decision":"blocked:no-source"`、
 >    `"blob":"0/6 target pairs; full 80-shot scans NONE for both"`）、`blob-compare-C3.json`、
 >    `capture-tas-stg08-direct.json`、`capture-tas-stg07-relay.json`（gitignored 可再生）。
+> 6) **【2026-10-18 环境层 superseded】** 本条定谳所用 C3/C2 采集 = headless(testRunner)，该模式
+>    `emu.setInput` 不生效 ⇒ **输入未注入、语义无效**；**`blocked:no-source` 定谳待 task-133（GUI 模式）
+>    重采后复核**，原数字/结论保留作历史（见 [gotcha-mesen2-testrunner-setinput-noop](../knowledge/gotcha-mesen2-testrunner-setinput-noop.md)）。
 
 > **原假设（保留留档，不删）**：§0 R-1/§2.1 I5/§3.0-§3.4 曾以 `tas-clear-full-v5` 为组 D
 > （#6-#11：ending-1..5 + fade-clear）来源候选，依据是其 `capture_every 1500 probe` 与
@@ -943,6 +952,10 @@ cargo run -q -p game-oracle --bin phase-batch -- l4-stg06-pass2
 > ⇒ 本节"四联真值来源 = I5/I5b 的 `stage_no==8` 硬帧号选帧"**降级为待重评**（task-111/后续卡须改为
 > "**确实到达 stage8 的合法 run + any-frame/blob/dense-capture 选帧**"）；**重评完成前，四联 expected
 > 不得按本节旧选帧脚本 staging**（与组 D 同纪律：不硬凑、不 staging 未证来源）。
+
+> **【2026-10-18 环境层 superseded】** 本节四联来源的候选采集 = I5 headless(testRunner)，该模式
+> `emu.setInput` 不生效 ⇒ **输入未注入、语义无效**；"直入不成立 / 待重评"的复核须在 task-133
+> （GUI 模式）重采后进行；原注保留作历史（见 [gotcha-mesen2-testrunner-setinput-noop](../knowledge/gotcha-mesen2-testrunner-setinput-noop.md)）。
 
 ---
 
@@ -1359,6 +1372,8 @@ if __name__ == "__main__":
 > expected（`blocked:no-source`，**不 staging**）；§7a 的"用新 capture 替换对应帧"分支**不触发**；
 > §7b（actual 侧）仍独立执行（canonical 渲染后的两两不同/documented duplicate 判定与来源无关）。
 > 恢复条件 = §3.6 顶部更正块第 4 条（先有到达 ending 的合法 run + any-frame blob 搜索命中）。
+> **【2026-10-18 环境层 superseded】** 本节组 D 定谳依据的 C1/C2/C3 采集 = headless(testRunner)，
+> `emu.setInput` 不生效 ⇒ 输入未注入、语义无效——待 task-133（GUI 模式）重采后复核；原结论保留。
 > 证据：`docs/findings/p0-0-groupD-source-decision.md` §0/§2；`analysis/repro/p0-0-groupD/decision.json`。
 >
 > **【2026-10-18 task-130 重裁现状】** P0-0-2 重渲（16 对 deterministic）后本组仍**无 actual**（blocked）——
@@ -1385,6 +1400,8 @@ documented duplicate（静态同图），必须已在 manifest `dedupe.documente
 > **先用 §3.6 重裁选中来源**的 28500 capture 比对（候选 C1/C2 优先；v5 作负候选，预期不等）。
 > **【2026-10-18 定谳·task-106/task-113】fade 对（#11）同组 D：`blocked:no-source`**（C3/C2 blob 0/6、
 > C1 BLOCKED）——旧 expected 保留、**不 staging**；恢复条件同 §3.6 顶部更正块第 4 条。
+> **【2026-10-18 环境层 superseded】** 本节 fade 定谳依据的采集同组 D = headless(testRunner)、输入未注入
+> ⇒ 语义无效；待 task-133（GUI 模式）重采后复核，原结论保留。
 
 **§7a**：用 **§3.6 命中来源**的 f28500 capture 与旧 expected sha 比对 → 相等即映射确认（expected 不动）；
 不等/无来源 ⇒ 按 §3.6 走 `blocked:no-source` + 新采集 `s5-full-inject`（命中后再 staging 到
@@ -1667,6 +1684,8 @@ PY
       `frame_errors=142149`、C1 BLOCKED；`$26 bit7` 非 Ending 判据；见
       `docs/findings/p0-0-groupD-source-decision.md` §0/§2/§3）⇒ **6 对不 staging、旧 expected 保留，
       本清单在组 D 取得合法来源前维持不通过**（P0-0 不得宣称全绿）；
+      **（2026-10-18 环境层 superseded：组 D 定谳所用采集=headless testRunner，`emu.setInput` 不生效 ⇒
+      输入未注入、语义无效；待 task-133 GUI 重采复核后重判，原结论保留。）**
 - [ ] **§3.7 四联来源更正落地**：四联 expected 来自 `l4-stg08b2-pass2`/`l4-stg06-pass2` 的选帧 capture
       （`l4-selected-frames.json` 含 `scene`/`frame`；`expected_source` 指向 pass2 场景），**不是**
       `l4-baseline-v5-pass2`(36500f)；I1-I6 采集与两跑集合已按 §2.3 更新；

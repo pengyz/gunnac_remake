@@ -1,5 +1,7 @@
 # P0-0-2：22 对 canonical 重渲两跑 + manifest/去重（task-114）
 
+> 【2026-10-18 更正·superseded】本文件基于 headless(testRunner) 采集，其 emu.setInput 不生效 ⇒ 输入未注入、语义无效；重采见 task-133（GUI 模式）；原数字保留作历史。
+
 > 日期：2026-10-18｜执行：l4-analyst（test-runner）｜状态：**16/16 可渲对两跑 png+idx 全部一致；6 对组 D blocked:no-source；0 失败**
 > 任务：task-114（P0-0 手册 §4.1/§5.1/§5.3）；**不需要 Mesen**（render-frame 纯离线，输入=P0-0-1 采集 trace/probe + phase-batch 文本）。
 > 边界：未改代码/gates/基线；`target/`、`analysis/`、`shots/` gitignored 不入库；**未跑 gates check/status/visual**。

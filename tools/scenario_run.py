@@ -63,11 +63,12 @@ elif os.name == "nt":
     MESEN = ROOT / "tools" / "mesen2" / "Mesen.exe"
 else:
     MESEN = ROOT / "tools" / "mesen2" / "Mesen"
-# headless：Windows 版（.exe）默认走 `--testRunner <lua> <rom>`；可用 GUNNAC_HEADLESS=0/1 强制。
-HEADLESS = os.environ.get(
-    "GUNNAC_HEADLESS",
-    "1" if MESEN.suffix.lower() == ".exe" else "0",
-) == "1"
+# headless：`--testRunner <lua> <rom>`（无窗口）。**2026-10-18 实测：testRunner 模式下
+# emu.setInput 不生效**（getInput 读回为空、$18 恒 0、游戏停在开场）——有输入的场景必须用 GUI 模式。
+# 因此 Windows 默认 **GUI（窗口）模式**；无输入场景可用 GUNNAC_HEADLESS=1 强制 headless（更快）。
+HEADLESS = os.environ.get("GUNNAC_HEADLESS", "0") == "1"
+# Windows GUI 模式：无需 Xvfb/DISPLAY；脚本以位置参数传入并 AutoStartScriptOnLoad。
+GUI_WINDOWS = (not HEADLESS) and os.name == "nt"
 ROM = _abs("GUNNAC_ROM", "rom/gunnac_cn.nes")
 TRACES_DIR = _abs("GUNNAC_TRACES", "analysis/traces")
 SHOTS_DIR = _abs("GUNNAC_SHOTS", "shots")
@@ -523,8 +524,8 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
         raise ScenarioError("另一场景运行中（串行纪律）：analysis/.scenario.lock 被占用")
     # t54 F3 根因防护：串行锁只罩驱动进程——驱动崩溃/被强杀后 Mesen/Xvfb 孤儿仍在跑，
     # 与后续运行争显示/写同一批产物（实测 trace 交错、DONE 不落、30x 变慢）。启动前显式清扫。
-    # headless（Windows .exe）：无 Xvfb；testRunner 由脚本 emu.stop 自行退出，孤儿风险低，跳过 pgrep。
-    if not HEADLESS:
+    # 仅 POSIX GUI 路径有 Xvfb/pgrep：headless 与 Windows GUI 跳过（Windows 无 pgrep）。
+    if (not HEADLESS) and os.name != "nt":
         stale = subprocess.run(["pgrep", "-f", "tools/mesen2/Mesen"], capture_output=True, text=True).stdout.split()
         if stale:
             for pid in stale:
@@ -597,7 +598,14 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     try:
         if HEADLESS:
             proc = subprocess.Popen(
-                [str(MESEN), "--testRunner", f"--timeout={mesen_timeout_s}", str(lua_path), str(ROM)],
+                [str(MESEN), "--testRunner", f"--timeout={mesen_timeout_s}", str(lua_path), str(ROM),
+                 "/DoNotSaveSettings"],
+                cwd=ROOT, stdout=mesen_log, stderr=subprocess.STDOUT, text=True,
+            )
+        elif GUI_WINDOWS:
+            # Windows GUI 模式：窗口（真实输入注入可用）；脚本位置参数 + AutoStartScriptOnLoad。
+            proc = subprocess.Popen(
+                [str(MESEN), str(ROM), str(lua_path), "/DoNotSaveSettings"],
                 cwd=ROOT, stdout=mesen_log, stderr=subprocess.STDOUT, text=True,
             )
         else:

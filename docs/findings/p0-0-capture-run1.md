@@ -1,5 +1,7 @@
 # P0-0-1 输入恢复：P0-0 场景采集 I1-I6（run 1）＋两跑确定性（task-86）
 
+> 【2026-10-18 更正·superseded】本文件基于 headless(testRunner) 采集，其 emu.setInput 不生效 ⇒ 输入未注入、语义无效；重采见 task-133（GUI 模式）；原数字保留作历史。
+
 > 日期：2026-10-18｜角色：test-runner（执行）/ l4-analyst（记录）｜状态：**I4/I3/I2/I6/I1 已采集并通过判据；I5 两轮定点 stall ⇒ `BLOCKED: capture-termination`（见 §4）**
 > 任务：task-86（P0-0 手册 §2 采集；环境=task-81/85 已复核的 Windows Mesen2 2.1.1 headless）。
 > 纪律：严格串行（`analysis/.scenario.lock`）；只读采集，不改代码/gates/基线；`analysis/`、`shots/` 为

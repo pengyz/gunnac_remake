@@ -1,5 +1,7 @@
 # L5 B1 锚证据重建跑（gs5-stg01-full/c1/c2）+ A9（task-131）
 
+> 【2026-10-18 更正·superseded】本文件基于 headless(testRunner) 采集，其 emu.setInput 不生效 ⇒ 输入未注入、语义无效；重采见 task-133（GUI 模式）；原数字保留作历史。
+
 > 日期：2026-10-18｜执行：platform-verifier（test-runner 执行 + 记录）｜状态：**BLOCKED / needs_revision**
 > 任务：task-131（L5 B1 补跑 + s5_anchor_rederive + A9）；环境：Windows Mesen2 2.1.1 headless，
 > `python tools/scenario_run.py run <name> --timeout 1200`；只读/短场景，未改代码/scenario/gates/expected。

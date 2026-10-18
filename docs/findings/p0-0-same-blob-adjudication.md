@@ -1,5 +1,7 @@
 # P0-0-2 actual 6 对同 blob 裁定：真实 OBS-1 冻结屏（非渲染缺陷）（task-126）
 
+> 【2026-10-18 更正·superseded】本文件基于 headless(testRunner) 采集，其 emu.setInput 不生效 ⇒ 输入未注入、语义无效；重采见 task-133（GUI 模式）；原数字保留作历史。
+
 > 日期：2026-10-18｜角色：l4-analyst（取证/记录）｜状态：**结论 = `真实同画面`（OBS-1 冻结屏）；6 对 actual 同 blob 合理、非渲染/输入映射缺陷**
 > 任务：task-126（P0-0-2 复核 F125-2 证据并入）；输入 = P0-0-1 trace/probe/text + P0-0-2 重渲产物（`target/p0-0/render/`）。
 > 纪律：只读取证；不改代码/expected/threshold；未跑 Mesen（沙盒补渲仅 render-frame）；`analysis/`、`target/`、`shots/` gitignored 不入库。

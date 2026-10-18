@@ -1,5 +1,7 @@
 # P0-0 组 D 来源重裁：C3 `tas-stg08-direct` / C2 `tas-stg07-relay` 裁定（task-106）
 
+> 【2026-10-18 更正·superseded】本文件基于 headless(testRunner) 采集，其 emu.setInput 不生效 ⇒ 输入未注入、语义无效；重采见 task-133（GUI 模式）；原数字保留作历史。
+
 > 日期：2026-10-18｜角色：l4-analyst（取证/记录）｜状态：**组 D 结论 = `blocked:no-source`（C1 BLOCKED；C2/C3 采集合法但 blob 0/6、无 Ending 语义）**
 > 任务：task-106（P0-0 手册 §3.6 组 D 重裁）；环境=task-81/85 的 Windows Mesen2 2.1.1 headless（`tools/mesen2/Mesen.exe`
 > sha256 `d2eb03c2…fe96b`）；采集工具 = `tools/scenario_run.py` + capture.lua（task-105 修复后：`frame>=frames` +

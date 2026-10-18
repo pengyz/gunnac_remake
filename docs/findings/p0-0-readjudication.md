@@ -1,5 +1,7 @@
 # P0-0-3：22 对组 A–E 重裁（actual vs 旧 expected；不放宽阈值）（task-130）
 
+> 【2026-10-18 更正·superseded】本文件基于 headless(testRunner) 采集，其 emu.setInput 不生效 ⇒ 输入未注入、语义无效；重采见 task-133（GUI 模式）；原数字保留作历史。
+
 > 日期：2026-10-18｜角色：l4-analyst（执行/记录）｜状态：**22 对当前状态定稿：16 可渲（1 像素级 0 差异 + 15 差异>0）/ 6 组 D `blocked:no-source`；P0-0 不得宣称全绿**
 > 任务：task-130（P0-0 手册 §6/§7.3/§7.4/§7.5/§8.2）。**说明（F3）**：任务卡写「组 A–F」，手册实际分组为
 > **A–E**（title-menu=E，无 F 组）；本报告与手册统一按 A–E。输入 = P0-0-2 两跑 actual（`target/p0-0/render/run1|run2`，
