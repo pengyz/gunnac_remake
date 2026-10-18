@@ -3,7 +3,7 @@
 //!
 //! 证据边界（详见 `docs/findings/plan-bullets-hit.md` 与 task-38
 //! `docs/findings/playability-evidence-h16-coords.md` §2.4）：
-//! - **生成**：B 键按住（`$18` bit6）→ `$39/$3A` 重复计时器（reload=8）→ 六型生成器；
+//! - **生成**：B 键按住（`$18` bit6）→ `$39/$3A` 重复计时器（默认 reload=7；`$94DF` 表）→ 六型生成器；
 //!   在途计数 `$072E,X` < 在途上限 `$074A,Y` ⇒ 生成并 INC 回写（R-shot-gen-1/2/3，A 级）；
 //! - **运动/寿命**：直接调用已证 `shot::tick`（DEC 寿命/脚本机取指/LUT 双轴/溢出死亡，A 级）；
 //! - **命中**：`shot_hitbox_register`（弹 7×10 框）+ `fetch_shape_boxes`（敌框形 A 级）+
@@ -209,6 +209,13 @@ pub fn apply_hit_damage(stage: &mut StageState, slot_index: usize) -> (u8, bool)
 /// `fetch_shape_boxes`，数据由装载侧喂 ROM bank2）→ 4 边+属性（`hit_resolves`）→
 /// 清框（`clear_hit_entry`）+ 弹回收（`$87FD`）→ 受限额伤害（[`apply_hit_damage`]）。
 ///
+/// **命中顺序 = 敌槽/矩形外层 → 弹内层**（task-42 F1 修；敌/矩外层遍历序与
+/// `engine::combat_frame` L236-285 一致）：每矩形只消费**一颗**弹（`break`），且同一敌槽本帧
+/// 命中后跳过其余矩形（`slot_hit` 门）⇒ **每槽每帧 1 伤**。⚠ 粒度差异（F1-new，task-63 复核）：
+/// 本实现比 engine 的**每矩形 1 伤**更严（多矩形同帧探针：shell=1 伤 / engine=2 伤）——
+/// 该差异**待 ROM 多框同帧证据**；per-rect 消费修复归 task-67（Boss/多矩形接线前必做）。
+/// 目的=避免同帧多弹对同一敌槽重复伤害（task-38 §2.4 L104 判据）。
+///
 /// 敌弹防护：玩家弹按 `type_code & 0x80 == 0` 过滤；敌对象槽若 `type_ & 0x80 != 0` 也跳过。
 /// `shape_data` 缺失/无对应流 ⇒ 该敌槽跳过（fail-closed，不造框）。
 pub fn resolve_player_hits(
@@ -217,42 +224,53 @@ pub fn resolve_player_hits(
     frame: u64,
 ) -> Vec<EnemyHitEvent> {
     let mut events = Vec::new();
-    for &bullet_slot in PLAYER_SLOT_ORDER.iter() {
-        if !is_player_bullet(bullets, bullet_slot) {
+    for si in 8..28usize {
+        let enemy = stage.grid.slots[si];
+        if enemy.type_ == 0 || enemy.type_ & 0x80 != 0 {
             continue;
         }
-        let bi = bullet_slot as usize;
-        let shot_box = shot_hitbox_register(bullets.x[bi], bullets.y[bi], bullet_slot);
-        let mut consumed = false;
-        for si in 8..28usize {
-            let enemy = stage.grid.slots[si];
-            if enemy.type_ == 0 || enemy.type_ & 0x80 != 0 {
-                continue;
-            }
-            let Some(addr) = shape_stream_addr(enemy.f518) else {
-                continue;
-            };
+        let Some(addr) = shape_stream_addr(enemy.f518) else {
+            continue;
+        };
+        // 取框在不可变借用作用域内完成（随后施伤需 &mut stage）。
+        let rects = {
             let Some((_, stream)) = stage.shape_data.iter().find(|(a, _)| *a == addr) else {
                 continue; // 框形数据缺失 ⇒ fail-closed（不造框）
             };
-            let flip_x = enemy.f534 & 0x40 != 0;
-            let flip_y = enemy.f534 & 0x80 != 0;
-            let rects = fetch_shape_boxes(stream, enemy.x, enemy.y, flip_x, flip_y);
-            let enemy_attr = enemy.f4c4 & 0xF0;
-            for (left, right, top, bottom) in rects {
-                let enemy_box = HitBoxEntry {
-                    left,
-                    right,
-                    top,
-                    bottom,
-                    owner: si as u8,
-                    attr: enemy_attr,
-                };
+            fetch_shape_boxes(
+                stream,
+                enemy.x,
+                enemy.y,
+                enemy.f534 & 0x40 != 0,
+                enemy.f534 & 0x80 != 0,
+            )
+        };
+        let enemy_attr = enemy.f4c4 & 0xF0;
+        let mut slot_hit = false; // 同帧不回打：该敌槽本帧已命中 ⇒ 跳过其余矩形
+        for (left, right, top, bottom) in rects {
+            if slot_hit {
+                break;
+            }
+            let enemy_box = HitBoxEntry {
+                left,
+                right,
+                top,
+                bottom,
+                owner: si as u8,
+                attr: enemy_attr,
+            };
+            // 弹内层：按槽序取首颗命中弹（确定性）
+            for &bullet_slot in PLAYER_SLOT_ORDER.iter() {
+                if !is_player_bullet(bullets, bullet_slot) {
+                    continue;
+                }
+                let bi = bullet_slot as usize;
+                let shot_box = shot_hitbox_register(bullets.x[bi], bullets.y[bi], bullet_slot);
                 if !hit_resolves(&shot_box, &enemy_box) {
                     continue;
                 }
                 // 命中：清框（`$D7DA` 一框一伤）+ 弹回收（`$87FD` 死亡处理器语义）
-                let _cleared = clear_hit_entry(&shot_box);
+                let _cleared = clear_hit_entry(&enemy_box);
                 release(bullets, bullet_slot);
                 let (damage, fail_closed) = apply_hit_damage(stage, si);
                 events.push(EnemyHitEvent {
@@ -262,11 +280,8 @@ pub fn resolve_player_hits(
                     damage,
                     fail_closed,
                 });
-                consumed = true;
-                break;
-            }
-            if consumed {
-                break;
+                slot_hit = true;
+                break; // 本矩形只消费一颗弹（槽级同帧不回打，见函数文档 F1-new）
             }
         }
     }
@@ -414,6 +429,36 @@ mod tests {
         bullet_at(&mut g4, 0x80, 100, 100, 0x80);
         assert!(resolve_player_hits(&mut g4, &mut stage4, 10).is_empty(), "敌弹不参与（友伤防护）");
         assert_ne!(g4.state[0x80], 0, "敌弹不被玩家命中逻辑回收");
+    }
+
+    #[test]
+    fn two_bullets_same_frame_same_enemy_box_one_damage() {
+        // F1 回归（task-42）：同帧 2 弹同敌槽同框 ⇒ 一框一伤、同帧不回打
+        //（engine::combat_frame 敌/矩形外层 + 每矩 break 语义；task-38 §2.4）。修复前=2 伤。
+        let mut stage = stage_with_shape();
+        enemy_at(&mut stage, 8, BOSS_MID_TYPE, 100, 100, 0x10, BOSS_MID_HP);
+        let mut g = BulletGrid::default();
+        bullet_at(&mut g, 0x80, 100, 100, 0);
+        bullet_at(&mut g, 0x81, 100, 100, 0);
+        let events = resolve_player_hits(&mut g, &mut stage, 55);
+        assert_eq!(events.len(), 1, "同帧同框只允许 1 次伤害（修复前=2）");
+        assert_eq!(events[0].bullet_slot, 0x80, "低槽序弹优先消费（确定性）");
+        assert!(!events[0].fail_closed);
+        assert_eq!(stage.grid.slots[8].f630, BOSS_MID_HP - 2, "仅扣 1 次（14→12）");
+        assert_ne!(g.state[0x81], 0, "第二弹未被消费（本帧已回打）");
+
+        // 非白名单同帧 2 弹：仍只 1 条 fail_closed 事件、0 伤
+        let mut stage2 = stage_with_shape();
+        enemy_at(&mut stage2, 8, 0x2B, 100, 100, 0x10, 4);
+        let mut g2 = BulletGrid::default();
+        bullet_at(&mut g2, 0x80, 100, 100, 0);
+        bullet_at(&mut g2, 0x81, 100, 100, 0);
+        let ev2 = resolve_player_hits(&mut g2, &mut stage2, 56);
+        assert_eq!(ev2.len(), 1, "非白名单同帧同框也只登记 1 次");
+        assert!(ev2[0].fail_closed);
+        assert_eq!(ev2[0].damage, 0);
+        assert_eq!(stage2.grid.slots[8].f630, 4, "不写 f630");
+        assert_ne!(g2.state[0x81], 0, "第二弹不消费");
     }
 
     #[test]

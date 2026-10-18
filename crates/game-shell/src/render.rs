@@ -71,7 +71,7 @@ pub struct FrameView {
     pub stage: u8,
     /// 玩家状态（唯一 v1 绘制源：已证 x/y 坐标面）。
     pub player: PlayerState,
-    /// 活弹数（全槽；engine 已暴露面；v1 **不画**）。
+    /// 活弹数（**game-shell 自有弹网格**全槽；A 级槽域；v1 **不画**）。
     pub live_bullets: u16,
     /// 玩家子弹活弹数（`PLAYER_ONLY_SLOTS`∪`SHARED_SLOTS` 活槽；A 级槽分类）。
     pub player_bullets_live: u16,
