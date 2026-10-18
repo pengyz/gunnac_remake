@@ -4,6 +4,7 @@ resolver = "3"
 members = [
     "crates/game-data",
   "crates/game-desktop",
+  "crates/shell-win",
     "crates/game-core",
     "crates/game-platform",
     "crates/game-oracle",
