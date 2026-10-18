@@ -1282,7 +1282,9 @@ name = "shell-win"
 version = "0.1.0"
 dependencies = [
  "game-core",
+ "game-data",
  "game-platform",
+ "game-shell",
  "softbuffer",
  "winit",
 ]
