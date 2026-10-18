@@ -103,7 +103,7 @@ def extract_weapon_events(scene: str) -> int:
         if bomb is not None:
             prev_bomb = bomb
     dst.parent.mkdir(parents=True, exist_ok=True)
-    with open(dst, "w", encoding="utf-8") as f:
+    with open(dst, "w", encoding="utf-8", newline="\n") as f:
         for e in events:
             f.write(json.dumps(e) + "\n")
     n_bomb = sum(1 for e in events if e["kind"] == "bomb")
@@ -259,7 +259,7 @@ def extract_shot_trajectories(scene: str) -> int:
         print(f"弹轨迹抽取：{scene} 0 个合格弹窗口（负例段 ✓ 无 B 长按静默/W7 驻留值全排除）——不产出 golden")
         return 0
     n_rows = 0
-    with open(dst, "w", encoding="utf-8") as out:
+    with open(dst, "w", encoding="utf-8", newline="\n") as out:
         for f, slots in frames:
             for slot in SHOT_SLOTS:
                 if (f, slot) in emit:
@@ -284,7 +284,7 @@ def extract_enemy_churn(scene: str) -> int:
         return 2
     n = 0
     wrote = False
-    with open(dst, "w", encoding="utf-8") as out:
+    with open(dst, "w", encoding="utf-8", newline="\n") as out:
         for line in src.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
@@ -324,7 +324,7 @@ def extract_stage_scroll(scene: str) -> int:
     if not src.is_file():
         return 2
     n = 0
-    with open(dst, "w", encoding="utf-8") as out:
+    with open(dst, "w", encoding="utf-8", newline="\n") as out:
         for line in src.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
@@ -356,7 +356,7 @@ def extract_money_events(scene: str) -> int:
         return 2
     events = 0
     prev = None
-    with open(dst, "w", encoding="utf-8") as out:
+    with open(dst, "w", encoding="utf-8", newline="\n") as out:
         for line in src.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
@@ -404,7 +404,7 @@ def extract_flow_sequence(scene: str) -> int:
     if not rows:
         print(f"流程序列：{scene} 无模式标签——不产出 golden")
         return 0
-    with open(dst, "w", encoding="utf-8") as out:
+    with open(dst, "w", encoding="utf-8", newline="\n") as out:
         for r in rows:
             out.write(json.dumps(r) + "\n")
     print(f"流程序列抽取：{scene} {len(rows)} 事件 → {dst.relative_to(ROOT)}")
@@ -443,7 +443,7 @@ def extract_appearances(scene: str) -> int:
                     events.append({"f": rec["f"], "slot": i,
                                    "x": blob[0x1E0 + i], "y": blob[0x1FC + i]})
         prev = cur
-    with open(dst, "w", encoding="utf-8") as out:
+    with open(dst, "w", encoding="utf-8", newline="\n") as out:
         for e in events:
             out.write(json.dumps(e) + "\n")
     rec_x = [175, 123, 139, 119, 119, 117, 117, 128]
@@ -472,7 +472,7 @@ def extract_l5_chain() -> int:
                             (0, "StageStart", "stg08-start")]),
     ]
     out = ROOT / "oracle" / "traces" / "stg01-chain.l5.jsonl"
-    with open(out, "w", encoding="utf-8") as f:
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         for scene, events in chain:
             for (fr, mode, cp) in events:
                 cp_s = f'"{cp}"' if cp else "null"
@@ -504,7 +504,7 @@ def extract() -> int:
             print(f"{scene}: 窗口样本不足（{len(rows)}）", file=sys.stderr)
             return 2
         dst = ROOT / "oracle" / "traces" / f"{scene}.player.jsonl"
-        with open(dst, "w", encoding="utf-8") as f:
+        with open(dst, "w", encoding="utf-8", newline="\n") as f:
             for r in rows:
                 f.write(json.dumps(r) + "\n")
         print(f"player golden 抽取：{scene} {len(rows)} 帧 → {dst.relative_to(ROOT)}")

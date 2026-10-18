@@ -137,7 +137,8 @@ def emit_anchors(name, evs, frames, out_path):
             seen.add(cid)
     rows.sort(key=lambda r: r["f"])
     out = Path(out_path)
-    out.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")
+    out.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
+                   encoding="utf-8", newline="\n")
     print(f"锚发射：{len(rows)} 行 → {out}（trigger=natural；run 级签={src}）")
     return rows
 

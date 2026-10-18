@@ -50,7 +50,7 @@ def gen(events_path, scene, out_path):
     events = [json.loads(l) for l in open(events_path, encoding="utf-8") if l.strip()]
     events.sort(key=lambda e: (e["frame"],))  # 写序保真=文件序；帧内稳定排序注
     segs = segments(events)
-    with open(out_path, "w", encoding="utf-8") as fh:
+    with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
         for k, seg in enumerate(segs):
             h = hashlib.sha256(canonical_encode(seg)).hexdigest()
             fh.write(json.dumps({"seg": k, "scene": scene, "hash": h, "events": len(seg)}) + "\n")

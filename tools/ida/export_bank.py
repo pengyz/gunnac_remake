@@ -132,7 +132,7 @@ out = {
     "funcs": funcs,
     "far_calls": far_calls,
 }
-with open(OUT, "w", encoding="utf-8") as f:
+with open(OUT, "w", encoding="utf-8", newline="\n") as f:
     json.dump(out, f, ensure_ascii=False)
 print("S1 export bank%02d base=0x%04X items=%d funcs=%d xrefs=%d far_calls=%d -> %s"
       % (BANK, BASE, len(items), len(funcs), len(xrefs), len(far_calls), OUT))

@@ -127,7 +127,7 @@ def build_replay(bot_scenario: Path, bot_name: str, replay_name: str,
             lines.append(f"capture {a['f']} {a['tag']}")
     lines.append("")
     out = SCEN / f"{replay_name}.txt"
-    out.write_text("\n".join(lines), encoding="utf-8")
+    out.write_text("\n".join(lines), encoding="utf-8", newline="\n")
     return out
 
 
@@ -368,7 +368,7 @@ def main() -> int:
             "verdict": "pass" if cmp_report["verdict"] == "pass" else "fail",
         }
         out = TRACES / f"{bot}.closure.json"
-        out.write_text(json.dumps(rep, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        out.write_text(json.dumps(rep, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(json.dumps({k: rep[k] for k in ("bot_run", "replay_run", "verdict")},
                          ensure_ascii=False))
         print(f"closure mismatch={cmp_report['mismatch_total']} "

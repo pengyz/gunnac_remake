@@ -159,7 +159,7 @@ def emit_anchors(trace_path, out_path, run_name=None):
         if combat_next is not None and f == combat_next:
             rows_out.append(_row(f'stg{seg+1:02d}-start', f, f'关始采样帧（+96f 于出店，三证同型）', run, sha))
             combat_next = None
-    with open(out_path, 'w', encoding='utf-8') as fh:
+    with open(out_path, 'w', encoding='utf-8', newline='\n') as fh:
         for r in rows_out:
             fh.write(json.dumps(r, ensure_ascii=False) + '\n')
     print(f'anchors: {len(rows_out)} 行 → {out_path}（run={run} sha={sha[:16]}…）', file=__import__('sys').stderr)

@@ -81,7 +81,7 @@ def backfill_cross_scene(gold_path, anch_rows, dry):
         g["f"] = f
         changed += 1
     if not dry and changed:
-        with open(gold_path, "w", encoding="utf-8") as fh:
+        with open(gold_path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write("\n".join(json.dumps(r, ensure_ascii=False) for r in gold) + "\n")
     return changed
 
@@ -121,7 +121,7 @@ def main():
             changed += 1
         total += changed
         if not dry and changed:
-            with open(gp, "w", encoding="utf-8") as fh:
+            with open(gp, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write("\n".join(json.dumps(r, ensure_ascii=False) for r in gold) + "\n")
         # 三面自检
         g_real = sum(1 for g in gold if g["f"] > 0)

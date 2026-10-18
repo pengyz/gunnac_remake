@@ -501,7 +501,7 @@ def main():
     }
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "subroutines.json").write_text(
-        json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+        json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
     MIRROR.write_text(json.dumps(out, ensure_ascii=False, indent=1),
                       encoding="utf-8", newline="\n")
 
@@ -563,7 +563,7 @@ def main():
             fp["mapper_write"], fp["rom_idx_reads"], fp["ram_writes"],
             fp["calls_out"], fp["loop"], root, r["status"],
             "; ".join(basis) if basis else "—"))
-    (OUT_DIR / "tables.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (OUT_DIR / "tables.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
     # ---- stdout ----
     print("== workset inventory ==")

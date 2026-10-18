@@ -70,8 +70,8 @@ def main(argv):
     if "--dry-run" in argv:
         print("dry-run：未写入。前置核对：cargo test -p game-oracle --test l5_s5 须已同域转绿后实放。")
         return 0
-    L5.write_text("\n".join(l5) + "\n", encoding="utf-8")
-    ANCH.write_text("\n".join(an) + "\n", encoding="utf-8")
+    L5.write_text("\n".join(l5) + "\n", encoding="utf-8", newline="\n")
+    ANCH.write_text("\n".join(an) + "\n", encoding="utf-8", newline="\n")
     print(f"已写入 {L5} / {ANCH}；随即跑 cargo test -p game-oracle --test l5_s5 与 diff_l5 对照贴账。")
     return 0
 

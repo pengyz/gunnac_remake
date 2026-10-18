@@ -80,7 +80,7 @@ def watch_block() -> list[str]:
 
 def write_scenario(name: str, body: str, out_dir: Path) -> Path:
     p = out_dir / f"{name}.txt"
-    p.write_text(body.rstrip("\n") + "\n", encoding="utf-8")
+    p.write_text(body.rstrip("\n") + "\n", encoding="utf-8", newline="\n")
     return p
 
 
@@ -111,7 +111,8 @@ def build_shots() -> Path:
             r["b"] = r["f"] in taps          # 其余键沿用 stale；B = 点按 ×10
         out_rows.append(r)
     inp_out = TRACES / "tas-arena-shots.inputs.jsonl"
-    inp_out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in out_rows), encoding="utf-8")
+    inp_out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in out_rows),
+                       encoding="utf-8", newline="\n")
     text = tas_gen.record_to_scenario(inp_out, "tas-arena-shots")
     body = "\n".join([
         "# 第四候选判别实验 · 中距单发轨（纯按键，无 poke）——",
@@ -209,7 +210,7 @@ def analyze(name: str) -> dict:
         ],
     }
     out = TRACES / f"{name}.disc.json"
-    out.write_text(json.dumps(rep, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(rep, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
     # 控制台：逐发判别表
     print(f"== analyze {name} == frames={len(frames)}  hp_events={len(hp_events)}")

@@ -489,9 +489,9 @@ def main():
             return
         default_name = "tas-stg%02d-v1" % plan["stage"]
         out = Path(args.out_dir) / (plan.get("name", default_name) + ".txt")
-        out.write_text(text, encoding="utf-8")
+        out.write_text(text, encoding="utf-8", newline="\n")
         rep = out.with_suffix(".report.json")
-        rep.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        rep.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
         print(f"生成 {out}（{len(text.splitlines())} 行）")
         print(f"报告 {rep}")
         return
@@ -499,7 +499,7 @@ def main():
         try:
             name = safe_name_component(args.name, "name")  # A1 路径消毒
             out = Path(args.out_dir) / f"{name}.txt"
-            out.write_text(record_to_scenario(Path(args.inputs), name), encoding="utf-8")
+            out.write_text(record_to_scenario(Path(args.inputs), name), encoding="utf-8", newline="\n")
         except PlanError as e:
             print(f"PlanError: {e}", file=sys.stderr)
             sys.exit(1)

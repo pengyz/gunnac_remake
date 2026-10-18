@@ -405,7 +405,7 @@ def normalize_paths_in_outputs(name: str) -> None:
             continue
         txt = f.read_text(encoding="utf-8")
         if prefix in txt:
-            f.write_text(txt.replace(prefix, ""), encoding="utf-8")
+            f.write_text(txt.replace(prefix, ""), encoding="utf-8", newline="\n")
 
 
 def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = True) -> dict:
@@ -434,11 +434,11 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     GEN_DIR.mkdir(parents=True, exist_ok=True)
     lua_src, lua_sha = generate_lua(plan, spath)
     lua_path = GEN_DIR / f"{name}.lua"
-    lua_path.write_text(lua_src, encoding="utf-8")
+    lua_path.write_text(lua_src, encoding="utf-8", newline="\n")
     # 工具态留档（复核 #82 建议 4——旧生成 lua 被覆盖 ⇒ "旧态不可复原"）：生成 lua 同步落
     # analysis/traces/<name>.gen.lua 持久副本，随 run 产物归档（archive_existing 一并迁移）。
     gen_archive = TRACES_DIR / f"{name}.gen.lua"
-    gen_archive.write_text(lua_src, encoding="utf-8")
+    gen_archive.write_text(lua_src, encoding="utf-8", newline="\n")
 
     # t54：观测/基线设置全部在 Mesen 启动前完成（此段崩溃不得孤儿化模拟器）
     cap_frames = [int(c["frame"]) for c in plan.get("captures", []) if "frame" in c]
@@ -463,7 +463,7 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
         done_path.unlink()
 
     t0 = time.time()
-    mesen_log = open(TRACES_DIR / f"{name}.mesen.log", "w", encoding="utf-8")
+    mesen_log = open(TRACES_DIR / f"{name}.mesen.log", "w", encoding="utf-8", newline="\n")
     # 自管 Xvfb（t24 实测：xvfb-run 包装层偶发提前退出 → Xvfb 随之死 → Mesen 冻在中途帧、
     # DONE 不落）。直接拉 Xvfb + DISPLAY 注入，Mesen 为直接子进程；进程组清理见 finally。
     # 场景仍必须**串行**运行（run-all 已是串行；勿并行多个 Mesen）。
@@ -567,7 +567,7 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
         },
     }
     mpath = TRACES_DIR / f"{name}.run.json"
-    mpath.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    mpath.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
     fcntl.flock(lock_f, fcntl.LOCK_UN)
     lock_f.close()
@@ -623,7 +623,7 @@ def main() -> int:
             GEN_DIR.mkdir(parents=True, exist_ok=True)
             src, sha = generate_lua(plan, spath)
             out = GEN_DIR / f"{plan['name']}.lua"
-            out.write_text(src, encoding="utf-8")
+            out.write_text(src, encoding="utf-8", newline="\n")
             print(f"生成 {out.relative_to(ROOT)} sha256={sha}")
             return 0
         if args.cmd == "run":
