@@ -34,6 +34,7 @@ use game_platform::{
 };
 
 use crate::audio::AudioPipe;
+use crate::enemy_coords;
 use crate::fire::{self, EnemyHitEvent};
 use crate::fixed_step::FixedStep;
 use crate::input::{held_bitmap, menu_pressed_bitmap, pressed_bitmap, resolve_directions};
@@ -191,6 +192,11 @@ pub struct Host {
     hit_overflow: u16,
     enemy_hit_log: Vec<EnemyHitEvent>,
     shape_data_shapes: usize,
+    // ===== task-45：敌槽坐标可见化（只暴露已证坐标列）=====
+    /// 槽 8..=27 的已证坐标是否已初始化（仅 `enemy_coords::has_proven_coords` 的型；其余恒 false）。
+    enemy_coord_ready: [bool; 28],
+    /// 坐标槽是否仍在上屏域（出屏=A 级运动判定；v1 仅停止暴露坐标，不发明回收语义）。
+    enemy_coord_onscreen: [bool; 28],
 }
 
 impl Host {
@@ -238,6 +244,8 @@ impl Host {
             hit_overflow: 0,
             enemy_hit_log: Vec::new(),
             shape_data_shapes: 0,
+            enemy_coord_ready: [false; 28],
+            enemy_coord_onscreen: [false; 28],
         }
     }
 
@@ -518,6 +526,8 @@ impl Host {
         self.hit_overflow = 0;
         self.enemy_hit_log.clear();
         self.shape_data_shapes = 0;
+        self.enemy_coord_ready = [false; 28];
+        self.enemy_coord_onscreen = [false; 28];
         true
     }
 
@@ -771,6 +781,36 @@ impl Host {
         }
     }
 
+    /// 敌槽坐标可见化（task-45）：**只对已证坐标列**初始化/步进（v1 仅 `$2F` leader，x/y 双列）。
+    ///
+    /// - 新激活的 `$2F` 槽：置 trace 已证恒定坐标 `(128,8)` + 速度四元组 0（静止）；
+    /// - 已初始化槽：跑已证 `motion_update`（速度=0 ⇒ 位置不变）；出屏 ⇒ 停止暴露坐标；
+    /// - `$2B`/`$4E` 成员型（坐标写者未审计）与其他未接型：**不初始化、不暴露坐标**（fail-closed），
+    ///   `FrameView.enemy_slots[].position` 保持 `None`，不得用 type_code 反推/预测位置。
+    ///
+    /// 槽复用（型值变化/清 0）⇒ 重置该槽坐标可见状态（不沿用旧坐标）。
+    fn update_enemy_coords(&mut self) {
+        for slot in 8..28usize {
+            let type_ = self.stage_state.grid.slots[slot].type_;
+            let proven = enemy_coords::has_proven_coords(type_);
+            if !proven {
+                self.enemy_coord_ready[slot] = false;
+                self.enemy_coord_onscreen[slot] = false;
+                continue;
+            }
+            if !self.enemy_coord_ready[slot] {
+                if enemy_coords::init_proven_coords(&mut self.stage_state.grid.slots[slot]) {
+                    self.enemy_coord_ready[slot] = true;
+                    self.enemy_coord_onscreen[slot] = true;
+                }
+            } else if self.enemy_coord_onscreen[slot] {
+                if !enemy_coords::step_proven_coords(&mut self.stage_state.grid.slots[slot]) {
+                    self.enemy_coord_onscreen[slot] = false;
+                }
+            }
+        }
+    }
+
     fn live_bullet_count(&self) -> u16 {
         self.player_bullets.state.iter().filter(|&&s| s != 0).count() as u16
     }
@@ -902,6 +942,8 @@ impl Host {
             stage_clear_requested = fx.stage_clear_requested;
             self.apply_stage_effects(&fx);
             self.scan_spawns(frame);
+            // task-45：敌槽坐标可见化（只初始化/步进已证坐标列；未证型保持 None）
+            self.update_enemy_coords();
             // ⑥b-2 shell 侧命中管线（task-38 §2.4）：注册/敌框/4 边属性/清框回收 + 受限额伤害。
             //        engine combat_frame 只见空 `StageState.bullets`（玩家弹在自有网格）⇒ 不重复判定。
             if mode_before == Mode::Combat {
@@ -967,9 +1009,14 @@ impl Host {
             *view = EnemySlotView {
                 slot: slot as u8,
                 type_code: if s.type_ == 0 { None } else { Some(s.type_) },
-                // 坐标写者链（spawn 定位/行为 VM 位置写）未接线/未证 ⇒ 显式 None，
-                // 不得把 None 当 (0,0)（platform-shell §8 / plan-playable-loop §6）。
-                position: None,
+                // task-45：只暴露**已证坐标列**——v1 仅 `$2F` leader（trace 恒 (128,8)；
+                // x/y 双列可对拍，见 `tests/enemy_coords_replay.rs`）。`$2B`/`$4E` 成员型
+                // 坐标写者未审计 ⇒ None（不得把 None 当 (0,0)、不得 type_code 反推/预测位置）。
+                position: if self.enemy_coord_ready[slot] && self.enemy_coord_onscreen[slot] {
+                    Some((s.x, s.y))
+                } else {
+                    None
+                },
             };
         }
         FrameView {

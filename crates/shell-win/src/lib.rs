@@ -611,13 +611,11 @@ pub const MODE_MARKER_COLORS: [[u8; 4]; 14] = [
     [0xFF, 0xFF, 0x00, 0xFF], // 13 Ending
 ];
 
-/// 敌槽占位色（`type_code & 3` 索引；**非原版图样/调色板**，只用于占位区分，语义不命名）。
-pub const ENEMY_PLACEHOLDER_COLORS: [[u8; 4]; 4] = [
-    [0xFF, 0x00, 0xFF, 0xFF],
-    [0x00, 0xFF, 0xFF, 0xFF],
-    [0xFF, 0xFF, 0x00, 0xFF],
-    [0xFF, 0xFF, 0xFF, 0xFF],
-];
+/// 敌槽可见占位块边长（像素；**非原版精灵尺寸/图样**——尺寸/图样/颜色未证，`TODO(shell-v2)`）。
+pub const ENEMY_VISIBLE_PLACEHOLDER_SIZE: i32 = 4;
+
+/// 敌槽可见占位色（**非原版精灵调色板**；唯一色便于 GUI PrintWindow 像素抽样）。
+pub const ENEMY_VISIBLE_PLACEHOLDER_RGBA: [u8; 4] = [0xFF, 0x80, 0x00, 0xFF];
 
 /// HUD 占位槽位（**固定占位布局，非原版 HUD 屏幕坐标**；`TODO(shell-v2)`）。
 pub const HUD_MONEY_SLOT_X: i32 = 8;
@@ -757,8 +755,11 @@ pub fn frame_view_digest(view: &FrameView) -> u64 {
 /// - **模式标记**：8×8 角标（`mode_tag`→[`MODE_MARKER_COLORS`]）——模式可见区分，非原版画面；
 /// - **HUD**：`money_digits` 的 `(digit, show)` 逐桁 2×2 点阵 + `bomb_ammo` 8 位位行 +
 ///   `stage` 4 位位行（固定占位槽，**非原版字形/布局/文本**）；
-/// - **敌槽**：仅 `position: Some(_)` 且 `type_code: Some(_)` 画 8×8 占位块（v1 运行态 position
-///   恒 `None` ⇒ 不画；**禁止用 type_code 反推坐标**；图样未证=`TODO(shell-v2)`）；
+/// - **敌槽**（task-45）：仅 `position: Some(_)` 画 **4×4 纯色占位块**——坐标列由 game-shell 只对
+///   **已证坐标列**暴露（v1 仅 `$2F` leader 的 x/y 双列，trace 可对拍）；`position=None` 一律不画
+///   （缺写者列/未证型）；**禁止用 `type_code` 反推坐标**；尺寸/图样/颜色未证=`TODO(shell-v2)`；
+/// - **命中事件**：`hits_this_frame` 的闪烁/消失视觉**未证**（`$D616` 死亡/回收门未证、HP0 不回收敌槽）
+///   ⇒ **不改敌像素**，事件仅入 [`frame_view_digest`]（不发明命中特效）；
 /// - **玩家子弹**（task-44）：`player_bullets` 中 `Some(BulletView)` 按已证坐标面
 ///   （`$04EE` x / `$055E` y；存活=弹网格空槽判）画 **4×4 占位块**；图样/尺寸/颜色未证
 ///   ⇒ 占位并标 `TODO(shell-v2)`，**不发明弹型视觉/弹道**；槽/坐标/型值同时入 [`frame_view_digest`]。
@@ -776,12 +777,20 @@ pub fn draw_frame_view_overlay(target: &mut [u8], view: &FrameView) {
     draw_bit_row(target, HUD_BOMB_SLOT_X, HUD_BOMB_SLOT_Y, view.hud.bomb_ammo, 8, HUD_PLACEHOLDER_RGBA);
     draw_bit_row(target, HUD_STAGE_SLOT_X, HUD_STAGE_SLOT_Y, view.hud.stage & 0x0F, 4, GREY4[2]);
 
+    // 敌槽（task-45）：只画已证坐标列；position=None（缺写者列/未证型）一律不画。
     for slot in &view.enemy_slots {
-        if let (Some(pos), Some(type_code)) = (slot.position, slot.type_code) {
-            let color = ENEMY_PLACEHOLDER_COLORS[usize::from(type_code) & 3];
-            fill_block(target, i32::from(pos.0), i32::from(pos.1), 8, 8, color);
+        if let Some((x, y)) = slot.position {
+            fill_block(
+                target,
+                i32::from(x),
+                i32::from(y),
+                ENEMY_VISIBLE_PLACEHOLDER_SIZE,
+                ENEMY_VISIBLE_PLACEHOLDER_SIZE,
+                ENEMY_VISIBLE_PLACEHOLDER_RGBA,
+            );
         }
     }
+    // 命中事件：闪烁/消失未证 ⇒ 不改敌像素（事件面仅入 view 摘要；不发明命中特效）。
     // 玩家子弹（task-44）：只画已证坐标面（`$04EE`/`$055E`，存活由 game-shell 空槽判定）；
     // 图样/尺寸/颜色未证 ⇒ 4×4 纯色占位块 + TODO(shell-v2)（不发明弹型视觉/弹道）。
     for bullet in view.player_bullets.iter().flatten() {
@@ -1147,10 +1156,11 @@ mod tests {
 mod view_tests {
     use super::{
         compose_canvas_with_view, draw_frame_view_overlay, frame_view_digest, ChrBackground,
-        FrameRenderer, FrameView, CLEAR_RGBA, ENEMY_PLACEHOLDER_COLORS, GREY4, HUD_BOMB_SLOT_X,
-        HUD_BOMB_SLOT_Y, HUD_MONEY_SLOT_PITCH, HUD_MONEY_SLOT_X, HUD_MONEY_SLOT_Y,
-        HUD_PLACEHOLDER_RGBA, HUD_STAGE_SLOT_X, HUD_STAGE_SLOT_Y, MODE_MARKER_COLORS,
-        PLAYER_BULLET_PLACEHOLDER_RGBA, PLAYER_BULLET_PLACEHOLDER_SIZE,
+        FrameRenderer, FrameView, CLEAR_RGBA, ENEMY_VISIBLE_PLACEHOLDER_RGBA,
+        ENEMY_VISIBLE_PLACEHOLDER_SIZE, GREY4, HUD_BOMB_SLOT_X, HUD_BOMB_SLOT_Y,
+        HUD_MONEY_SLOT_PITCH, HUD_MONEY_SLOT_X, HUD_MONEY_SLOT_Y, HUD_PLACEHOLDER_RGBA,
+        HUD_STAGE_SLOT_X, HUD_STAGE_SLOT_Y, MODE_MARKER_COLORS, PLAYER_BULLET_PLACEHOLDER_RGBA,
+        PLAYER_BULLET_PLACEHOLDER_SIZE,
     };
     use game_core::flow::Mode;
     use game_platform::{Renderer, CANVAS_LEN, CANVAS_W};
@@ -1254,20 +1264,29 @@ mod view_tests {
     }
 
     #[test]
-    fn enemy_slots_draw_only_when_position_and_type_present() {
+    fn enemy_slots_draw_only_when_proven_position_present() {
         let mut view = view_fixture();
-        view.enemy_slots[0] = EnemySlotView { slot: 8, type_code: Some(1), position: Some((40, 50)) };
-        view.enemy_slots[1] = EnemySlotView { slot: 9, type_code: None, position: Some((60, 50)) };
-        view.enemy_slots[2] = EnemySlotView { slot: 10, type_code: Some(2), position: None };
+        view.enemy_slots[0] = EnemySlotView { slot: 8, type_code: Some(0x2F), position: Some((40, 50)) };
+        view.enemy_slots[1] = EnemySlotView { slot: 9, type_code: Some(0x2B), position: None };
+        view.enemy_slots[2] = EnemySlotView { slot: 10, type_code: Some(0x4E), position: None };
         let mut canvas = black_canvas();
         draw_frame_view_overlay(&mut canvas, &view);
         assert_eq!(
             px(&canvas, 40, 50),
-            ENEMY_PLACEHOLDER_COLORS[1],
-            "position+type 均 Some⇒8×8 占位块"
+            ENEMY_VISIBLE_PLACEHOLDER_RGBA,
+            "position=Some（已证坐标列）⇒4×4 占位块（尺寸/图样未证）"
         );
-        assert_eq!(px(&canvas, 60, 50), CLEAR_RGBA, "type=None 不画（空槽）");
-        assert_eq!(px(&canvas, 10, 50), CLEAR_RGBA, "position=None 不画（不按 (0,0) 画）");
+        assert_eq!(
+            px(
+                &canvas,
+                40 + ENEMY_VISIBLE_PLACEHOLDER_SIZE as usize - 1,
+                50 + ENEMY_VISIBLE_PLACEHOLDER_SIZE as usize - 1
+            ),
+            ENEMY_VISIBLE_PLACEHOLDER_RGBA,
+            "占位块 4×4"
+        );
+        assert_eq!(px(&canvas, 60, 50), CLEAR_RGBA, "$2B position=None⇒不画");
+        assert_eq!(px(&canvas, 10, 50), CLEAR_RGBA, "$4E position=None⇒不画（不得当 (0,0)）");
     }
 
     #[test]

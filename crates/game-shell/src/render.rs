@@ -25,17 +25,19 @@ pub const PLACEHOLDER_PLAYER_RGBA: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
 
 /// 敌槽视图（**型值不命名**；槽 8..=27 分配域）。
 ///
-/// 字段来源（task-9 FrameView 暴露口径）：
+/// 字段来源（task-9 FrameView 暴露口径；task-45 坐标可见化）：
 /// - `type_code`=`$0400+槽` 原始型值（A 级地址面，0=空槽⇒None；**不做语义命名**）；
-/// - `position`=`$04E0/$04FC+槽` 坐标；**v1=None**（spawn 定位/行为 VM 坐标写者链未接线/未证，
-///   不得把 None 当 (0,0)；见 platform-shell §8 / plan-playable-loop §6）。
+/// - `position`=`$04E0/$04FC+槽` 坐标。**只暴露已证坐标列**（v1 仅 `$2F` leader 的 x/y 双列，
+///   trace 恒 `(128,8)` 可对拍；见 `enemy_coords` / `tests/enemy_coords_replay.rs`）；
+///   其余型（`$2B/$4E` 写者未审计、`$12/$1A/$1C/$2A` 生成源未解码）⇒ `None`。
+///   **不得把 None 当 (0,0)、不得用 type_code 反推/预测坐标**（platform-shell §8）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EnemySlotView {
     /// 槽号（8..=27）。
     pub slot: u8,
     /// `$0400+槽` 型值（原始；空槽 None）。
     pub type_code: Option<u8>,
-    /// `$04E0/$04FC+槽` 坐标（**v1 恒 None**：写者链未证）。
+    /// `$04E0/$04FC+槽` 已证坐标列（未证/缺写者列⇒`None`；v1 仅 `$2F`）。
     pub position: Option<(u8, u8)>,
 }
 

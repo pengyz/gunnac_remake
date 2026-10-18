@@ -21,6 +21,7 @@
 #![forbid(unsafe_code)]
 
 pub mod audio;
+pub mod enemy_coords;
 pub mod fire;
 pub mod fixed_step;
 pub mod host;
@@ -30,6 +31,10 @@ pub mod shape;
 pub mod snapshot;
 
 pub use audio::AudioPipe;
+pub use enemy_coords::{
+    init_proven_coords, has_proven_coords, ENEMY_FAIL_CLOSED_COORDS, ENEMY_LEADER_POSITION,
+    ENEMY_LEADER_TYPE,
+};
 pub use fire::{
     BulletView, EnemyHitEvent, MAX_ACTIVE_TYPES, PLAYER_SLOT_ORDER, SHOT_TIMER_RELOAD,
 };

@@ -15,13 +15,13 @@ use game_core::flow::Mode;
 use game_platform::{
     AppEvent, AssetSource, Audio, Buttons, Input, Lifecycle, Renderer, Storage, CANVAS_LEN, CANVAS_W,
 };
-use game_shell::{BulletView, EnemySlotView, FrameView, Host};
+use game_shell::{BulletView, EnemyHitEvent, EnemySlotView, FrameView, Host};
 use shell_win::{
     asset_root, blit_scaled, compose_canvas, frame_view_digest, map_key, run_selftest, storage_dir,
     view_rect, ChrBackground, FileStorage, FrameRenderer, FsAssets, KeyboardInput, LifecycleQueue,
-    PcAudio, CLEAR_RGBA, ENEMY_PLACEHOLDER_COLORS, GREY4, HUD_MONEY_SLOT_PITCH, HUD_MONEY_SLOT_X,
-    HUD_MONEY_SLOT_Y, HUD_PLACEHOLDER_RGBA, MODE_MARKER_COLORS, PLAYER_BULLET_PLACEHOLDER_RGBA,
-    PLAYER_BULLET_PLACEHOLDER_SIZE, WINDOW_TITLE,
+    PcAudio, CLEAR_RGBA, ENEMY_VISIBLE_PLACEHOLDER_RGBA, ENEMY_VISIBLE_PLACEHOLDER_SIZE, GREY4,
+    HUD_MONEY_SLOT_X, HUD_MONEY_SLOT_Y, HUD_PLACEHOLDER_RGBA, MODE_MARKER_COLORS,
+    PLAYER_BULLET_PLACEHOLDER_RGBA, PLAYER_BULLET_PLACEHOLDER_SIZE, WINDOW_TITLE,
 };
 
 /// 测试用 CHR ROM 最小长度（`CHR_FILE_BASE + 128*CHR_BANK_SIZE` = 0x40010；
@@ -364,8 +364,8 @@ fn frame_view_overlay_renders_mode_hud_enemy_placeholders_only() {
     view.hud.bomb_ammo = 0b0000_0001;
     view.hud.stage = 2;
     view.enemy_slots[0] =
-        EnemySlotView { slot: 8, type_code: Some(2), position: Some((40, 60)) };
-    view.enemy_slots[1] = EnemySlotView { slot: 9, type_code: Some(2), position: None };
+        EnemySlotView { slot: 8, type_code: Some(0x2F), position: Some((40, 60)) };
+    view.enemy_slots[1] = EnemySlotView { slot: 9, type_code: Some(0x2B), position: None };
 
     let mut renderer = FrameRenderer::new();
     renderer.set_frame_view(view);
@@ -381,8 +381,17 @@ fn frame_view_overlay_renders_mode_hud_enemy_placeholders_only() {
     assert_eq!(pixel(c, mx, my + 2), CLEAR_RGBA, "digit=3 无 bit2");
     assert_eq!(
         pixel(c, 40, 60),
-        ENEMY_PLACEHOLDER_COLORS[2],
-        "position+type 均 Some⇒8×8 占位块（图样未证）"
+        ENEMY_VISIBLE_PLACEHOLDER_RGBA,
+        "position=Some（已证坐标列）⇒4×4 占位块"
+    );
+    assert_eq!(
+        pixel(
+            c,
+            40 + ENEMY_VISIBLE_PLACEHOLDER_SIZE as usize - 1,
+            60 + ENEMY_VISIBLE_PLACEHOLDER_SIZE as usize - 1
+        ),
+        ENEMY_VISIBLE_PLACEHOLDER_RGBA,
+        "占位块 4×4（尺寸/图样未证）"
     );
     assert_eq!(pixel(c, 10, 60), CLEAR_RGBA, "position=None 不画（不得当 (0,0)）");
 
@@ -400,6 +409,40 @@ fn frame_view_overlay_renders_mode_hud_enemy_placeholders_only() {
         frame_view_digest(&view),
         frame_view_digest(&view_no_count),
         "view 摘要仍登记 player_bullets_live"
+    );
+}
+
+// ===================== 敌槽可见化：命中事件不改像素（task-118 Info-2） =====================
+
+#[test]
+fn hit_events_do_not_change_enemy_pixels() {
+    // 已证写集=清框/弹回收/$4A HP；闪烁/消失未证（$D616 死亡门未证、HP0 不回收敌槽）
+    // ⇒ 有/无 hit 事件渲染结果必须相同；事件面仅入 view 摘要。
+    let mut base = FrameView { mode: Mode::Combat, ..FrameView::default() };
+    base.enemy_slots[0] =
+        EnemySlotView { slot: 8, type_code: Some(0x2F), position: Some((40, 50)) };
+    let mut with_hit = base;
+    with_hit.hits_this_frame[0] = Some(EnemyHitEvent {
+        frame: 1200,
+        enemy_slot: 8,
+        bullet_slot: 0x80,
+        damage: 0,
+        fail_closed: true,
+    });
+
+    let mut renderer_base = FrameRenderer::new();
+    renderer_base.set_frame_view(base);
+    let mut renderer_hit = FrameRenderer::new();
+    renderer_hit.set_frame_view(with_hit);
+    assert_eq!(
+        renderer_base.composed_canvas(),
+        renderer_hit.composed_canvas(),
+        "命中事件不得改变敌像素（无闪烁/消失：已证写集无视觉写点）"
+    );
+    assert_ne!(
+        frame_view_digest(&base),
+        frame_view_digest(&with_hit),
+        "命中事件仍入 view 摘要（事件面可观测）"
     );
 }
 
@@ -533,12 +576,30 @@ fn menu_dispatch_progresses_modes_with_platform_input_only() {
     assert!(host.stage_loaded(), "转场帧 STG-01 已装载（A 级 f1193 锚）");
     assert_eq!(format!("{:?}", host.mode()), "Combat");
 
-    // 终态 FrameView：已证字段可用；敌坐标未证⇒v1 恒 None（不画）；Combat 后按住 B ⇒ 玩家弹出现。
+    // 终态 FrameView：已证字段可用；敌槽只暴露**已证坐标列**（v1 仅 $2F leader）；
+    // 其余敌型 position=None（fail-closed）；Combat 后按住 B ⇒ 玩家弹出现。
     let view = host.frame_view();
     assert_eq!(view.mode, Mode::Combat);
     assert_eq!(view.stage, 1);
     assert_eq!(view.hud.stage, 1, "HUD 关号=已证 $180");
-    assert!(view.enemy_slots.iter().all(|s| s.position.is_none()), "敌坐标写者链未证⇒恒 None");
+    let leader_positions: Vec<(u8, u8)> = view
+        .enemy_slots
+        .iter()
+        .filter(|s| s.type_code == Some(0x2F))
+        .filter_map(|s| s.position)
+        .collect();
+    assert!(!leader_positions.is_empty(), "trace 视界内 $2F 已证坐标应出现（task-45）");
+    assert!(
+        leader_positions.iter().all(|p| *p == (128, 8)),
+        "$2F 已证坐标恒 (128,8)，实得 {leader_positions:?}"
+    );
+    assert!(
+        view.enemy_slots
+            .iter()
+            .filter(|s| s.type_code.is_some() && s.type_code != Some(0x2F))
+            .all(|s| s.position.is_none()),
+        "非 $2F 敌型坐标写者未证⇒position 必须 None（fail-closed）"
+    );
     assert!(
         view.player_bullets.iter().flatten().count() > 0,
         "按住 B 后 FrameView 暴露玩家弹（task-37 已证坐标面）"
@@ -549,6 +610,13 @@ fn menu_dispatch_progresses_modes_with_platform_input_only() {
         MODE_MARKER_COLORS[8],
         "Combat 模式角标（占位）"
     );
+    // 敌槽可见化：已证坐标处出现敌占位色像素（4×4 橙色；可能与玩家弹重叠，故计数 >0 即可）。
+    let enemy_px = renderer
+        .composed_canvas()
+        .chunks_exact(4)
+        .filter(|p| p == &ENEMY_VISIBLE_PLACEHOLDER_RGBA)
+        .count();
+    assert!(enemy_px > 0, "已证敌坐标处应画出敌占位块（task-45），实得 {enemy_px}px");
 
     // 子弹数量变化 ⇒ 画布对应像素变化：取一颗在画布内的弹，验证其坐标处=占位色，
     // 且把该弹置 None 后同位置不再是占位色（真·像素来源=子弹坐标面）。

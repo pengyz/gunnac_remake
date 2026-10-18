@@ -110,7 +110,8 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 | STG-01 装载 | `Host::load_stg01`（`AssetSource`→`game_data::rom::prg_bank(8)`→`decode_sched($A26D,64)`=43 记录→`StageState`）；转场帧自动装载（A 级 f1193 锚） | `tests/stg01_replay.rs`：43 记录 + tick 锚 [1,33,49,65,81]（A 级 golden） |
 | 滚动源 | `Host::stage_scroll_delta`=`-stage::scroll_delta(abs)`；`abs=1193+(frame-load_frame)` | **C1：vs `.scroll.jsonl` 1207/1207 帧 0 失配**（A 级） |
 | spawn 落地/摘要 | `apply_stage_effects`（`land_pair`/`land_leader`）+ `scan_spawns`（`$0400` 0→非0 判定式） | C4：共同槽 16/16、engine 型集 ⊆ oracle 型集；帧列不可对拍（见 §8） |
-| FrameView | `Host::frame_view()`：mode/stage/frame/player/live_bullets/player_bullets_live/敌槽型值（坐标 None）/HUD 已证数值域 | 单测：字段只读幂等、position=None 显式、槽 8..=27 |
+| 敌槽坐标可见化（task-45） | `enemy_coords.rs`：**只暴露已证坐标列**——v1 仅 `$2F` leader（trace 全采样恒 `(128,8)`；handler `bank02:$899B` 字面量写值 A：`$89D5 A9 80`→`$89D7 9D E0 04`、`$89DA A9 08`→`$89DC 9D FC 04`）的 x/y 双列；`$2B/$4E` 成员（handler init x/y/速度对未逐值审计）与其他未接型 ⇒ `position=None`（fail-closed）。已证运动规则 `engine::motion_update`（速度=0 静止）；槽复用/清 0 重置；**不用 type_code 反推/预测坐标**（证据 [enemy-coords-impl-spec.md](../findings/enemy-coords-impl-spec.md)） | `tests/enemy_coords_replay.rs`（**收窄口径**：仅 `$2F` 坐标列）：共同 (帧,型) 采样点 **N=28（钉死；≥20）**、≤1px **28/28=100%（≥90%）**、$2F 恒 (128,8)、fail-closed 型 position 必 None、两次 replay 全等；**spec §4.2 步骤 2/6 的 `V1_TYPES={$2F,$2B,$4E}` 过滤后类型集合相等断言未实现**（$2B/$4E 坐标写者未审计、生成源未接；差异登记见 [plan-enemy-render.md](../findings/plan-enemy-render.md) §4/§8；task-118 F1） |
+| FrameView | `Host::frame_view()`：mode/stage/frame/player/live_bullets/player_bullets_live/敌槽型值 + **敌槽已证坐标列**（v1 仅 `$2F`；其余 None）/HUD 已证数值域 | 单测：字段只读幂等、position=None 显式、槽 8..=27；`enemy_coords_replay` 对拍 |
 | 玩家弹丸生成/运动（task-37） | `fire.rs`：B 长按（`$18` bit6）→ `$39/$3A` 计时器（默认 `$3C`=0 ⇒ **reload=7**，bank02:$94DF 表 `07 05 04 03 02`）→ 六型生成器（在途上限 `$074A`）→ `shot::tick` 运动/寿命/死亡回收；弹网格为 **game-shell 自有**（不写 `StageState.bullets`） | 单测：7f 周期/上限/槽序/出生字段/运动/死亡回收；集成：`bullets_seen>0` 且两次 run 全等 |
 | 框形数据装载（task-37） | `shape.rs`：ROM **bank2 `$8000` 窗** → `shape_stream_addr($97BA/$9812)` 表 → 流 `[count][4B]` → `StageState.shape_data`（装载侧喂，不造数据） | 单测：合成流/截断 fail-closed；集成：装载 59 形 |
 | 命中 + 受限额伤害（task-37） | shell 侧 `shot_hitbox_register`+`fetch_shape_boxes`+`hit_resolves`+`clear_hit_entry`；伤害**仅 `type==$4A`**（HP=14 A 级）`Const2`，其余 **0 伤 + `fail_closed` 事件**（不写 `f630`）；敌弹按 `type_code & 0x80` 过滤 | 单测：命中正例/负例 ≥4、`$4A` 7 发 14→0 不回收、敌弹不参与；**非 H-16 收口**（§8） |
@@ -157,8 +158,8 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 > 此处保留历史口径以免读者把旧注当现状。
 | 存储 | `FileStorage`（`Storage` impl）：`%APPDATA%/gunnac`（Win）/`~/.local/share/gunnac`（Linux），`slot{n}.sav` | 单测：往返/空槽 fail-closed；**不自动保存**（原版存档语义未证） |
 | 生命周期 | `LifecycleQueue`：关窗→`Quit`；焦点丢失/获得→`Suspend`/`Resume`（最小平台策略）；宿主 suspend 停逻辑帧 | FIFO 单测；game-shell 门控测试 |
-| 渲染内容（v2，task-10；task-44 子弹） | `FrameView` 覆盖层：CHR 背景（v1 灰阶占位）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）+ **模式占位角标**（`mode_tag`→`MODE_MARKER_COLORS`；Boot/Title/Menu/Shop/Stage 可见区分；**非原版美术/文字**）+ **HUD 数值域占位编码**（`money_digits(digit,show)` 逐桁 2×2 点阵、`bomb_ammo` 8bit 位行、`stage` 4bit 位行；固定占位槽；**非原版字形/布局/文本**）+ **敌槽占位块**（仅 `position+type_code` 均 `Some`；v1 运行态 `position` 恒 None⇒不画；`type_code` 不反推坐标）+ **玩家子弹占位块**（task-44：`player_bullets` 中 `Some(BulletView)` 按已证坐标面 `$04EE/$055E` 画 4×4 纯色占位块；图样/尺寸/颜色/弹道未证⇒`TODO(shell-v2)`；`hits_this_frame` 不画布、仅入 view 摘要） | 单测：合成保玩家块/模式占位色/HUD 编码/敌槽门/子弹坐标+数量变化⇒像素变化；smoke：1400 帧按键透传→Host 内派发→Combat→按 B 实弹渲染断言；GUI PostMessage+PrintWindow 抽样：子弹占位色像素出现（bbox/计数见 plan-shellwin-v2 §8.6） |
-| 自检 | `cargo run -p shell-win -- --selftest-frames N`：无窗口、真实 `AssetSource`、固定已证 `ModeEvent`/按钮脚本；每帧用 `Host::frame_view()` 最新视图重合成覆盖层；新增**独立 view 摘要签名**（仅 FrameView 字段 FNV、平台无关；**不改** `Host::signature()` 语义） | 300 帧连跑两次 stdout 逐行一致、退出码 0（§4.2，含 `view_signature`） |
+| 渲染内容（v2，task-10；task-44 子弹；task-45 敌槽） | `FrameView` 覆盖层：CHR 背景（v1 灰阶占位）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）+ **模式占位角标**（`mode_tag`→`MODE_MARKER_COLORS`；Boot/Title/Menu/Shop/Stage 可见区分；**非原版美术/文字**）+ **HUD 数值域占位编码**（`money_digits(digit,show)` 逐桁 2×2 点阵、`bomb_ammo` 8bit 位行、`stage` 4bit 位行；固定占位槽；**非原版字形/布局/文本**）+ **敌槽占位块**（task-45：仅 `position=Some`——即 **只画已证坐标列**（v1 仅 `$2F` leader x/y）；`position=None`（`$2B/$4E` 写者未审计/其他未接型）一律不画；**不用 type_code 反推坐标**；4×4 纯色占位，尺寸/图样/颜色未证=`TODO(shell-v2)`）+ **命中事件**（`hits_this_frame` 事件面入摘要；**闪烁/消失视觉未证**——`$D616` 死亡/回收门未证、HP0 不回收敌槽 ⇒ 不改敌像素、不发明命中特效）+ **玩家子弹占位块**（task-44：按已证坐标面 `$04EE/$055E` 画 4×4 纯色） | 单测：合成保玩家块/模式占位色/HUD 编码/敌槽已证坐标/子弹坐标+数量变化⇒像素变化；smoke：1400 帧按键透传→Host 内派发→Combat→按 B 实弹 + `$2F` 敌占位块断言；GUI PostMessage+PrintWindow 抽样：敌占位色 64px@bbox (264,47)-(271,54)、子弹占位色像素出现（见 [plan-enemy-render.md](../findings/plan-enemy-render.md) §6 / plan-shellwin-v2 §8.6） |
+| 自检 | `cargo run -p shell-win -- --selftest-frames N`：无窗口、真实 `AssetSource`、固定已证 `ModeEvent`/按钮脚本；每帧用 `Host::frame_view()` 最新视图重合成覆盖层；独立 view 摘要签名（仅 FrameView 字段 FNV、平台无关；**不改** `Host::signature()` 语义）。**task-45 后四签名不变**：selftest 不经转场装载（`stage_loaded=false`）⇒ 无敌 spawn ⇒ 覆盖层无敌槽；敌槽确定性由 `enemy_coords_replay` 两次全等 + GUI 实拍覆盖（不声称 selftest 覆盖敌槽） | 300 帧连跑两次 stdout 逐行一致、退出码 0（§4.2，含 `view_signature`） |
 
 **迁移**：旧骨架的 `FrameDriver`/`GameHost`（重复宿主逻辑）已删除，改接 `game_shell::FixedStep`/
 `Host`；`AudioSink` 改为 `PcAudio`（平台 `Audio` 实现，不是第二套宿主）。实现方案与未证域声明见
@@ -210,6 +211,13 @@ selftest: OK
 > `display_signature`/`canvas_signature`/`host_signature` 不变（selftest 无关卡装载⇒不产弹，
 > 游戏逻辑未改）；**非回归**：300 帧连跑两次 stdout 逐行一致。GUI 实跑（PostMessage+PrintWindow）
 > 抽样到子弹占位色像素（§4.1 验证列 / plan-shellwin-v2 §8.6）。
+>
+> 【2026-10-18 task-45 更新】**四签名均不变**（host=`0x68547665bf1ab396` / canvas=`0x963ac9a776a57625` /
+> display=`0xe99af5849b632fbd` / view=`0x15dbc2c7b0ba0a5d`）：原因=selftest 用 `apply_event` 走已证边集、
+> 不经转场装载（`stage_loaded=false`）⇒ 无敌 spawn ⇒ FrameView 敌槽 `position` 全 None、画布不含敌占位块
+> ⇒ 本卡不改变 selftest 合成/摘要。敌槽可见化确定性证据由：①`enemy_coords_replay` 两次 2408 帧 replay
+> 全等 + oracle 对拍 N=28/100%（≤1px，阈值未放宽）；②既有 `stg01_replay` 3000 帧两次全等；
+> ③GUI PrintWindow 实拍敌占位色（§4.1 验证列）。**不声称** selftest 覆盖敌槽（未装载口径已登记）。
 
 **口径**：`host_signature`/`canvas_signature`/`display_signature`/`view_signature` 是**确定性回归锚**，
 **不声称**等价真机 trace 对拍（platform-shell.md §3/§9 同口径）；`display_signature` 含平台侧
@@ -218,9 +226,10 @@ CHR 背景+`FrameView` 覆盖层占位合成（非原版像素/布局，L4 不�
 
 **未证/未接（与 §8 一致）**：菜单/模式派发已由 game-shell 接线（窗口可从 Boot 推进、Start 派发、
 转场帧装载 STG-01）；**shell-win 渲染（v2+）**=CHR 背景+玩家块+**占位覆盖层**（模式角标/HUD 数值域
-占位编码/敌槽 Some 占位门/**玩家子弹已证坐标面 4×4 占位块**）；**敌坐标写者链/敌图样、玩家子弹
+占位编码/**敌槽已证坐标列占位块（仅 `$2F`）**/玩家子弹已证坐标面 4×4 占位块）；**敌坐标写者链
+（`$2B/$4E` handler init/速度对）与其余敌型生成源（W32）、敌图样、命中闪烁/消失视觉、玩家子弹
 图样/尺寸/颜色/弹道（H-01 余项）、HUD 字形/布局/文本、原版 BG/nametable/美术一律占位/不画/不发明**；
-GUI 键推进已可用 `PostMessage(WM_KEYDOWN)`+`PrintWindow` 自动化（task-44 实测；`SendKeys`/前台授权
+GUI 键推进已可用 `PostMessage(WM_KEYDOWN)`+`PrintWindow` 自动化（task-44/45 实测；`SendKeys`/前台授权
 在本会话失败属环境限制）；音频 PCM 静音占位；spawn 坐标写者链/初生记录未接；
 `shell-win→shell-pc` 更名待用户裁定。
 
@@ -305,6 +314,15 @@ v1 复核（task-6）补充登记：
 - **每采样上屏次数**（task-36 E3/S2）：窗口模式每采样 **1 次** softbuffer present（`Renderer::present`
   只合成+计数、统一由 `refresh_view()` 上屏）；收口前为 2 次（tick 内上一帧 view + refresh 最新帧）
   **采样临时口径**。`presents` 计数语义仍=逻辑帧数；`display_signature`/`view_signature` 不变。
+- **敌槽坐标列可见性边界**（task-45）：v1 **只**暴露 `$2F` leader 的 x/y（trace 恒 (128,8)，可对拍）；
+  `$2B/$4E` 成员（handler init x/y/速度对未逐值审计）与 `$12/$1A/$1C/$2A`/低槽 `$05/$07`（生成源未解码
+  W32）⇒ `position=None`（fail-closed，不画）。**禁止**用 type_code 反推坐标、用常量/预测/插值位置冒充
+  已证坐标。敌精灵图样/尺寸/调色板/优先级未证 ⇒ 4×4 纯色占位块；**命中闪烁/消失视觉未证**
+  （`$D616` 死亡/回收门未证、HP0 不回收敌槽）⇒ 不改敌像素、不发明命中特效（事件面仅入 view 摘要）。
+  **对拍口径收窄登记（task-118 F1）**：`enemy_coords_replay` 只承诺 `$2F` 坐标列；spec
+  [enemy-coords-impl-spec.md](../findings/enemy-coords-impl-spec.md) §4.2 步骤 2/6 的
+  `V1_TYPES={$2F,$2B,$4E}` 过滤后类型集合相等断言**未实现**（$2B/$4E 坐标写者未审计、生成源未接；
+  差异登记见 [plan-enemy-render.md](../findings/plan-enemy-render.md) §4/§8）。
 
 ## 9. 验收与复现命令（task-5 v1 + task-9 可玩闭环 A）
 
