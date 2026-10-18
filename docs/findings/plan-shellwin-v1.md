@@ -49,10 +49,10 @@
 | platform-shell v2 合同 | shell-win v1 落地方式 | 状态 |
 |---|---|---|
 | `Renderer::canvas_mut/present`（256×240 RGBA） | `FrameRenderer`：持有 game-shell 逻辑画布；`present()` 合成后计数 | ✅ 本卡 |
-| `Renderer::size/resize`（v1 新增占位） | `WindowRenderer` 覆盖：`size`=窗口内尺寸；`resize` 更新缓冲 | ✅ 本卡（输出面语义=窗口像素） |
+| `Renderer::size/resize`（v1 新增占位） | `WindowRenderer` 覆盖：`size`=窗口内尺寸；`resize` **仅记录输出面尺寸元组**（`FrameRenderer::resize`）；softbuffer `Surface::resize` 在 `WindowRenderer::blit()` 按窗口尺寸执行 | ✅ 本卡（输出面语义=窗口像素；E1 口径） |
 | `Audio::write_apu/end_frame`（ApuWrite 流消费） | `PcAudio`：真实接收 game-shell `AudioPipe` 转发的事件；PCM=静音占位显式 | ✅ 本卡（合成器未证，显式静音） |
 | `Storage::load/save`（字节块） | `FileStorage`：`%APPDATA%/gunnac`（Win）/`~/.local/share/gunnac`（Linux），`slot{n}.sav` | ✅ 本卡（字节存取；原版存档语义未证） |
-| `AssetSource::read_all` | `FsAssets`：`std::fs`，根=仓库工作目录（失败回退 `CARGO_MANIFEST_DIR` 上级）；缺失⇒`None` fail-closed | ✅ 本卡 |
+| `AssetSource::read_all` | `FsAssets`：`std::fs`；资产根=**exe 目录优先**（`exe/rom` → `exe/../rom`，debug 回退 `CARGO_MANIFEST_DIR` 仓库根），不依赖进程 cwd；拒绝绝对/Windows 前缀（`C:foo`）/`..`/缺失⇒`None` fail-closed（task-18 S1/B1 收口） | ✅ 本卡 |
 | `Input::buttons` | `KeyboardInput`：winit `PhysicalKey`→`Buttons`（Z/X/Enter/RShift/方向）；对向同持交给 game-shell `resolve_directions` | ✅ 本卡 |
 | `Lifecycle::poll_event` / `AppEvent` | `LifecycleQueue`：关窗→`Quit`；焦点丢失/获得→`Suspend`/`Resume`（平台策略占位） | ✅ 本卡（最小） |
 | 60Hz 固定步（`game-shell` `FixedStep`/`Host::advance`） | `main.rs` 只喂整数 ns（`Instant` 相对启动时刻）；`about_to_wait` 用 winit `ControlFlow::WaitUntil` 节流 | ✅ 本卡 |
@@ -145,7 +145,8 @@ WindowRenderer::present：FrameRenderer 合成（CHR 背景 + game-shell 画布�
 
 | 文件 | 改动 |
 |---|---|
-| `crates/shell-win/Cargo.toml` | 增 `game-shell`/`game-data` 依赖；增 `[[bin]] name="shell-win" path="src/main.rs"` |
+| `crates/shell-win/Cargo.toml` | 增 `game-shell`/`game-data` 依赖；增 `[[bin]] name="shell-win" path="src/main.rs"`；平台依赖注释同步（既有 game-desktop 工具壳也依赖 winit/softbuffer=pre-existing；未新增到纯 crate） |
+| 根 `Cargo.lock` | 依赖同步（仅 +`game-shell`/+`game-data`；生成物） |
 | `crates/shell-win/src/lib.rs` | 删 `FrameDriver`/`GameHost`；保留/修正 `map_key`/`storage_dir`/`view_rect`/`blit_scaled`；新增 `FrameRenderer`（Renderer 头less/合成）、`PcAudio`（Audio）、`FsAssets`（AssetSource）、`FileStorage`（Storage）、`KeyboardInput`（Input）、`LifecycleQueue`（Lifecycle）、`run_selftest`；lib 内单测锁语义 |
 | `crates/shell-win/src/main.rs` | 新增：`[[bin]]` 入口；`--selftest-frames N` 分支；winit 0.30 `ApplicationHandler` + softbuffer 呈现实装（`WindowRenderer`） |
 | `crates/shell-win/tests/smoke.rs` | 重写为 v1 契约测试（映射/路径/缩放/trait 实现/自检确定性） |
@@ -185,7 +186,9 @@ platform-shell.md §4 状态与实现相符（不声称未实现能力）；独�
 |---|---|
 | `1be66e5` | `docs(platform)`：本方案（对照/迁移/呈现/自检设计 + 未证域声明） |
 | `7b5e4da` | `feat(platform)`：shell-win v1 实现（Cargo/lib/main/tests；六 trait + 主循环 + 自检） |
-| 本次 docs commit | `docs(spec)`：platform-shell.md §4.1/§4.2 状态回填 + 本 §9 回填 |
+| `a93704b` | `docs(spec)`：platform-shell.md §4.1/§4.2 状态回填 + 本 §9 回填 |
+| `16fb5b2` | `chore(status)`：`rust_test_count` 326→**338**——**由 Lead 依 master-plan §5 进度类基线授权执行（非实施方自行提交）**；内容经独立复核确认无下调（`git grep -c '#[test]'`=338=新基线） |
+| 本卡（task-18）follow-up | `fix/feat(platform)` + `docs`：shell-win v1 复核 findings 收口（B1/S1/E1-E5/S2；见 §9.6；commit 见 `git log`） |
 
 **§9.2 门禁与实测输出（本机 Windows，2026-10-18）**
 
@@ -193,7 +196,7 @@ platform-shell.md §4 状态与实现相符（不声称未实现能力）；独�
 |---|---|---|
 | 编译 | `cargo build -p shell-win` | 成功（0 error；仅既有 game-core `scroll_frames` dead_code 警告） |
 | 单元/集成测试 | `cargo test -p shell-win` | lib 3 + smoke 17 = **20 passed / 0 failed** |
-| 全量 | `cargo test --workspace` | 全绿（rust-tests 门禁实测 338，基线 326） |
+| 全量 | `cargo test --workspace` | 全绿（rust-tests 门禁实测 **338 = `#[test]` 静态计数**；该树运行态 337 passed + 1 ignored、0 failed；基线 326，后由 Lead 授权上调 338） |
 | 总闸 | `python gates/cli.py check` | **CHECK: PASS**（PASS=11 FAIL=0 SKIP=1[addr-bridge] TOLERATED=0；rust_test_count ratchet WARN 见 §9.4） |
 | 自检（1） | `cargo run -p shell-win -- --selftest-frames 300` | 退出码 0，输出见下 |
 | 自检（2） | 同上第二次 | 退出码 0，stdout 与第一次**逐行完全一致** |
@@ -215,13 +218,16 @@ selftest: OK
 
 **§9.3 交付文件清单**
 
-- `crates/shell-win/Cargo.toml`：`[[bin]] shell-win` + `game-shell`/`game-data` 依赖（平台依赖仍只在本 crate）
+- `crates/shell-win/Cargo.toml`：`[[bin]] shell-win` + `game-shell`/`game-data` 依赖（未新增平台依赖到
+  game-core/game-platform/game-shell/game-data；既有 game-desktop 工具壳也依赖 winit/softbuffer=pre-existing）
+- 根 `Cargo.lock`：依赖同步（仅 +`game-shell`/+`game-data`；生成物）
 - `crates/shell-win/src/lib.rs`：PC 六 trait 实现（`FsAssets`/`FileStorage`/`PcAudio`/`KeyboardInput`/
   `LifecycleQueue`/`FrameRenderer`）+ `ChrBackground`/`compose_canvas`/`view_rect`/`blit_scaled` +
   `run_selftest`；删除 `FrameDriver`/`GameHost`，`AudioSink`→`PcAudio`
 - `crates/shell-win/src/main.rs`：winit 0.30 `ApplicationHandler` + softbuffer `WindowRenderer`；
   `Host::advance` 固定步主循环；`--selftest-frames N`
-- `crates/shell-win/tests/smoke.rs`：20 项契约测试（键位/路径/缩放黑边/CHR 合成/六 trait/自检确定性）
+- `crates/shell-win/tests/smoke.rs`：**17 项**契约测试；crate 级 **20 项 = lib 3 + smoke 17**
+  （键位/路径/缩放黑边/CHR 合成/六 trait/自检确定性；E1 口径）
 - `docs/spec/platform-shell.md` §4.1/§4.2：状态回填 + 自检记录值
 
 **§9.4 遗留项 / TODO（未证域，未实现/未声称）**
@@ -238,8 +244,9 @@ selftest: OK
 6. **CHR 背景为可见性占位**：灰阶 `GREY4` 非原版调色板（C 级未证），不做 nametable/精灵优先级；
    L4 像素目标仍 0 容差攻坚（独立任务）。
 7. **`shell-win`→`shell-pc` 更名**：待用户裁定（platform-shell.md §4 注；本任务不改名/不移动）。
-8. **ratchet WARN**：`rust_test_count` 现值 338 > 基线 326（只升不降=WARN 非 FAIL）；
-   `data/status/baselines/` 属本任务写范围外 ⇒ **报 Lead 处置**（用 `gates/cli.py baseline update --reason`）。
+8. **ratchet 基线**：`16fb5b2`（326→338）与 `fe8ce68`（338→339，平台层复核修正）均由 **Lead/门禁属主**
+   授权上调；本卡（task-18）新增测试后现值高于基线 ⇒ ratchet WARN 与基线上调仍由 **Lead 处置**
+   （本卡不写 `data/status/`；见 §9.6 实测计数）。
 9. **GUI 视觉验收**：窗口标题/启动已实跑验证；整数缩放/黑边/CHR 背景像素的肉眼验收为手动项
    （本机无自动截图对拍；L4 门禁不覆盖 shell 呈现）。
 
@@ -247,6 +254,35 @@ selftest: OK
 
 1. 是否将 `shell-win` 更名 `shell-pc`（平台矩阵口径）。
 2. 菜单输入门控/主循环自动事件派发是否为下一张任务卡（决定窗口可玩性；当前 fail-closed）。
-3. `rust_test_count` 基线上调（`data/status/` 写范围外，需 Lead/门禁属主执行）。
+3. `rust_test_count` 基线上调（`data/status/` 写范围外，需 Lead/门禁属主执行；task-18 新增测试后同理）。
 4. 独立对抗复核（verifier 角色）为本步骤完成前置——本产出在复核 pass 前只算"待审稿"。
+
+## 9.6 task-18 findings 收口（2026-10-18 回填）
+
+**来源**：`docs/findings/adversarial-review-shellwin-v1.md`（shell-verifier，verdict=pass，7 条非阻塞
+findings）。本卡只做小修，不改可玩性功能（task-9/10 负责）。
+
+| finding | 处置 | 证据/位置 |
+|---|---|---|
+| **B1（Low）** Windows drive-relative 前缀逃逸 | `safe_relative` 增 `Component::Prefix(_) => false`；`read_all` 经同一判定；smoke 增 `read_all("C:foo")`/`"D:foo\\x"` 断言；lib 单测 `safe_relative_rejects_escape_paths` | `lib.rs` `safe_relative`/`FsAssets`；spec §4.1 资产行 |
+| **S1（Medium）** 资产根应为 exe 目录 | 新增 `asset_root()`：`exe/rom` → `exe/../rom` 优先，**仅 debug** 回退 `CARGO_MANIFEST_DIR`；`asset_root_from_exe()` 纯函数单测（exe 同目录/上一级/无 ROM 三布局）；`FsAssets::detect()`；启动（窗口+selftest 两模式）**始终**打印资产根（stderr）；smoke 增异 cwd 子进程自检测试（`CARGO_BIN_EXE_shell-win`，临时 cwd 仍 `rom_len=Some(262160)`） | `lib.rs`/`main.rs`/`tests/smoke.rs`；spec §4.1 资产行 |
+| **E1** resize 语义口径 | plan §2 改为：`resize` 仅记录输出面尺寸元组；softbuffer `Surface::resize` 在 `blit()` | 本文件 §2 |
+| **E2** 基线 commit 授权链 | §9.1 补 `16fb5b2`，注明 Lead 依 master-plan §5 授权执行、非实施方提交（另 `fe8ce68` 同属 Lead 授权） | 本文件 §9.1 |
+| **E3** 平台依赖范围口径 | plan §2/§7/§9.3 + `crates/shell-win/Cargo.toml` 注释改为「未新增到 game-core/game-platform/game-shell/game-data；既有 game-desktop 工具壳也依赖 winit/softbuffer=pre-existing」 | 本文件 + Cargo.toml |
+| **E4** 文件清单缺 Cargo.lock | plan §7/§9.3 增根 `Cargo.lock`（依赖同步生成物） | 本文件 §7/§9.3 |
+| **E5** rust-tests 338 口径 | plan §9.2 注明「338=`#[test]` 静态计数；该树运行态 337 passed + 1 ignored、0 failed」 | 本文件 §9.2 |
+| **S2** Audio 措辞 | spec §4 音频行改为「v1=写流消费+PCM 静音占位（`PcAudio` 无 cpal 设备流）；cpal/合成器=AUD-2/3 后续」 | platform-shell.md §4 |
+
+**task-18 实测（本机 Windows，2026-10-18）**
+
+| 验收项 | 命令 | 结果 |
+|---|---|---|
+| 单 crate | `cargo test -p shell-win` | lib **5** + smoke **19** = **24 passed / 0 failed**（task-1 基线 20 + 本卡新增 4） |
+| 自检确定性 | `cargo run -p shell-win -- --selftest-frames 300` ×2 | 两次 stdout 逐行一致、exit 0；stderr 打印实际资产根；`rom_len=Some(262160)` |
+| 全量 | `cargo test --workspace` | 见交付汇报（并发 task-9 工作树口径） |
+| 总闸 | `python gates/cli.py check` | 见交付汇报（`CHECK: PASS`；rust_test_count ratchet WARN 由 Lead 处置） |
+
+> 口径说明：§9.2 的 `host_signature` 等记录值是 **task-1 交付树（`a93704b`）时点值**；后续
+> game-shell（task-9）扩展签名覆盖字段会导致该值变化——属预期演进，以各卡交付记录为准；
+> `canvas_signature`/`display_signature`（本卡未改渲染）保持同值。
 

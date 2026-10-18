@@ -1,18 +1,19 @@
 //! shell-win v1 契约测试：PC 平台 trait 实现 + 呈现语义 + 确定性自检。
 //!
-//! 覆盖（task-1）：
+//! 覆盖（task-1 + task-18 findings 收口）：
 //! - 输入映射（platform-shell.md §4 键位表）；
 //! - 存储路径（Windows `%APPDATA%` / Linux `~/.local/share`）；
 //! - 整数倍缩放 + 黑边（`view_rect`/`blit_scaled`）；
-//! - `AssetSource`/`Storage`/`Audio`/`Lifecycle`/`Input` 的 PC 实现真实行为与 fail-closed；
+//! - `AssetSource`/`Storage`/`Audio`/`Lifecycle`/`Input` 的 PC 实现真实行为与 fail-closed
+//!   （含 Windows drive-relative 前缀拒绝 B1、exe 目录资产根解析 S1）；
 //! - CHR 背景占位合成（灰阶投影；非原版调色板）；
-//! - `--selftest-frames` 确定性（两次运行报告逐字段一致）。
+//! - `--selftest-frames` 确定性（两次运行报告逐字段一致）+ 异 cwd 资产定位。
 
 use game_platform::{
     AppEvent, AssetSource, Audio, Buttons, Input, Lifecycle, Renderer, Storage, CANVAS_LEN, CANVAS_W,
 };
 use shell_win::{
-    blit_scaled, compose_canvas, map_key, repo_root, run_selftest, storage_dir, view_rect,
+    asset_root, blit_scaled, compose_canvas, map_key, run_selftest, storage_dir, view_rect,
     ChrBackground, FileStorage, FrameRenderer, FsAssets, KeyboardInput, LifecycleQueue, PcAudio,
     CLEAR_RGBA, GREY4, WINDOW_TITLE,
 };
@@ -219,7 +220,13 @@ fn file_storage_roundtrip_and_fail_closed() {
 
 #[test]
 fn fs_assets_reads_relative_files_and_fails_closed() {
-    let mut assets = FsAssets::new(repo_root());
+    // 显式根=仓库根（编译期绝对路径；测试不依赖进程 cwd —— S1 口径）。
+    let repo = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("仓库根")
+        .to_path_buf();
+    let mut assets = FsAssets::new(&repo);
     let manifest = assets
         .read_all("crates/shell-win/Cargo.toml")
         .expect("仓库相对文件可读");
@@ -227,10 +234,63 @@ fn fs_assets_reads_relative_files_and_fails_closed() {
     assert_eq!(assets.read_all("rom/missing-asset.nes"), None, "缺失⇒None");
     assert_eq!(assets.read_all("../AGENTS.md"), None, "`..` 越界⇒None");
     assert_eq!(assets.read_all("C:\\AGENTS.md"), None, "绝对路径⇒None");
+    // B1：Windows drive-relative 前缀（"C:foo" 不是绝对路径但会逃逸资产根）同样 fail-closed。
+    assert_eq!(assets.read_all("C:foo"), None, "drive-relative 前缀⇒None");
+    assert_eq!(assets.read_all("D:foo\\x"), None, "盘符前缀+反斜杠⇒None");
     let rom = assets.read_all("rom/gunnac_cn.nes");
     assert!(
         rom.map(|r| r.len() >= CHR_ROM_MIN).unwrap_or(false),
         "ROM 资产可读且覆盖 CHR 域"
+    );
+}
+
+#[test]
+fn fs_assets_detect_resolves_dev_asset_root() {
+    // 开发态：exe 目录无 ROM ⇒ debug 回退 CARGO_MANIFEST_DIR 仓库根（S1）。
+    let Some(root) = asset_root() else {
+        // release 且 exe 旁无 ROM ⇒ 按设计 fail-closed（debug 构建必须能解析）。
+        assert!(!cfg!(debug_assertions), "debug 构建必须能解析开发态资产根");
+        return;
+    };
+    assert!(root.join("rom/gunnac_cn.nes").is_file(), "资产根含 ROM");
+    let mut assets = FsAssets::detect();
+    assert_eq!(assets.root(), Some(root.as_path()));
+    assert!(
+        assets
+            .read_all("rom/gunnac_cn.nes")
+            .map(|r| r.len() >= CHR_ROM_MIN)
+            .unwrap_or(false),
+        "自动检测根可读 ROM"
+    );
+}
+
+#[test]
+fn selftest_locates_assets_from_foreign_cwd() {
+    // S1：异 cwd 下仍经 exe 目录/开发态回退定位资产根（不依赖进程 cwd）。
+    let dir = std::env::temp_dir().join(format!(
+        "gunnac-shellwin-foreign-cwd-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("临时 cwd");
+    let exe = env!("CARGO_BIN_EXE_shell-win");
+    let out = std::process::Command::new(exe)
+        .args(["--selftest-frames", "5"])
+        .current_dir(&dir)
+        .output()
+        .expect("spawn shell-win --selftest-frames 5");
+    let _ = std::fs::remove_dir_all(&dir);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "异 cwd 自检退出码 0；stderr={stderr}");
+    assert!(stdout.contains("selftest: OK"), "自检完成：{stdout}");
+    assert!(
+        stdout.contains("selftest: rom_len=Some(262160)"),
+        "异 cwd 仍定位 ROM（exe/资产根，不依赖 cwd）：{stdout}"
+    );
+    assert!(
+        stderr.contains("shell-win: 资产根="),
+        "启动始终打印实际资产根：stderr={stderr}"
     );
 }
 

@@ -3,8 +3,9 @@ name = "shell-win"
 version = "0.1.0"
 edition = "2021"
 
-# 平台实现 crate：平台依赖（winit/softbuffer）只允许出现在这里（AGENTS.md §2 + platform-shell.md §7）。
-# game-core/game-platform/game-shell/game-data 均为纯逻辑/纯契约/纯解析 crate（零平台依赖）。
+# 平台实现 crate：平台依赖（winit/softbuffer）只允许出现在平台壳——本 crate 与**既有**
+# game-desktop 工具壳（pre-existing，platform-shell.md §4 自认"同族"）；**未新增到**
+# game-core/game-platform/game-shell/game-data（AGENTS.md §2 + platform-shell.md §7 零平台依赖合同）。
 [dependencies]
 game-core = { path = "../game-core" }
 game-data = { path = "../game-data" }

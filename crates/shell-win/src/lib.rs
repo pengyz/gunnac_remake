@@ -192,63 +192,100 @@ pub fn storage_dir() -> PathBuf {
     }
 }
 
-/// 资产根目录：优先"当前工作目录含 `rom/gunnac_cn.nes`"（开发态 `cargo run` 从仓库根跑），
-/// 否则回退 `CARGO_MANIFEST_DIR` 的仓库根（`crates/shell-win` 上两级）。
+/// PC 资产根解析（platform-shell.md §4/§5 S3）：**可执行文件目录优先**，不依赖进程 cwd。
+///
+/// 解析顺序：
+/// 1. `exe_dir/rom/gunnac_cn.nes` ⇒ `exe_dir`（发布态：ROM 与 exe 同目录）；
+/// 2. `exe_dir/../rom/gunnac_cn.nes` ⇒ `exe_dir/..`（发布态：ROM 在 exe 上一级）；
+/// 3. **仅 debug 构建**回退 `CARGO_MANIFEST_DIR` 的仓库根（开发态 `cargo run`/`cargo test`）；
+/// 4. 均不命中 ⇒ `None`（fail-closed；`FsAssets` 随后一律返回 `None`）。
 ///
 /// 资产只经 `game_platform::AssetSource` 读取；本函数只决定 PC 文件根路径（平台侧语义）。
-pub fn repo_root() -> PathBuf {
-    if let Ok(cwd) = std::env::current_dir() {
-        if cwd.join(ROM_ASSET_PATH).is_file() {
-            return cwd;
+pub fn asset_root() -> Option<PathBuf> {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(root) = asset_root_from_exe(&exe) {
+            return Some(root);
         }
     }
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest.parent().and_then(Path::parent);
-    root.map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."))
+    #[cfg(debug_assertions)]
+    {
+        if let Some(root) = manifest_repo_root() {
+            if root.join(ROM_ASSET_PATH).is_file() {
+                return Some(root);
+            }
+        }
+    }
+    None
 }
 
-/// `AssetSource` PC 实现：根目录 + 相对路径 ⇒ `std::fs` 读整块字节。
+/// 从 exe 路径解析资产根：`exe_dir` 优先，其次 `exe_dir/..`；均需含 [`ROM_ASSET_PATH`]。
 ///
-/// fail-closed：绝对路径/含 `..` 的路径拒绝（`None`）；文件缺失⇒`None`，**不**返回默认内容
-/// （AGENTS.md §3 未证不发明；解析/校验属 `game-data` 域）。
+/// 纯路径解析 + `is_file` 判定（无 cwd 依赖），供 [`asset_root`] 与单测复用。
+pub fn asset_root_from_exe(exe: &Path) -> Option<PathBuf> {
+    let exe_dir = exe.parent()?;
+    let mut candidates: Vec<PathBuf> = vec![exe_dir.to_path_buf()];
+    if let Some(parent) = exe_dir.parent() {
+        candidates.push(parent.to_path_buf());
+    }
+    candidates.into_iter().find(|c| c.join(ROM_ASSET_PATH).is_file())
+}
+
+/// 开发态仓库根（`CARGO_MANIFEST_DIR` 上两级）；**仅 debug 构建**可用（release 不内嵌源码路径）。
+#[cfg(debug_assertions)]
+fn manifest_repo_root() -> Option<PathBuf> {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    manifest.parent().and_then(Path::parent).map(Path::to_path_buf)
+}
+
+/// `AssetSource` PC 实现：资产根 + 相对路径 ⇒ `std::fs` 读整块字节。
+///
+/// fail-closed：根未解析（[`asset_root`] 返回 `None`）、绝对路径、Windows 盘符/前缀路径
+/// （`C:foo` 一类 drive-relative）、含 `..` 的越界路径、文件缺失 ⇒ 一律 `None`，
+/// **不**返回默认内容、不依赖进程 cwd（AGENTS.md §3 未证不发明；解析/校验属 `game-data` 域）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FsAssets {
-    root: PathBuf,
+    root: Option<PathBuf>,
 }
 
 impl FsAssets {
-    /// 指定资产根目录。
+    /// 指定资产根目录（显式根，测试/嵌入场景）。
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self { root: Some(root.into()) }
     }
 
-    /// 默认资产根（[`repo_root`]）。
-    pub fn repo() -> Self {
-        Self::new(repo_root())
+    /// 平台资产根自动检测（[`asset_root`]：exe 目录优先，debug 回退仓库根）。
+    pub fn detect() -> Self {
+        Self { root: asset_root() }
     }
 
-    /// 资产根目录（只读）。
-    pub fn root(&self) -> &Path {
-        &self.root
+    /// 资产根目录（未解析⇒`None`；启动时应打印该值，见 `main.rs`）。
+    pub fn root(&self) -> Option<&Path> {
+        self.root.as_deref()
     }
 }
 
-/// 相对路径安全检查（拒绝绝对路径与 `..` 越界）。
+/// 相对路径安全检查（拒绝绝对路径、Windows 盘符/前缀路径与 `..` 越界）。
 fn safe_relative(path: &str) -> bool {
     let p = Path::new(path);
     if p.is_absolute() {
         return false;
     }
-    !p.components()
-        .any(|c| matches!(c, Component::ParentDir | Component::RootDir))
+    !p.components().any(|c| {
+        matches!(
+            c,
+            // Windows drive-relative（"C:foo"）不是绝对路径，但会逃逸资产根（S1/B1）。
+            Component::Prefix(_) | Component::ParentDir | Component::RootDir
+        )
+    })
 }
 
 impl AssetSource for FsAssets {
     fn read_all(&mut self, path: &str) -> Option<Vec<u8>> {
+        let root = self.root.as_ref()?;
         if !safe_relative(path) {
             return None;
         }
-        std::fs::read(self.root.join(path)).ok()
+        std::fs::read(root.join(path)).ok()
     }
 }
 
@@ -707,7 +744,7 @@ pub struct SelftestReport {
 /// - 真实 `AssetSource`（`std::fs` 读 ROM）→ CHR 背景；无窗口、无网络、不写用户目录。
 pub fn run_selftest(frames: u64) -> SelftestReport {
     let mut host = Host::new();
-    let mut assets = FsAssets::repo();
+    let mut assets = FsAssets::detect();
     let mut renderer = FrameRenderer::new();
     let mut audio = PcAudio::new();
     let mut input = KeyboardInput::new();
@@ -755,9 +792,65 @@ pub fn run_selftest(frames: u64) -> SelftestReport {
 
 #[cfg(test)]
 mod tests {
-    use super::{key_name, map_key, KeyboardInput, CLEAR_RGBA};
+    use super::{
+        asset_root_from_exe, key_name, map_key, safe_relative, KeyboardInput, CLEAR_RGBA,
+    };
     use game_platform::{Buttons, Input as _};
     use winit::keyboard::KeyCode;
+
+    fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("gunnac-shellwin-{tag}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn asset_root_from_exe_prefers_exe_dir_then_parent() {
+        let base = unique_temp_dir("asset-root");
+        let _ = std::fs::remove_dir_all(&base);
+
+        // 布局 A（发布态）：ROM 与 exe 同目录 ⇒ 资产根=exe 目录。
+        let game = base.join("game");
+        std::fs::create_dir_all(game.join("rom")).unwrap();
+        std::fs::write(game.join(super::ROM_ASSET_PATH), b"fake").unwrap();
+        assert_eq!(
+            asset_root_from_exe(&game.join("shell-win.exe")),
+            Some(game.clone()),
+            "exe 目录优先"
+        );
+
+        // 布局 B（发布态）：ROM 在 exe 上一级 ⇒ 资产根=exe/..（读 `exe/../rom/...`）。
+        let bundle = base.join("bundle");
+        let bin = bundle.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(bundle.join("rom")).unwrap();
+        std::fs::write(bundle.join(super::ROM_ASSET_PATH), b"fake").unwrap();
+        assert_eq!(
+            asset_root_from_exe(&bin.join("shell-win.exe")),
+            Some(bundle),
+            "回退 exe/../rom"
+        );
+
+        // 两候选均无 ROM ⇒ None（fail-closed；不猜进程 cwd）。
+        assert_eq!(
+            asset_root_from_exe(&base.join("nowhere").join("x.exe")),
+            None
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn safe_relative_rejects_escape_paths() {
+        assert!(safe_relative("rom/gunnac_cn.nes"), "普通相对路径放行");
+        assert!(!safe_relative("../AGENTS.md"), "`..` 越界拒绝");
+        assert!(!safe_relative("/etc/passwd"), "unix 绝对路径拒绝");
+        #[cfg(windows)]
+        {
+            // B1：drive-relative 前缀（`C:foo`）不是绝对路径但会逃逸资产根。
+            assert!(!safe_relative("C:foo"), "Windows drive-relative 前缀拒绝");
+            assert!(!safe_relative("D:foo\\x"), "盘符前缀+反斜杠拒绝");
+            assert!(!safe_relative("C:\\Windows\\x"), "盘符绝对路径拒绝");
+        }
+    }
 
     #[test]
     fn key_name_matches_map_key_table() {

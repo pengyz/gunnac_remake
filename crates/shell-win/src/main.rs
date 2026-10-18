@@ -134,7 +134,7 @@ impl App {
             renderer: WindowRenderer::new(),
             audio: PcAudio::new(),
             lifecycle: LifecycleQueue::new(),
-            assets: FsAssets::repo(),
+            assets: FsAssets::detect(),
             start: now,
             next_frame: now,
             asset_loaded: false,
@@ -148,6 +148,13 @@ impl App {
             return;
         }
         self.asset_loaded = true;
+        // S1：启动时**始终**打印实际资产根（成功/失败都打印，便于验收与排障）。
+        match self.assets.root() {
+            Some(root) => eprintln!("shell-win: 资产根={}", root.display()),
+            None => eprintln!(
+                "shell-win: 资产根=未找到（exe 目录与开发态回退均无 {ROM_ASSET_PATH}；fail-closed 黑背景）"
+            ),
+        }
         if self.host.load_asset(&mut self.assets, ROM_ASSET_PATH) {
             let rom = self.host.rom().map(|r| r.to_vec());
             if let Some(rom) = rom {
@@ -157,10 +164,7 @@ impl App {
                 }
             }
         } else {
-            eprintln!(
-                "shell-win: 资产缺失 {ROM_ASSET_PATH}（根={:?}），CHR 背景 fail-closed 用黑背景",
-                self.assets.root()
-            );
+            eprintln!("shell-win: 资产缺失 {ROM_ASSET_PATH}，CHR 背景 fail-closed 用黑背景");
         }
     }
 }
@@ -320,6 +324,14 @@ fn parse_frames(value: &str) -> Result<u64, String> {
         .map_err(|_| format!("--selftest-frames 需要非负整数，收到：{value:?}"))
 }
 
+/// 资产根描述（selftest 模式启动打点；窗口模式由 `App::load_assets` 打印——两模式都**始终**打印）。
+fn asset_root_description() -> String {
+    match shell_win::asset_root() {
+        Some(root) => root.display().to_string(),
+        None => "未找到（fail-closed）".to_string(),
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
@@ -328,6 +340,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     match parse_selftest_frames(&args) {
         Ok(Some(frames)) => {
+            // S1：启动时始终打印实际资产根（selftest 模式；stderr，保持 stdout 确定性签名面不变）。
+            eprintln!("shell-win: 资产根={}", asset_root_description());
             let report = shell_win::run_selftest(frames);
             print_selftest(&report);
             return Ok(());

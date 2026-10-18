@@ -66,22 +66,24 @@ shell-pc（首实现，现名 shell/win；Win/Linux 同源）    shell-android�
 | 模块 | 设计 |
 |---|---|
 | `fixed_step` | 60Hz 固定步：`FRAME_NS=1e9/60`；平台注入整数纳秒；追帧上限 4；时钟回拨⇒0 帧（fail-closed） |
-| `input` | **对向同持消解**（L+R/U+D⇒两键 0；进入 core 前完成，core 对未证组合 panic=W6）；`$18` 位图（R-move-1 A 级 bit0/1/2/3/6/7）+ `$16` 边沿位图（v1 **仅方向+A/B 子集**，不含 START/SELECT；只产出不消费） |
-| `host` | 宿主状态机（`FlowState`+关号 `stage_index`）只走 game-core flow **已证边集**；关号守卫（E37C/E392）；tick 序列（见下）；`signature()` 确定性状态签名；AssetSource/Storage/Lifecycle 端口 |
-| `render` | 渲染合成：清屏 + 已证坐标面玩家 8×8 占位块（`$04E0/$04FC`）；BG/敌/弹/HUD/文本/结局卡**不画**（未证） |
+| `input` | **对向同持消解**（L+R/U+D⇒两键 0；进入 core 前完成，core 对未证组合 panic=W6）；`$18` 位图（R-move-1 A 级 bit0/1/2/3/6/7）+ `$16` 边沿位图（v1 **仅方向+A/B 子集**，不含 START/SELECT；只产出不消费）+ 菜单域 `$18` 按下沿位图（含 START/SELECT，喂 `InputLatch`） |
+| `host` | 宿主状态机（`FlowState`+关号 `stage_index`）只走 game-core flow **已证边集**；关号守卫（E37C/E392）；**菜单/模式派发**（`InputLatch`+1f/12f、`MenuInputGate` 两层门、`ShopState::on_b`、帧锚 Boot@180/Black@360、33f/240f 常数、响应延迟队列）；**STG-01 装载**（`decode_sched($A26D,43)`+`ScriptCursor::stg01`+自机槽初态）；**stage clock 滚动源**（`stage::scroll_delta`）；spawn 效果落地（`land_pair`/`land_leader`）+ 激活日志；tick 序列（见下）；`signature()` 确定性状态签名；AssetSource/Storage/Lifecycle 端口 |
+| `render` | 渲染合成：清屏 + 已证坐标面玩家 8×8 占位块（`$04E0/$04FC`）；BG/敌/弹/HUD/文本/结局卡**不画**（未证）；另有只读 `FrameView`（模式/关号/帧号/玩家/玩家子弹活弹数/敌槽原始型值+坐标 None 口径/HUD 已证数值域）供平台侧渲染合成（task-10 消费） |
 | `audio` | `ApuWriteStream`→`Audio` 保序 `write_apu` + 每逻辑帧 `end_frame`；**v1 生产者未接**（音频驱动内部体未证） |
 | `snapshot` | Storage 存档缝占位：`GNSH` v1 定长快照（不自动保存；损坏 fail-closed） |
 
 **帧内 tick 序列（每逻辑帧）**
 
 1. 输入采样 → `resolve_directions` → `held`/`pressed` 位图；
-2. 模式门：`engine::stage_tick`：`Combat`=已证 gameplay 段（R-stage-tick；R-ui-6 是 UI capture 锚）；
-   `DeathRespawn|StageClear`=**接线约定**（v1 行为等级降级：细粒度行为未隔离，G-S5-5 死亡窗/关末门
-   并发未取证；A2 `death_chain_step`/A3 `stage_clear_step` 未接线），且**不含 `StageStart`**
-   （intro 可动性未证）。`player::tick` 仅 `Combat`（重生窗 x/y/亚像素冻结=A 级，R-respawn-2）；
-   `scroll_delta`：Combat=16（tick=scroll/16，Wt-2 A 级；未接关卡数据时=接线约定），其余 0；
-3. 消费 `StageEffects`：`stage_clear_requested`（`$26 bit4` 门）在 `Combat` ⇒ 自动投递已证边
-   `Combat→StageClear`；其余效果只登记摘要（不发明消费语义）；
+2. 模式门：`engine::stage_tick`：`Combat`=已证 gameplay 段（R-stage-tick）；`Transition|StageStart`=
+   **B 级接线依据**（装载后滚动在转场窗推进=`.scroll.jsonl` A 级；出敌在 stage-start 窗内发生=
+   `stage-appear` f1278∈[1260,1500)）；`DeathRespawn|StageClear`=**接线约定**（细粒度行为未隔离，
+   G-S5-5 死亡窗/关末门并发未取证；A2/A3 细粒度状态机未接线）。`player::tick`=`Combat|StageStart`
+   （**StageStart 可动=A 级 trace**：`.player.jsonl` f1301 首移；`DeathRespawn` 窗冻结=R-respawn-2 A 级，
+   不跑）。滚动源=stage clock + `stage::scroll_delta`（A 级逐帧；见 §3.1）；未装载关卡⇒引擎不 tick（fail-closed）；
+3. 消费 `StageEffects`：spawn 项落地（`Pair→land_pair` / `Spawn→land_leader(...,None)`；其余 item
+   fail-closed 不落地）+ 槽 0→非0 激活日志；`stage_clear_requested`（`$26 bit4` 门）在 `Combat` ⇒
+   自动投递已证边 `Combat→StageClear`；其余效果只登记摘要（不发明消费语义）；
 4. Audio 流消费 → 渲染合成 + `present` → `FrameClock::tick`；
 5. suspend/quit 帧不推进、不呈现（生命周期门控）。
 
@@ -91,11 +93,28 @@ GameOverPending→GameOverMenu→StageClear→Ending` + 关末 `StageAdvance(→
 边集证据指针见 [game-core flow.rs](../../crates/game-core/src/flow.rs) 注释（R-ui-6/7、A2 F6-F12、
 A3 R-l5-3..6）。
 
-**驱动方（v1）**：除 `Combat→StageClear` 一条自动接线（`$26 bit4` 门）外，**所有 `ModeEvent` 由平台/上层
-显式投递**（宿主不做按键→模式自动转移，避免发明未证键序/时机）。**已证但未接线**的时序（S8）：
-关始 intro 240f（`engine.rs RUN_STAGE_INTRO_FRAMES`，R-ui-6 锚 1260→1500）、A3 关末细段
-`stage_clear_step`（50×8f 倒数+飞离+第 4 关特判）、A2 死亡链 `death_chain_step`、R-respawn 玩家侧复位
-——属后续任务卡；shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
+**驱动方（v1）**：`Combat→StageClear`（`$26 bit4` 门）与**菜单/模式派发**为宿主自动接线；其余
+`ModeEvent` 由平台/上层经 `Host::apply_event_hooked` 显式投递。菜单派发规则（证据级见
+[plan-playable-loop.md](../findings/plan-playable-loop.md) §4）：`InputLatch` press@N→N+1f/保持 12f、
+标题段锁 `(450,550]` 后解锁、`MenuInputGate` 按下沿派发、`ShopState::on_b` 双 B 退出、
+Boot@180/Black@360 帧锚、转场/关始 33f/240f 常数、出店 +33f 响应延迟。**已证但未接线**的时序（S8）：
+A3 关末细段 `stage_clear_step`、A2 死亡链 `death_chain_step`、R-respawn 玩家侧复位——属后续任务卡；
+shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
+
+**§3.1 可玩闭环 A 实施状态（2026-10-18，task-9 回填）**
+
+| 件 | 实现 | 验证 |
+|---|---|---|
+| 菜单/模式派发 | `Host::dispatch_menu`/`auto_advance`/`due_events`（`InputLatch`+`MenuInputGate`+`ShopState::on_b`+帧锚/常数/延迟队列） | 单元测试：Boot→…→Combat 完整序列、标题锁窗内 Start 无效、Shop 内 Start 无效 |
+| STG-01 装载 | `Host::load_stg01`（`AssetSource`→`game_data::rom::prg_bank(8)`→`decode_sched($A26D,64)`=43 记录→`StageState`）；转场帧自动装载（A 级 f1193 锚） | `tests/stg01_replay.rs`：43 记录 + tick 锚 [1,33,49,65,81]（A 级 golden） |
+| 滚动源 | `Host::stage_scroll_delta`=`-stage::scroll_delta(abs)`；`abs=1193+(frame-load_frame)` | **C1：vs `.scroll.jsonl` 1207/1207 帧 0 失配**（A 级） |
+| spawn 落地/摘要 | `apply_stage_effects`（`land_pair`/`land_leader`）+ `scan_spawns`（`$0400` 0→非0 判定式） | C4：共同槽 16/16、engine 型集 ⊆ oracle 型集；帧列不可对拍（见 §8） |
+| FrameView | `Host::frame_view()`：mode/stage/frame/player/live_bullets/player_bullets_live/敌槽型值（坐标 None）/HUD 已证数值域 | 单测：字段只读幂等、position=None 显式、槽 8..=27 |
+| 确定性 | 3000 帧 replay 两次全等 | `host=0x521d397a6c609f34 canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807` |
+| 玩家列对拍（新增 C6） | `player::tick` vs `.player.jsonl`（死亡窗剔除 f1260..=1830） | **571/571 帧一致**（A 级） |
+
+> `Host::signature()` 语义在 task-9 扩展（新增菜单锁存/门控/装载/spawn 日志/阶段计时覆盖）；
+> shell-win 自检 `host_signature` 值随之更新（§4.2，记录新值；非回退）。
 
 ## 4. shell-pc 架构（首实现，现名 `shell/win`）
 
@@ -105,7 +124,7 @@ A3 R-l5-3..6）。
 | 帧驱动 | 平台单调时钟→`game_shell::Host::advance(now_ns)`（60Hz 固定步）→ 渲染 → present。**时间基准（S1）**：`now_ns` 必须**相对 `Host` 创建时刻**（首帧=0，平台侧用 `Instant::now() - instant_at_host_creation` 折算）；禁止传平台绝对 uptime ns（否则首帧被当成积压、受追帧上限 4 截断而启动偏移）。`advance` 返回**折算帧数**；suspend/quit 帧不推进逻辑，实际推进帧数=前后 `Host::frame()` 之差 |
 | 帧呈现 | 256×240 RGBA → blit 整数倍缩放（保比例黑边——game-desktop blit_scaled 语义） |
 | 输入 | 键盘事件 → `Buttons`（Z/X/Enter/RShift/方向键）；对向同持由 game-shell 统一消解 |
-| 音频 | 平台 `Audio` 实现（cpal 族，PCM=合成器未证期静音占位显式）；消费 ApuWrite 流 |
+| 音频 | 平台 `Audio` 实现：v1=**ApuWrite 写流消费 + PCM 静音占位显式**（`PcAudio`，**无 cpal 设备流**）；cpal 设备输出与 APU 合成器（AUD-2/3）=后续任务卡 |
 | 资产 | `AssetSource`=`std::fs`；**资产根=可执行文件所在目录**（`exe/rom/gunnac_cn.nes`；可回退 `exe/../rom/` 与 `CARGO_MANIFEST_DIR` 开发态），**不得依赖进程 cwd**（S3）；逻辑路径 `ROM_ASSET_PATH` 跨平台一致 |
 | 存储 | `Storage`：Windows=`%APPDATA%/gunnac/`；Linux=`~/.local/share/gunnac/` |
 | 生命周期 | 关窗→`AppEvent::Quit`；最小化/焦点可选发 Suspend/Resume（桌面可不发） |
@@ -123,7 +142,7 @@ A3 R-l5-3..6）。
 | 呈现 | `FrameRenderer` 合成 + `blit_scaled` 整数倍缩放/黑边（softbuffer `0x00RRGGBB`） | `view_rect`/`blit_scaled` 单测（2×/3×/黑边/小窗裁切） |
 | 输入 | `KeyboardInput`+`key_name`：winit 物理键码→`Buttons`（Z/X/Enter/RShift/方向）；对向同持交 game-shell `resolve_directions` 消解 | 键位表单测 + 按下/抬起状态单测 |
 | 音频 | `PcAudio`（`Audio` impl）：真实消费 game-shell `ApuWrite` 流（写序保真登记，计数不丢）；PCM=静音占位显式（`silent()=true`） | 单测：写流保序/计数/`end_frame`/零 PCM；自检注入 2 条写流被消费（audio_writes=2） |
-| 资产 | `FsAssets`（`AssetSource` impl）：`std::fs` 相对路径读 `rom/gunnac_cn.nes`；绝对路径/`..`/缺失⇒`None`（fail-closed）。**v1=相对 cwd 定位**（S3 复核项：task-1 后续加固为 exe 目录基准，见 §4） | 单测 + 自检 rom_len=262160 |
+| 资产 | `FsAssets`（`AssetSource` impl）：`std::fs` 读 `rom/gunnac_cn.nes`；**资产根=exe 目录优先**（`exe/rom` → `exe/../rom`；debug 回退 `CARGO_MANIFEST_DIR`），**不依赖进程 cwd**；启动（窗口/自检）始终打印实际资产根。**拒绝绝对路径/Windows 前缀（`C:foo` drive-relative）/`..`/缺失** ⇒ `None`（fail-closed，B1/S1） | 单测：exe 两布局解析/前缀拒绝；smoke：异 cwd 子进程仍定位 ROM；自检 rom_len=262160 |
 | 存储 | `FileStorage`（`Storage` impl）：`%APPDATA%/gunnac`（Win）/`~/.local/share/gunnac`（Linux），`slot{n}.sav` | 单测：往返/空槽 fail-closed；**不自动保存**（原版存档语义未证） |
 | 生命周期 | `LifecycleQueue`：关窗→`Quit`；焦点丢失/获得→`Suspend`/`Resume`（最小平台策略）；宿主 suspend 停逻辑帧 | FIFO 单测；game-shell 门控测试 |
 | 渲染内容 | CHR 背景（`ChrBackground`：`game-data::chr` 解码字模区 tile 平铺，灰阶 `GREY4` **C 级占位**）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）；敌/弹/HUD/文本**显式不画** | 单测：短 ROM fail-closed、tile 解码、画布覆盖/清屏色保留；合成 hash 确定性 |
@@ -199,24 +218,32 @@ CHR 背景占位合成，非 L4 像素目标。GUI 视觉（缩放/黑边/CHR �
 
 H-01 弹丸/武器槽语义、H-16 命中判定、Boss/EN-9+ 段、商店消费侧、音效/音乐触发与 PCM 合成
 （AUD-2/3 内部体）、原版调色板映射/BG nametable/文本流/结局卡渲染、玩家主武器连射与 A 边沿投放接线、
-菜单输入门控派发、关卡数据装载（脚本/调度/shape/初始槽）、触摸虚拟手柄布局/连发、Android 音频后端
-选型细节/EGL 资源策略/存档时机、原版存档语义、`StageStart` 段玩家可动性、死亡窗滚动行为。
-逐条处理口径见 [plan-platform-abstraction.md](../findings/plan-platform-abstraction.md) §6。
+**敌 spawn 帧级对齐与初生记录 loader**、**敌坐标写者链（spawn 定位/behavior VM 位置写）**、
+触摸虚拟手柄布局/连发、Android 音频后端选型细节/EGL 资源策略/存档时机、原版存档语义、死亡窗滚动行为。
+逐条处理口径见 [plan-playable-loop.md](../findings/plan-playable-loop.md) §8 +
+[plan-platform-abstraction.md](../findings/plan-platform-abstraction.md) §6。
+
+> 【2026-10-18 task-9 更新】「菜单输入门控派发」「关卡数据装载」从**未实现**转为**已接线**（菜单派发
+> 输入驱动 + STG-01 装载，见 §3.1）；但两者仍有未证边界：菜单→商店中间动画时长（主循环只保证序列不
+> 保证帧级）、spawn 帧级对齐/初生记录/坐标写者链、Boss/EN-9+ 后段（decode 视界仅 43 记录主段）。
 
 v1 复核（task-6）补充登记：
 
 - **死亡窗/关末并发窗的 engine tick 细粒度行为未隔离**（G-S5-5）：`DeathRespawn`/`StageClear` 内
   跑 `engine::stage_tick` 是**接线约定**，不是已证 gameplay 段（A2 `death_chain_step` / A3
   `stage_clear_step` 尚未接线）；差分对拍时视作未证域。
-- **除 `Combat→StageClear` 外的模式时序已证但未接线**：关始 intro 240f（R-ui-6）、A3 关末细段、
-  A2 死亡链、R-respawn 玩家侧复位——v1 由平台/上层显式投递 `ModeEvent`，不硬编码时序。
+- **除 `Combat→StageClear` 外的模式时序**：关始 intro 240f（R-ui-6）、A3 关末细段、A2 死亡链、
+  R-respawn 玩家侧复位——菜单序列由 task-9 输入驱动接线；A2/A3 细粒度仍由平台/上层显式投递。
 - **双状态源同步契约待定**：`Host.stage_index` vs `StageState.stage_counter`（`$180`）；
   `player.bomb_ammo` vs `FlowState.data.bomb_ammo`——接 game-data/死亡链任务卡的前置条款。
 - **快照只做格式 fail-closed**（不做 stage 范围/mode×stage 组合语义校验；不恢复 `prev_buttons/pacer`）。
 - **依赖门禁扫描面**只解析 `[dependencies]`（dev/build/target 段=后续加固）。
-- **菜单域 `$16` START/SELECT 边沿**（bit4/bit5）不在 v1 `pressed_bitmap`（仅方向+A/B 子集）。
+- **菜单域 `$16` START/SELECT 边沿**（bit4/bit5）不在 `pressed_bitmap`（仅方向+A/B 子集）；
+  菜单派发改用独立 `menu_pressed_bitmap`（$18 域，含 START/SELECT）。
 - **平台接入契约**：`Host::advance(now_ns)` 时间基准=相对 Host 创建（首帧=0）；PC `AssetSource`
   资产根=可执行文件目录（不得依赖 cwd），Android=APK `assets/` 根。
+- **game-shell 依赖**：task-9 起含 `game-data`（纯解析；ROM 只读窗口 `game_data::rom::prg_bank`），
+  零平台依赖门禁同步白名单。
 
 ## 9. 验收与复现命令（task-5 v1）
 
