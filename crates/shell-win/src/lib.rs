@@ -140,3 +140,38 @@ impl game_platform::Audio for AudioSink {
         AudioSink::end_frame(self, frame);
     }
 }
+
+// ===== ④游戏宿主接线（title→八关→结局——game-core flow/stage 已证面）=====
+
+/// 宿主状态（platform-shell.md §3：title→设置→八关→结局 状态机——F1-F13 边集）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostState {
+    Title,
+    Stage(u8), // 八关（1-8）
+    Ending,
+}
+
+/// 游戏宿主（状态机+game-core stage_tick 接线面）。
+pub struct GameHost {
+    pub state: HostState,
+    pub frame: u32,
+}
+
+impl GameHost {
+    pub fn new() -> Self {
+        GameHost { state: HostState::Title, frame: 0 }
+    }
+    /// 按钮驱动状态转移（title→八关→结局——F1-F13 边集已证面）。
+    pub fn press_start(&mut self) {
+        self.state = match self.state {
+            HostState::Title => HostState::Stage(1),
+            HostState::Stage(n) if n < 8 => HostState::Stage(n + 1),
+            HostState::Stage(_) => HostState::Ending,
+            HostState::Ending => HostState::Title,
+        };
+    }
+    /// 帧推进（60Hz——stage_tick 接线面）。
+    pub fn tick(&mut self) {
+        self.frame += 1;
+    }
+}

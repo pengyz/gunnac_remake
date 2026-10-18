@@ -66,3 +66,21 @@ fn audio_sink_stream() {
     assert_eq!(pcm.len(), 10, "PCM 面");
     assert!(pcm.iter().all(|&s| s == 0), "静音期零样本");
 }
+
+/// ④游戏宿主状态机（title→八关→结局）。
+#[test]
+fn game_host_state_machine() {
+    use shell_win::{GameHost, HostState};
+    let mut h = GameHost::new();
+    assert_eq!(h.state, HostState::Title, "起始=title");
+    h.press_start();
+    assert_eq!(h.state, HostState::Stage(1), "title→关1");
+    for _ in 0..7 {
+        h.press_start();
+    }
+    assert_eq!(h.state, HostState::Stage(8), "八关");
+    h.press_start();
+    assert_eq!(h.state, HostState::Ending, "关8→结局");
+    h.press_start();
+    assert_eq!(h.state, HostState::Title, "结局→title");
+}
