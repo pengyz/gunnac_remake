@@ -1,13 +1,335 @@
 //! render_frame —— L4 对拍用 Rust 侧帧导出（t93：nametable 持久化模型 → BG 渲染）。
 //! 用法：render-frame <帧号> <输出名> [场景=gameplay-stage1] [--base <0|1>]
+//!          [--out-dir <目录>] [--log-path <文件>]（task-94：P0-0-2 输出参数化，默认行为不变）
 //!
 //! 模型（bank15:$F040-F0DA 定谳）：逐帧 nmi_flush（$130-$14F 行缓冲 → $8F:$8E 行、
 //! $D3-$DA → 属性行、$160=挂起计数）累积 nametable；目标帧按 $1C/$1D 卷轴渲染 32×30。
 //! BG 图案表基址（PPUCTRL bit4）未证——--base 0|1 双候选由 L4 对拍裁定（③）。
+//! `--out-dir`/`--log-path` 显式指定时须落在 repo_root 内（越界 exit 2）；缺失 ROM/trace exit 2。
 
 use game_core::terrain::Nametable;
 use game_desktop::{Canvas, SCREEN_H, SCREEN_W};
 use std::io::Write;
+use std::path::{Path, PathBuf};
+
+// ===== CLI / 输出参数化（task-94，P0-0-2；规格=l4-baseline-freeze-plan §4.1）=====
+
+/// 用法（`--help`）。
+pub const USAGE: &str = "\
+用法：render-frame <帧号> <输出名> [场景=gameplay-stage1] [--base <0|1>]
+                   [--out-dir <目录>] [--log-path <文件>]
+                   [--probe-file <文件>] [--stream-file <文件>] [--text-file <文件>]
+
+--out-dir   actual 输出根（png+idx 写此处；缺省=<repo_root>/oracle/screens/actual）
+--log-path  渲染日志（缺省=<out_dir>/.render.log；行含 scene/env/argv/输入 sha/输出 sha）
+显式 --out-dir/--log-path 必须落在仓库根（repo_root）内，越界 fail-closed（退出码 2）。
+缺失输入（ROM/trace）⇒ 显式报错退出码 2。";
+
+/// 默认场景名（历史行为）。
+pub const DEFAULT_SCENE: &str = "gameplay-stage1";
+
+/// 解析后的 CLI（**默认值与历史行为一致**；`--out-dir`/`--log-path` 为 task-94 新增）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cli {
+    pub frame: u64,
+    pub name: String,
+    pub scene: String,
+    pub base: usize,
+    /// `--out-dir` 原样字符串（缺省 None ⇒ `<repo_root>/oracle/screens/actual`）。
+    pub out_dir: Option<String>,
+    /// `--log-path` 原样字符串（缺省 None ⇒ `<out_dir>/.render.log`）。
+    pub log_path: Option<String>,
+    /// 旧可选参数（F97-3：解析进 CLI，避免把其值误当位置参数；主流程仍按原逻辑重扫 args 使用）。
+    pub probe_file: Option<String>,
+    pub stream_file: Option<String>,
+    pub text_file: Option<String>,
+}
+
+/// `--help`/`-h` 是否出现在任意位置（含位置参数之后；F97-4）。
+pub fn wants_help(args: &[String]) -> bool {
+    args.iter().any(|a| a == "--help" || a == "-h")
+}
+
+/// 取 `--flag` 后随值（缺失⇒None；不做越界/存在校验——校验在 resolve 阶段）。
+fn arg_value(args: &[String], flag: &str) -> Option<String> {
+    args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned()
+}
+
+/// 旧带值可选 flag（必须连同值一起跳过；否则值会被误当位置参数——F97-3）。
+const LEGACY_VALUE_FLAGS: &[&str] = &["--probe-file", "--stream-file", "--text-file"];
+
+/// 解析 CLI（纯函数；可单测）。缺失/非法参数 ⇒ Err（main 侧 eprintln + exit 2）。
+pub fn parse_cli(args: &[String]) -> Result<Cli, String> {
+    let mut positional: Vec<&String> = Vec::new();
+    let mut i = 1usize; // 跳过 argv[0]
+    while i < args.len() {
+        let a = &args[i];
+        if a == "--out-dir" || a == "--log-path" || a == "--base" {
+            if args.get(i + 1).is_none() {
+                return Err(format!("{a} 需要参数值"));
+            }
+            i += 2;
+            continue;
+        }
+        if LEGACY_VALUE_FLAGS.contains(&a.as_str()) {
+            if let Some(v) = args.get(i + 1) {
+                // 值必须跳过（不参与位置参数）；旧实现缺失值时按缺省处理 ⇒ 保持宽容
+                let _ = v;
+                i += 2;
+            } else {
+                i += 1;
+            }
+            continue;
+        }
+        if a.starts_with("--") {
+            i += 1; // 其余旧开关（无值）
+            continue;
+        }
+        positional.push(a);
+        i += 1;
+    }
+    let frame_raw = positional.first().ok_or("缺失帧号（第 1 个位置参数）")?;
+    let frame: u64 = frame_raw.parse().map_err(|_| format!("帧号非法：{frame_raw}"))?;
+    let name = positional
+        .get(1)
+        .map(|s| (*s).clone())
+        .ok_or("缺失输出名（第 2 个位置参数）")?;
+    let scene = positional
+        .get(2)
+        .map(|s| (*s).clone())
+        .unwrap_or_else(|| DEFAULT_SCENE.into());
+    let base: usize = match arg_value(args, "--base") {
+        Some(v) => v.parse().map_err(|_| format!("--base 非法：{v}"))?,
+        None => 0,
+    };
+    Ok(Cli {
+        frame,
+        name,
+        scene,
+        base,
+        out_dir: arg_value(args, "--out-dir"),
+        log_path: arg_value(args, "--log-path"),
+        probe_file: arg_value(args, "--probe-file"),
+        stream_file: arg_value(args, "--stream-file"),
+        text_file: arg_value(args, "--text-file"),
+    })
+}
+
+/// 去除 Windows `\\?\` 扩展长度前缀（比较/显示用；写入仍可用）。
+pub fn strip_verbatim(p: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let s = p.to_string_lossy();
+        if let Some(rest) = s.strip_prefix(r"\\?\") {
+            if !rest.starts_with("UNC\\") {
+                return PathBuf::from(rest);
+            }
+        }
+    }
+    p.to_path_buf()
+}
+
+/// 真实路径解析（**触及文件系统**）：存在则 canonicalize；不存在则 canonicalize 最近存在祖先
+/// 再把剩余组件词法拼回（用于尚未创建的输出目录）。错误 ⇒ Err（fail-closed）。
+pub fn real_path(p: &Path) -> Result<PathBuf, String> {
+    let abs = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| format!("无法取当前目录：{e}"))?
+            .join(p)
+    };
+    let mut existing = abs.clone();
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    loop {
+        match std::fs::canonicalize(&existing) {
+            Ok(c) => {
+                let mut out = strip_verbatim(&c);
+                for seg in tail.iter().rev() {
+                    out.push(seg);
+                }
+                return Ok(out);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let Some(name) = existing.file_name().map(|s| s.to_os_string()) else {
+                    return Err(format!("无法解析路径 {}：{e}", abs.display()));
+                };
+                tail.push(name);
+                if !existing.pop() {
+                    return Err(format!("无法解析路径 {}：{e}", abs.display()));
+                }
+            }
+            Err(e) => return Err(format!("无法解析路径 {}：{e}", existing.display())),
+        }
+    }
+}
+
+/// 词法规范化（不触盘）：解析 `.`/`..`（不越过根）。
+pub fn lexical_normalize(p: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for c in p.components() {
+        match c {
+            Component::Prefix(_) | Component::RootDir => out.push(c.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !out.pop() {
+                    out.push("..");
+                }
+            }
+            Component::Normal(x) => out.push(x),
+        }
+    }
+    out
+}
+
+/// 路径比较归一（Windows 大小写不敏感；POSIX 大小写敏感——F97-5）。
+fn norm_compare(p: &Path) -> String {
+    let s = strip_verbatim(p).to_string_lossy().replace('\\', "/").trim_end_matches('/').to_string();
+    #[cfg(windows)]
+    {
+        s.to_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        s
+    }
+}
+
+/// 是否位于仓库根内（按给定路径比较；真实路径 containment 见 [`resolve_explicit`]/[`ensure_real_within`]）。
+pub fn within_repo(repo_root: &Path, p: &Path) -> bool {
+    let root = norm_compare(repo_root);
+    let path = norm_compare(p);
+    path == root || path.starts_with(&(root.clone() + "/"))
+}
+
+/// 解析显式输出路径：相对路径按当前目录解释 → 词法规范化 → **真实路径**（canonicalize 最近存在
+/// 祖先再拼）→ 必须落在 repo_root 真实路径内；越界 ⇒ Err（fail-closed，main 侧 exit 2）。
+///
+/// 真实路径解析可识别 junction/symlink 逃逸（F97-1）；返回真实路径用于写入。
+pub fn resolve_explicit(repo_root: &Path, value: &str, flag: &str) -> Result<PathBuf, String> {
+    let raw = PathBuf::from(value);
+    let abs = if raw.is_absolute() {
+        raw
+    } else {
+        let cwd = std::env::current_dir().map_err(|e| format!("{flag}：无法取当前目录：{e}"))?;
+        cwd.join(raw)
+    };
+    let p = lexical_normalize(&abs);
+    let root_real = real_path(repo_root).map_err(|e| format!("{flag}：仓库根真实路径解析失败：{e}"))?;
+    let p_real = real_path(&p).map_err(|e| format!("{flag}：路径真实解析失败：{e}"))?;
+    if !within_repo(&root_real, &p_real) {
+        return Err(format!(
+            "{flag} 越界（真实路径在仓库外）：{}（仓库根 {}）",
+            p_real.display(),
+            root_real.display()
+        ));
+    }
+    Ok(p_real)
+}
+
+/// 创建后再校验真实路径仍位于 repo_root 内（防竞态/父级 junction；F97-1 二次校验）。
+pub fn ensure_real_within(repo_root: &Path, p: &Path, flag: &str) -> Result<(), String> {
+    let root_real = real_path(repo_root).map_err(|e| format!("{flag}：仓库根真实路径解析失败：{e}"))?;
+    let p_real = real_path(p).map_err(|e| format!("{flag}：路径真实解析失败：{e}"))?;
+    if !within_repo(&root_real, &p_real) {
+        return Err(format!(
+            "{flag} 越界（创建后真实路径在仓库外）：{}（仓库根 {}）",
+            p_real.display(),
+            root_real.display()
+        ));
+    }
+    Ok(())
+}
+
+/// 记录用 env 白名单（render_frame 显式 knobs；不含 REPO_ROOT=输入定位不属渲染参数）。
+pub const ENV_KNOBS: &[&str] = &[
+    "BOTH", "COLOFF", "COMP", "DBGPROBE", "DBGSTREAM", "FAMMAP", "FAMROW", "FLAGUPLOAD",
+    "FLIPOFF", "FUSE", "FUSE2", "GOLDPAL", "GRPSEL", "LOOPABL", "NOHUDLUT", "NOOWF", "PALROW",
+    "PROJ2007", "QBASE", "QUAD", "R4B", "R4BOFF", "R4BREV", "RECP3", "RECPAL", "RENDER_NT",
+    "REVORD", "ROWDBL", "ROWGOLD", "ROWMAP", "ROWOFF", "ROWWIN", "SLOTEND", "SPRABL", "TBLDRV",
+    "TEXTABL", "TEXTFALLBACK", "TRIHOP", "WHITE13",
+];
+
+/// 显式设置的 env 摘要（`K=V` 按 K 排序；空⇒`{}`）。
+pub fn env_explicit_summary() -> String {
+    let mut kv: Vec<String> = ENV_KNOBS
+        .iter()
+        .filter_map(|k| std::env::var_os(k).map(|v| (*k, v)))
+        .map(|(k, v)| format!("{k}={}", v.to_string_lossy()))
+        .collect();
+    kv.sort();
+    format!("{{{}}}", kv.join(","))
+}
+
+/// SHA-256（自含实现；P0-0 manifest 用 `sha12`=前 12 hex）。
+pub fn sha256_hex12(bytes: &[u8]) -> String {
+    let digest = sha256(bytes);
+    digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
+}
+
+fn sha256(bytes: &[u8]) -> [u8; 32] {
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let mut h: [u32; 8] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    let bit_len = (bytes.len() as u64).wrapping_mul(8);
+    let mut data = bytes.to_vec();
+    data.push(0x80);
+    while data.len() % 64 != 56 {
+        data.push(0);
+    }
+    data.extend_from_slice(&bit_len.to_be_bytes());
+    for chunk in data.chunks_exact(64) {
+        let mut w = [0u32; 64];
+        for (i, b) in chunk.chunks_exact(4).enumerate() {
+            w[i] = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+        }
+        for i in 16..64 {
+            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
+            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
+        }
+        let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh) =
+            (h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
+        for i in 0..64 {
+            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let ch = (e & f) ^ ((!e) & g);
+            let t1 = hh.wrapping_add(s1).wrapping_add(ch).wrapping_add(K[i]).wrapping_add(w[i]);
+            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let t2 = s0.wrapping_add(maj);
+            hh = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(t1);
+            d = c;
+            c = b;
+            b = a;
+            a = t1.wrapping_add(t2);
+        }
+        for (x, v) in h.iter_mut().zip([a, b, c, d, e, f, g, hh]) {
+            *x = x.wrapping_add(v);
+        }
+    }
+    let mut out = [0u8; 32];
+    for (i, v) in h.iter().enumerate() {
+        out[i * 4..i * 4 + 4].copy_from_slice(&v.to_be_bytes());
+    }
+    out
+}
 
 fn hex_decode(s: &str) -> Vec<u8> {
     (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect()
@@ -77,19 +399,86 @@ static ROW_GOLDEN: [usize; 30] = [
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let frame: u64 = args.get(1).expect("帧号").parse().expect("帧号");
-    let name = args.get(2).expect("输出名").clone();
-    let scene = args.get(3).cloned().unwrap_or_else(|| "gameplay-stage1".into());
-    let base: usize = args.iter().position(|a| a == "--base")
-        .and_then(|i| args.get(i + 1)).and_then(|v| v.parse().ok()).unwrap_or(0);
+    if wants_help(&args) {
+        println!("{USAGE}");
+        return;
+    }
+    let cli = match parse_cli(&args) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("render-frame: 参数错误：{e}\n\n{USAGE}");
+            std::process::exit(2);
+        }
+    };
+    let frame = cli.frame;
+    let name = cli.name.clone();
+    let scene = cli.scene.clone();
+    let base = cli.base;
     let repo_root: std::path::PathBuf = std::env::var("REPO_ROOT").map(std::path::PathBuf::from)
         .unwrap_or_else(|_| {
             std::env::current_exe().unwrap_or_default()
                 .parent().and_then(|p| p.parent()).and_then(|p| p.parent())
                 .map(|p| p.to_path_buf()).unwrap_or_default()
         });
-    let rom = std::fs::read(repo_root.join("rom/gunnac_cn.nes")).expect("ROM");
-    let trace = std::fs::read_to_string(repo_root.join(format!("analysis/traces/{scene}.frames.jsonl"))).expect("trace");
+    // 缺失输入 ⇒ 显式报错退出码 2（规格 §4.1-3；替代旧 expect panic）
+    let rom_path = repo_root.join("rom/gunnac_cn.nes");
+    let rom = match std::fs::read(&rom_path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("render-frame: 缺失输入 {}：{e}", rom_path.display());
+            std::process::exit(2);
+        }
+    };
+    let trace_path = repo_root.join(format!("analysis/traces/{scene}.frames.jsonl"));
+    let trace = match std::fs::read_to_string(&trace_path) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("render-frame: 缺失输入 {}：{e}", trace_path.display());
+            std::process::exit(2);
+        }
+    };
+    // ===== 输出参数化（task-94）：默认路径/行为与历史一致；显式参数 fail-closed（仓库外 exit 2）=====
+    let out_dir: std::path::PathBuf = match &cli.out_dir {
+        Some(v) => match resolve_explicit(&repo_root, v, "--out-dir") {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("render-frame: {e}");
+                std::process::exit(2);
+            }
+        },
+        None => repo_root.join("oracle/screens/actual"),
+    };
+    let log_path: std::path::PathBuf = match &cli.log_path {
+        Some(v) => match resolve_explicit(&repo_root, v, "--log-path") {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("render-frame: {e}");
+                std::process::exit(2);
+            }
+        },
+        None => out_dir.join(".render.log"),
+    };
+    if let Err(e) = std::fs::create_dir_all(&out_dir) {
+        eprintln!("render-frame: 无法创建 --out-dir {}：{e}", out_dir.display());
+        std::process::exit(2);
+    }
+    // 创建后二次校验真实路径（F97-1：父级 junction/symlink 竞态）
+    if let Err(e) = ensure_real_within(&repo_root, &out_dir, "--out-dir") {
+        eprintln!("render-frame: {e}");
+        std::process::exit(2);
+    }
+    if let Some(parent) = log_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                eprintln!("render-frame: 无法创建 --log-path 目录 {}：{e}", parent.display());
+                std::process::exit(2);
+            }
+            if let Err(e) = ensure_real_within(&repo_root, parent, "--log-path") {
+                eprintln!("render-frame: {e}");
+                std::process::exit(2);
+            }
+        }
+    }
     // NMI 级重建（R-l4-linebuf 五不变量，t94/t96）：
     // 帧 N 主循环扫写填充行缓冲（probe 写事件）→ 帧 N+1 vblank NMI 读走（读后即废）→
     // 写入 nametable（地址 = 帧 N zp $8E/$8F）；$160=挂起类型，上传后清零（模型侧等效）。
@@ -996,10 +1385,10 @@ fn main() {
         game_desktop::render_sprites(&mut canvas, &rom, &sprites, 30, &sprite_pals, &bg_opaque);
     }
 
-    std::fs::create_dir_all(repo_root.join("oracle/screens/actual")).unwrap();
-    let out_path = repo_root.join(format!("oracle/screens/actual/{name}.png")).to_string_lossy().into_owned();
+    // 输出参数化（task-94）：out_dir/log_path 已在前段解析（默认=历史路径）
+    let out_path = out_dir.join(format!("{name}.png"));
     canvas.export_png(std::path::Path::new(&out_path)).expect("导出");
-    let idx_path = repo_root.join(format!("oracle/screens/actual/{name}.idx.json")).to_string_lossy().into_owned();
+    let idx_path = out_dir.join(format!("{name}.idx.json"));
     std::fs::write(&idx_path, format!(
         "{{\"palette_src\":\"{}\",\"attrs\":\"{}\",\"tiles\":\"{}\"}}",
         palette_src.iter().map(|b| format!("{b:02x}")).collect::<String>(),
@@ -1007,8 +1396,32 @@ fn main() {
         nt.tiles[ntr].iter().map(|b| format!("{b:02x}")).collect::<String>(),
     )).expect("侧车");
     let _ = idx_rows;
-    let mut log = std::fs::OpenOptions::new().create(true).append(true).open(repo_root.join("oracle/screens/actual/.render.log")).unwrap();
-    writeln!(log, "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={}", nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count(), probe.len()).unwrap();
+    // 日志（P0-0 manifest 复用；旧字段前缀保持、新增字段追加在行尾）
+    let sha_file = |p: &str| -> String {
+        match std::fs::read(p) {
+            Ok(b) => sha256_hex12(&b),
+            Err(_) => "-".into(),
+        }
+    };
+    let out_sha = std::fs::read(&out_path).map(|b| sha256_hex12(&b)).unwrap_or_else(|_| "-".into());
+    let mut log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .unwrap_or_else(|e| panic!("日志 {}: {e}", log_path.display()));
+    writeln!(
+        log,
+        "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={} scene={scene} env={} argv={:?} in=frames:{},probe:{},text:{} out={}",
+        nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count(),
+        probe.len(),
+        env_explicit_summary(),
+        &args[1..],
+        sha256_hex12(trace.as_bytes()),
+        sha_file(&probe_path),
+        sha_file(&text_path),
+        out_sha
+    )
+    .unwrap();
     let _ = (SCREEN_W, SCREEN_H);
 }
 
@@ -1033,4 +1446,212 @@ pub const PALETTE_RECORDS: [u8; 96] = [
 pub fn palette_record_rgb(index: u8) -> [u8; 3] {
     let i = (index as usize & 31) * 3;
     [PALETTE_RECORDS[i], PALETTE_RECORDS[i + 1], PALETTE_RECORDS[i + 2]]
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    fn argv(items: &[&str]) -> Vec<String> {
+        std::iter::once("render-frame").chain(items.iter().copied()).map(String::from).collect()
+    }
+
+    #[test]
+    fn parse_cli_defaults_preserve_history() {
+        let c = parse_cli(&argv(&["4600", "l4_clear-inject"])).expect("默认用法可解析");
+        assert_eq!(c.frame, 4600);
+        assert_eq!(c.name, "l4_clear-inject");
+        assert_eq!(c.scene, DEFAULT_SCENE, "缺省场景=gameplay-stage1（历史行为）");
+        assert_eq!(c.base, 0);
+        assert_eq!(c.out_dir, None, "缺省 out-dir=repo_root/oracle/screens/actual");
+        assert_eq!(c.log_path, None, "缺省 log=<out_dir>/.render.log");
+    }
+
+    #[test]
+    fn parse_cli_scene_base_and_new_flags() {
+        let c = parse_cli(&argv(&[
+            "4600", "l4_clear-inject", "stg03-timeline", "--base", "1",
+            "--out-dir", "target/l4/out", "--log-path", "target/l4/out/run.log",
+        ]))
+        .expect("新参数可解析");
+        assert_eq!(c.scene, "stg03-timeline");
+        assert_eq!(c.base, 1);
+        assert_eq!(c.out_dir.as_deref(), Some("target/l4/out"));
+        assert_eq!(c.log_path.as_deref(), Some("target/l4/out/run.log"));
+    }
+
+    #[test]
+    fn parse_cli_rejects_missing_or_invalid() {
+        assert!(parse_cli(&argv(&[])).is_err(), "缺帧号");
+        assert!(parse_cli(&argv(&["4600"])).is_err(), "缺输出名");
+        assert!(parse_cli(&argv(&["abc", "n"])).is_err(), "帧号非法");
+        assert!(parse_cli(&argv(&["4600", "n", "--out-dir"])).is_err(), "--out-dir 缺值");
+        assert!(parse_cli(&argv(&["4600", "n", "--base", "9"])).is_ok(), "--base 任意整数可解析");
+        assert!(parse_cli(&argv(&["4600", "n", "--base", "x"])).is_err(), "--base 非法");
+    }
+
+    #[test]
+    fn parse_cli_legacy_value_flags_skip_their_values() {
+        // F97-3：legacy flag 的值不得被当作位置参数（否则 scene 被覆盖成路径）
+        let c = parse_cli(&argv(&[
+            "4600",
+            "name",
+            "--probe-file",
+            "analysis/traces/x.probe.jsonl",
+        ]))
+        .expect("legacy 组合可解析");
+        assert_eq!(c.scene, DEFAULT_SCENE, "probe 路径不得被当 scene（F97-3）");
+        assert_eq!(c.probe_file.as_deref(), Some("analysis/traces/x.probe.jsonl"));
+
+        let c2 = parse_cli(&argv(&[
+            "4600",
+            "name",
+            "stg03-timeline",
+            "--text-file",
+            "phase.text.jsonl",
+            "--stream-file",
+            "stream.bin",
+        ]))
+        .expect("legacy + scene 可解析");
+        assert_eq!(c2.scene, "stg03-timeline");
+        assert_eq!(c2.text_file.as_deref(), Some("phase.text.jsonl"));
+        assert_eq!(c2.stream_file.as_deref(), Some("stream.bin"));
+
+        assert!(
+            parse_cli(&argv(&["4600", "name", "--probe-file"])).is_ok(),
+            "旧用法 legacy flag 缺值保持宽容（不 panic）"
+        );
+    }
+
+    #[test]
+    fn help_after_positionals_is_detected() {
+        assert!(wants_help(&argv(&["4600", "n", "--help"])), "位置参数后的 --help 也须触发（F97-4）");
+        assert!(wants_help(&argv(&["-h"])));
+        assert!(!wants_help(&argv(&["4600", "n"])));
+        assert!(
+            parse_cli(&argv(&["4600", "n", "--help"])).is_ok(),
+            "help 由 main 先于 parse_cli 处理，解析层不报错"
+        );
+    }
+
+    #[test]
+    fn lexical_normalize_and_repo_containment() {
+        assert_eq!(
+            lexical_normalize(Path::new("D:/repo/target/../out")),
+            PathBuf::from("D:/repo/out")
+        );
+        let root = Path::new("D:/repo");
+        assert!(within_repo(root, Path::new("D:/repo/target/x")), "仓库内");
+        #[cfg(windows)]
+        assert!(within_repo(root, Path::new("D:/REPO/Target/X")), "Windows 大小写不敏感");
+        #[cfg(not(windows))]
+        assert!(!within_repo(root, Path::new("D:/REPO/Target/X")), "POSIX 大小写敏感（F97-5）");
+        assert!(!within_repo(root, Path::new("D:/repo_evil/x")), "前缀相似但非仓库内");
+        assert!(!within_repo(root, Path::new("D:/outside/x")), "仓库外");
+        assert!(
+            !within_repo(root, &lexical_normalize(Path::new("D:/repo/../outside"))),
+            ".. 越界须拒绝"
+        );
+    }
+
+    #[test]
+    fn resolve_explicit_relative_inside_and_outside() {
+        let root = std::env::current_dir().expect("cwd");
+        let root_real = real_path(&root).expect("仓库根真实路径");
+        let inside = resolve_explicit(&root, "target/render-frame-cli-test", "--out-dir");
+        assert!(inside.is_ok(), "仓库内相对路径应通过：{:?}", inside);
+        assert!(within_repo(&root_real, &inside.unwrap()), "解析结果真实路径在仓库根下");
+        let outside = resolve_explicit(&root, "../render-frame-cli-test-out", "--out-dir");
+        assert!(outside.is_err(), "仓库外相对路径须 fail-closed");
+        let abs_outside = if cfg!(windows) { "D:/outside-render-frame" } else { "/tmp/outside-render-frame" };
+        assert!(resolve_explicit(&root, abs_outside, "--log-path").is_err(), "仓库外绝对路径须 fail-closed");
+    }
+
+    #[cfg(any(windows, unix))]
+    #[test]
+    fn junction_or_symlink_escape_rejected_by_real_path() {
+        // F97-1：词法 containment 可被仓库内 junction/symlink 绕过 ⇒ 必须按真实路径拒绝
+        let root = std::env::current_dir().expect("cwd");
+        let base = root.join("target").join(format!("t100-junction-{}", std::process::id()));
+        let outside = std::env::temp_dir().join(format!("gunnac-t100-outside-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&base).expect("base");
+        std::fs::create_dir_all(&outside).expect("outside");
+        let link = base.join("escape");
+        #[cfg(windows)]
+        let made = {
+            let st = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(&link)
+                .arg(&outside)
+                .status();
+            matches!(st, Ok(s) if s.success())
+        };
+        #[cfg(unix)]
+        let made = std::os::unix::fs::symlink(&outside, &link).is_ok();
+        if !made {
+            let _ = std::fs::remove_dir_all(&base);
+            let _ = std::fs::remove_dir_all(&outside);
+            eprintln!("跳过 junction/symlink 逃逸测试：当前环境无创建权限（F97-7 允许说明）");
+            return;
+        }
+        let r = resolve_explicit(&root, link.to_str().expect("utf8"), "--out-dir");
+        assert!(
+            r.is_err(),
+            "仓库内 junction/symlink 指向仓库外 ⇒ 真实路径 containment 必须拒绝（F97-1）"
+        );
+        let r2 = resolve_explicit(&root, link.join("deep/out").to_str().expect("utf8"), "--log-path");
+        assert!(r2.is_err(), "junction 下深层不存在路径也须拒绝");
+        #[cfg(windows)]
+        {
+            let _ = std::fs::remove_dir(&link); // 删 junction 本体（reparse point）
+        }
+        #[cfg(unix)]
+        {
+            let _ = std::fs::remove_file(&link);
+        }
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn sha256_known_vectors_and_sha12() {
+        assert_eq!(
+            sha256_hex12(b""),
+            "e3b0c44298fc",
+            "sha256(\"\")=e3b0c44298fc1c14… 取前 12 hex"
+        );
+        assert_eq!(
+            sha256_hex12(b"abc"),
+            "ba7816bf8f01",
+            "sha256(\"abc\")=ba7816bf8f01cfea… 取前 12 hex"
+        );
+        assert_eq!(sha256_hex12(b"abc").len(), 12, "out=sha12 口径=12 hex（F97-8）");
+        // 跨块（>64B）自检：长度 200 的确定性输入，两跑一致
+        let buf: Vec<u8> = (0..200u32).map(|i| (i % 251) as u8).collect();
+        assert_eq!(sha256_hex12(&buf), sha256_hex12(&buf));
+    }
+
+    #[test]
+    fn env_summary_excludes_repo_root_and_is_sorted() {
+        assert!(!ENV_KNOBS.contains(&"REPO_ROOT"), "REPO_ROOT 是输入定位非渲染参数");
+        assert!(ENV_KNOBS.contains(&"QUAD") && ENV_KNOBS.contains(&"TEXTFALLBACK"));
+        let s = env_explicit_summary();
+        assert!(s.starts_with('{') && s.ends_with('}'));
+        // 排序自检（若测试进程显式设置了多个 knob）
+        let inner = &s[1..s.len() - 1];
+        if inner.contains(',') {
+            let keys: Vec<&str> = inner.split(',').map(|kv| kv.split('=').next().unwrap()).collect();
+            let mut sorted = keys.clone();
+            sorted.sort();
+            assert_eq!(keys, sorted, "env 摘要须按键排序");
+        }
+    }
+
+    #[test]
+    fn usage_mentions_new_flags() {
+        assert!(USAGE.contains("--out-dir") && USAGE.contains("--log-path"));
+        assert!(USAGE.contains("退出码 2"));
+    }
 }

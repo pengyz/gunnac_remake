@@ -244,6 +244,16 @@ cargo run -q -p game-oracle --bin phase-batch -- tas-stg08b2-direct
 > 其余 `python ...` / `cargo ...` 命令原样可用；多行 heredoc 脚本块（§3.3 等）建议在 Git Bash 执行或
 > 存为 `.py` 后 `python <file>`（不要直接在 PowerShell 里贴 heredoc）。
 
+> **P0-0 采集窗口纪律（2026-10-18 task-101）**：采集/渲染窗口内**禁用 `gates check` / `gates status` /
+> `gates visual`**——三者都跑 visual 门，会用**磁盘上当前 `oracle/screens/actual`** 重算并重写 **tracked** 的
+> `oracle/screens/diff/*.diff.png`、`visual-report.md`、`whitelist-application.md`；而 `actual/*` 由
+> `render-frame`（P0-0 渲染步）用**当前 `analysis/traces`** 写入——截断/部分 trace 的错帧会被 visual 门
+> **固化进 tracked 报告**（本轮 `l4_clear-inject` 差异 58,101→58,392 即此；Lead 已 `git checkout -- oracle/screens/` 回滚）。
+> 只读门禁请用单门命令 `gates/cli.py rom` / `seed` / `naming`（或 `baseline show`）。
+> **若必须跑 check**：跑前确认 `git status --short oracle/screens` 干净；跑后若脏 ⇒
+> `git checkout -- oracle/screens/` 回滚（并先确认 trace 未截断，再谈重渲）。详见知识库
+> `docs/knowledge/gotcha-visual-gate-rewrites-tracked-screens.md`。
+
 > **headless 超时注（2026-10-18 task-91）**：上面命令里的 `--timeout <秒>` 是**驱动级**超时
 > （`scenario_run.run_scenario(timeout_s=…)`）；`scenario_run.py` 的 headless 分支会**自动**再给
 > `Mesen.exe` 传 **Mesen 级** `--timeout=max(120, timeout_s+120)`（`--testRunner` 参数区内），
@@ -885,34 +895,60 @@ cargo run -q -p game-oracle --bin phase-batch -- l4-stg06-pass2
 回归方式（**B4 完整步骤**，A/B 编译对照；旧二进制**尚无 `--out-dir`** → 走 `REPO_ROOT` 沙盒，新二进制走
 `--out-dir`；两路都产出 png 后再 sha 对比）：
 ```bash
-# 0) 变量
-REPO=<repo-root>; OLD=/tmp/l4-old; OLDSB=/tmp/reg-old-sandbox; NEWOUT=/tmp/reg-new
+# 0) 变量（**全部放仓库内 `target/l4/**`**：新二进制 fail-closed 要求显式输出的**真实路径**在
+#    repo_root 内；/tmp 等仓库外路径会被 exit 2 拒绝——F97-2/§4.1 状态注）
+REPO=<repo-root>; OLD="$REPO/target/l4/b4-old"; OLDSB="$REPO/target/l4/b4-old-sandbox"
+NEWOUT="$REPO/target/l4/b4-new"; OLDBIN="$REPO/target/l4/render-frame-old"
+mkdir -p "$REPO/target/l4"
 
-# 1) 取改前提交的独立 worktree（不污染工作树）并构建旧二进制
+# 1) 取改前提交的独立 worktree（仓库内 target/ 下，不污染工作树）并构建旧二进制
 git worktree add "$OLD" <change-commit>~1
 ( cd "$OLD" && cargo build -q -p game-desktop --bin render-frame )
-cp "$OLD/target/debug/render-frame" /tmp/render-frame-old
+cp "$OLD/target/debug/render-frame" "$OLDBIN"
 
 # 2) 当前树（改后）构建
 ( cd "$REPO" && cargo build -q -p game-desktop --bin render-frame )
 
-# 3) 旧二进制：REPO_ROOT 沙盒（旧版无 --out-dir，输出落沙盒 oracle/screens/actual）
+# 3) 旧二进制：REPO_ROOT 沙盒（旧版无 --out-dir，输出落沙盒 oracle/screens/actual；沙盒亦在仓库内）
 rm -rf "$OLDSB"; mkdir -p "$OLDSB/oracle/screens/actual"
 ln -sfn "$REPO/rom"      "$OLDSB/rom"
 ln -sfn "$REPO/analysis" "$OLDSB/analysis"
-REPO_ROOT="$OLDSB" /tmp/render-frame-old 4600 l4_clear-inject stg03-timeline
+REPO_ROOT="$OLDSB" "$OLDBIN" 4600 l4_clear-inject stg03-timeline
 
-# 4) 新二进制：--out-dir（默认行为不变，但显式隔离输出）
+# 4) 新二进制：--out-dir/--log-path（显式隔离输出；真实路径须在 repo_root 内）
 rm -rf "$NEWOUT"; mkdir -p "$NEWOUT"
 ( cd "$REPO" && REPO_ROOT="$REPO" target/debug/render-frame \
-    4600 l4_clear-inject stg03-timeline --out-dir "$NEWOUT" )
+    4600 l4_clear-inject stg03-timeline --out-dir "$NEWOUT" --log-path "$REPO/target/l4/b4-new.log" )
 
 # 5) 两路 png sha 对比（A/B 判据；两文件都必须存在，缺一即 FAIL）
 sha256sum "$OLDSB/oracle/screens/actual/l4_clear-inject.png" \
           "$NEWOUT/l4_clear-inject.png"
 # 期望：两行 sha256 完全相同；不同 ⇒ P0-0-2 改坏了默认路径行为（BLOCKED，不得继续 §5）
+# 附（F97-8）：新日志 out=<sha12> 应等于 $NEWOUT/l4_clear-inject.png sha256 前 12 hex
 ```
 **不得用现行 `actual/` 的 sha 作回归基准**（那是旧诊断态产物，见方案 §2.4 F-0-D）；带 `--out-dir` 时文件落在指定目录。
+
+> 【2026-10-18 task-94 实现状态】P0-0-2 `--out-dir`/`--log-path` **已实现**（`crates/game-desktop/src/bin/render_frame.rs`；**默认行为不变**）：
+> - 缺省路径/行为与改前一致：`<repo_root>/oracle/screens/actual/{name}.png|.idx.json|.render.log`；显式参数只改输出位置，不改渲染/判定逻辑。
+> - `--log-path` 缺省=`<out_dir>/.render.log`；日志行保持旧字段前缀，行尾追加
+>   `scene=… env={K=V,…} argv=[…] in=frames:<sha12>,probe:<sha12>,text:<sha12> out=<sha12>`
+>   （缺失输入文件以 `-` 记；sha=sha256 前 12 hex；`env` 只记**显式设置**的 render knob（白名单，不含 `REPO_ROOT`）；`argv` 为参数向量 Debug 形式）。
+> - **fail-closed（真实路径口径，task-100 F97-1 修）**：显式 `--out-dir`/`--log-path` 先词法规范化，再
+>   **canonicalize 真实路径**（不存在则 canonicalize 最近存在祖先再拼）后必须位于 `repo_root` 真实路径内
+>   （仓库内 junction/symlink 指向仓库外也会被拒）；创建后对 out-dir/log 父目录**二次校验**；违反 ⇒ `eprintln!`+exit 2。
+>   以 `REPO_ROOT` 为根，故沿用沙盒工作流时输出根=沙盒根。
+>   缺失 ROM/trace 输入 ⇒ exit 2（替代旧 `expect` panic）；参数错误 exit 2；`--help` exit 0。
+> - 自检（本地 Windows，`target/verify37` 独立 target 构建）：沙盒默认跑 `1080 title-menu` → png/idx/log 正常，
+>   `out=1b1940f30bf8` 与 png sha256 前 12 一致；显式 `--out-dir/--log-path` 跑同帧 **png sha 相同**（渲染等价）；
+>   仓库外 `--out-dir` 与缺失场景输入均 exit 2；`--help`/`--base 1` exit 0；CLI 单测通过。
+> - 未证/边界：visual 门禁判定未改；手册 §4.1 的 A/B 旧/新二进制编译对照（旧二进制走 `REPO_ROOT` 沙盒、新二进制走 `--out-dir`）
+>   仍应在提交后按新路径复跑一次作为最终验收证据。
+>
+> 【2026-10-18 task-100 修订状态（F97-1/2/3/4/5/8）】
+> - **F97-1（阻塞）已修**：真实路径 containment（canonicalize + 创建后二次校验）；实测仓库内 `mklink /J` junction→`%TEMP%` 的逃逸输出现在 **exit 2 且仓库外无写入**；新增 junction/symlink 回归测试（无权限时显式跳过）。
+> - **F97-2 已改**：§4.1 B4 示例变量/路径全部改为仓库内 `target/l4/**`，并注明 `/tmp` 为何不可用（fail-closed 真实路径）。
+> - **F97-3 已修**：`parse_cli` 对 `--probe-file/--stream-file/--text-file` **连同值一起跳过并解析进 Cli**；`4600 name --probe-file <path>` 保持默认 scene（补 CLI 回归）。
+> - **F97-4/5/8 随文**：`--help` 任意位置单测；POSIX 大小写敏感（Windows 才 lower-case）；`sha12` 长度=12 断言（wrapper 自检口径）。
 
 ### 4.2 备选（无代码改动的先行路径）：`REPO_ROOT` 沙盒
 
@@ -931,10 +967,15 @@ ls "$SB/oracle/screens/actual/"     # → l4_clear-inject.png/.idx.json/.render.
 **注意**：①`create_dir_all(repo_root/oracle/screens/actual)` 会写沙盒（OK）；②不要 symlink 整个 `oracle/`
 （会写回仓库）；③最终 canonical 产物仍需 `--out-dir`（4.1）或把沙盒 run1 产物复制回仓库（经 Lead 同意）。
 **用途**：环境就绪但 4.1 未实现时的**先行**两跑验证/映射渲染；不替代 4.1 的长期方案。
+> 【2026-10-18 task-100 注】沙盒放 `/tmp` 对**默认路径**仍可用（默认不校验）；但若用新参数
+> `--out-dir/--log-path`，其**真实路径**必须在 `repo_root` 内 ⇒ 新参数场景应把沙盒放仓库内（如 `target/l4/`）。
 
 ### 4.3 BLOCKED
 
 `--out-dir` 未实现且操作者无法用沙盒（权限/路径限制）⇒ P0-0 的 canonical 渲染步 **BLOCKED**（采集步可先行）。
+
+> 【2026-10-18 task-94 更新】4.1 已实现（`--out-dir`/`--log-path`），该 BLOCKED 条件**已解除**（历史文本保留）；
+> 默认路径不变，显式路径 fail-closed 于 `repo_root` 内。
 
 ---
 
@@ -1528,6 +1569,11 @@ PY
       （FAIL 可接受，`ran_after_asset_swap=true`；B3）；
 - [ ] 方案 §2.1/§2.6 的旧数字**dated 更正**（新基线数值替换；旧主张划线保留，AGENTS §3.6）；
 - [ ] 产物路径齐：`oracle/screens/{expected,actual,diff}`、`oracle/screens/l4-manifest.json`、`analysis/repro/*`；
+- [ ] **`oracle/screens` 干净性（task-101）**：P0-0 采集窗口内未跑 `gates check`/`status`/`visual`（或跑后已
+      `git checkout -- oracle/screens/` 回滚）；**冻结时 actual/diff/visual-report 由「干净 trace 集」一次性
+      重生成**并作为**显式 commit**（message=`P0-0 baseline freeze` + Evidence/Confidence），提交前
+      `git status --short oracle/screens` 无残留；禁止部分/截断 trace 的 actual 混入基线
+      （见 §2.2 采集窗口纪律 + 知识库 gotcha-visual-gate-rewrites-tracked-screens）；
 - [ ] Lead 复核 + 独立对抗复核 pass。
 
 ### 8.3 与 R8 / 门禁的交互（引用复核 §7）
