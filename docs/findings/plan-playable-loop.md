@@ -236,8 +236,11 @@ cargo run -p shell-win -- --selftest-frames 300   # 仍确定性；若 host_sign
   门控/装载/spawn 日志/阶段计时字段覆盖；非回退，canvas/display 签名不变；shell-win 文档记录值由 task-10 更新）。
 - **replay 3000 帧签名**：`host=0x521d397a6c609f34 canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807`
   （两次独立运行全等；replay=f1193 装载、f1260 StageStart、f1500 Combat；engine_frames=3000-1193=1807）。
-- mock-300 契约签名（task-5 门禁回归）：`host=0x63b5a6195287a6d8 canvas=0x963ac9a776a57625`
-  （旧值 `0xefe39a9ba5e7c5b0`；原因=signature 语义扩展——新增菜单锁存/门控/装载/spawn 日志/阶段计时覆盖）。
+- mock-300 契约签名（task-5 门禁回归）：`host=0x3085adda845a078d canvas=0x963ac9a776a57625`
+  （旧值链：`0xefe39a9ba5e7c5b0`（task-5）→ `0x63b5a6195287a6d8`（task-9 语义扩展）→
+  **`0x3085adda845a078d`（task-29 B1 触发键域分离修正，语义修正非回归；两次运行 AssertEq）**）。
+  > 【2026-10-18 task-29 回填】本行由 Lead 授权更新（task-29 记录值同步；mock-300 签名覆盖
+  > `menu_latch`/`menu_gate` 状态，B1 修后值变化=语义修正，`canvas` 不变）。
 
 **对拍结果（列口径按 §7，不放宽阈值）**
 
