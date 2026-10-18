@@ -1,7 +1,17 @@
 #!/bin/sh
-# gunnac-remake gates: commit-msg -> python3 gates/cli.py commit-msg "$1"
-# 触及 data/naming/ reference/ rom/ 的提交必须含 Evidence/Confidence 字段（AGENTS.md §9）。
+# gunnac-remake gates: commit-msg -> gates/cli.py commit-msg "$1"
+# 触及 data/naming/ data/status/ data/reference/ reference/ rom/ 的提交必须含 Evidence/Confidence 字段（AGENTS.md §9）。
 # 薄封装：证据门禁逻辑只存在于 gates/cli.py（无第二套扫描逻辑）。
+# python 解析（2026-10-18）：Windows 上 `python3` 常是 Microsoft Store 占位别名（执行 exit 9009），
+# 故按 python3 -> python -> py 顺序探测**可用**解释器；Linux/CI 行为不变（首个即 python3）。
 set -e
 repo_root=$(git rev-parse --show-toplevel) || exit 1
-exec python3 "$repo_root/gates/cli.py" commit-msg "$1"
+PY=
+for c in python3 python py; do
+  if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys' >/dev/null 2>&1; then PY=$c; break; fi
+done
+if [ -z "$PY" ]; then
+  echo "gates: 未找到可用 Python 解释器（已尝试 python3/python/py）" >&2
+  exit 1
+fi
+exec "$PY" "$repo_root/gates/cli.py" commit-msg "$1"

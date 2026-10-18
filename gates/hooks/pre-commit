@@ -1,6 +1,16 @@
 #!/bin/sh
-# gunnac-remake gates: pre-commit -> python3 gates/cli.py check
+# gunnac-remake gates: pre-commit -> gates/cli.py check
 # 薄封装：扫描/裁定逻辑只存在于 gates/cli.py（无第二套扫描逻辑）。
+# python 解析（2026-10-18）：Windows 上 `python3` 常是 Microsoft Store 占位别名（执行 exit 9009），
+# 故按 python3 -> python -> py 顺序探测**可用**解释器；Linux/CI 行为不变（首个即 python3）。
 set -e
 repo_root=$(git rev-parse --show-toplevel) || exit 1
-exec python3 "$repo_root/gates/cli.py" check
+PY=
+for c in python3 python py; do
+  if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys' >/dev/null 2>&1; then PY=$c; break; fi
+done
+if [ -z "$PY" ]; then
+  echo "gates: 未找到可用 Python 解释器（已尝试 python3/python/py）" >&2
+  exit 1
+fi
+exec "$PY" "$repo_root/gates/cli.py" check
