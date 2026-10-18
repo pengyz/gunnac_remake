@@ -106,6 +106,16 @@
 合计 **280,132 / 1,351,680 = 20.7247%**；同点 1,071,548 = **79.2753%**；逐像素相等 **1/22**；
 `<7680` 的帧 **12/22**。全部可由命令 C1 复算。
 
+> **【2026-10-18 更正（task-156；GUI 重采 + 新二进制基线；旧数字留档作历史）】** 上表与合计基于**旧 headless
+> actual**（`emu.setInput` 不生效、输入未注入，语义无效）。**现行基线**（GUI 重采 trace + render-frame
+> `00c29d6a31c0…`）：
+> - **22 对 = 18 可渲 + 4 `blocked:no-source`**（fade-clear / ending-1/2/3）+ **5 `replaced-invalid-asset`**
+>   （#14 stg02-start + 四联 #16/#19/#20/#21；其中四联/#17/#18 expected 来源已恢复，待 §7.7 安装）；
+> - 18 对 diff：**min 0**（title，像素级 0）/ **median 9,766** / **max 58,159**（clear-inject）/ **sum 242,555 px**；
+> - **actual==expected sha = 0/18**（L4 0 容差**未达成**，属 P0-1 修复目标）；去重 **expected_unique=13 / actual_unique=14**。
+> 证据：`p0-0-readjudication-gui.md` §0/§3、`target/p0-0/render/g-manifest-v2.json`（rendered 18 / blocked 4 /
+> replaced 5 / expected_matches 0）。旧 `280,132 / 20.7247% / 1/22 / 12/22` 数字**保留作历史**（旧基线作废）。
+
 ### 2.2 N-3way 像素性质三分（A 级）
 
 | 性质 | 像素 | 占比 | 判定 |
@@ -187,6 +197,16 @@
 **S1 独立对核算**：12/22 独立对 = #1/#2/#3/#4/#5/#11/#12/#13/#15/#17/#18/#22
 （G1 非冻结 8：#4/#5/#11/#12/#13/#15/#17/#18；G3 3：#1/#2/#3；title 1：#22）；
 **10/22 需重采/重渲** = #6-#10（ending 5）+ #14（stg02）+ #16/#19/#20/#21（四联 4）。
+
+> **【2026-10-18 更正（task-156；旧 provenance 作废留档）】** 上表 expected/actual sha 与"复用关系"来自**旧
+> headless 基线**（输入未生效）。现行 GUI 基线口径：
+> - 22 对 = **18 可渲 / 4 blocked / 5 replaced**；逐对 expected/actual sha、diff、bbox、分类以
+>   `target/p0-0/render/g-manifest-v2.json` + `p0-0-readjudication-gui.md` §2 为准；
+> - 去重：**expected_unique=13 / actual_unique=14**（旧 17/15 与"唯一比较 18 对"口径不再适用）；
+> - **四联/#17/#18 expected 来源已恢复**（`stg08-timeline` GUI：四联=f16500–33900 共 64 帧同 `62a8ef06`、
+>   #17=f14600 `ddb322ac`、#18=f16000 `2824cb13`；见 §3.7 末 task-156 块），**待 §7.7 安装核验**；
+>   **#14 `l4_stg02-start` expected 仍 invalid**（`788d6984`=boot-black 复制品）。
+> 旧"S1 12/22 独立对、10/22 需重采"数字保留作历史。
 
 
 ---

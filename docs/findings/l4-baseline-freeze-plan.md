@@ -957,6 +957,24 @@ cargo run -q -p game-oracle --bin phase-batch -- l4-stg06-pass2
 > `emu.setInput` 不生效 ⇒ **输入未注入、语义无效**；"直入不成立 / 待重评"的复核须在 task-133
 > （GUI 模式）重采后进行；原注保留作历史（见 [gotcha-mesen2-testrunner-setinput-noop](../knowledge/gotcha-mesen2-testrunner-setinput-noop.md)）。
 
+> **【2026-10-18 更正·task-156：四联/#17/#18 expected 来源恢复（旧 pass2 选帧口径作废）】** GUI 重采后对
+> `stg08-timeline` **125 张 shots 全量 sha256 扫描**（本卡独立复算）：
+> - `f16500–33900` **共 64 帧全部** = `62a8ef06c4b9…` = **四联 expected**（#16/#19/#20/#21 同 blob）逐字节同
+>   （首帧 `stg08-timeline_f16500_probe.png`、末帧 `stg08-timeline_f33900_probe.png`）；
+> - `f14600` = `ddb322ac5702…` = **#17** `l4_stg07-start` expected；`f16000` = `2824cb134987…` = **#18**
+>   `l4_stg07-combat` expected——均 1:1 命中；
+> ⇒ **四联/#17/#18 expected 可复现性恢复**（旧 expected = "输入正常"的 Mesen 源截图），处置口径
+> **`replaced-invalid-asset → valid-with-source`**（**待 §7.7 安装核验后才算落地**）：`expected_source=
+> stg08-timeline:<frame>:<tag>`；`trigger` 按脚本注入实际登记（`stg08-timeline` 源含关末门双 poke，
+> **不得冒充 natural**）。旧"I5/I5b pass2 选帧 capture"口径（本节上方）**作废留档**。
+> - **#14 `l4_stg02-start` expected 仍无效**（`788d6984…`=boot-black 复制品；f3404/f16200 亦命中黑屏）⇒
+>   仍待重采定位（**唯一 remaining expected-invalid**）。
+> - 组 D 同步口径（task-133/143）：**2 sourced（#9/#10 ending-4/5，assisted）+ 4 blocked**
+>   （fade-clear/ending-1/2/3；dense 133 张 any-frame 零命中）。
+> - 证据：`docs/findings/p0-0-recapture-gui-run.md` §4/§5（含两阶段更正）、
+>   [adversarial-review-recapture](adversarial-review-recapture.md)；manifest `target/p0-0/render/g-manifest-v2.json`
+>   （rendered 18 / blocked 4 / replaced 5 / expected_matches 0）。
+
 ---
 
 ## 4. 步骤 2：输出参数化（P0-0-2）——**实现动作，属执行卡（crates 写权限），本手册只给规格**
@@ -1097,6 +1115,22 @@ ls "$SB/oracle/screens/actual/"     # → l4_clear-inject.png/.idx.json/.render.
 > 17/127（旧现状：expected 17/22、actual 目录 257 张/127 unique——actual 判据**必须按 manifest 22 名过滤**，
 > 不得 glob 整目录）。**重复组按组核对**（B2）：`unique = 22 − Σ(len(group)−1)`；expected 与 actual 两侧的
 > 重复都写进 `documented_duplicates`，且**必须与 mapping.duplicate_of 的组一致**；expected 重复也登记。
+
+> 【2026-10-18 task-155 实现状态：manifest 22 行全字段 + 工具化】`tools/l4_render_all.py`
+> （默认只读 `target/p0-0/render/{g_run1,g_run2}` + `g-manifest-v2.json`；不渲染、不改 expected/threshold/判定）
+> 生成 22 行全字段 manifest（`scene/frame/capture_tag/trigger/expected_source/input_sha256/render_env/
+> render_argv/expected_sha256/actual_sha256/status/reuse/duplicate_of/deterministic/notes`）：
+> - **4 blocked**：`expected_sha256=""`、`actual_sha256=""`、`status=blocked:no-source`、`deterministic=false`、
+>   `trigger=unknown`（dense 全扫零命中负证据见 `p0-0-recapture-gui-run.md` §5.2）；
+> - **5 replaced**：`expected_sha256` 填**现 expected 旧件 sha**（A 级证据；`notes=expected-invalid 待 §7.2 重采`，
+>   不冒充 verified）；ending-4/5 为 `documented-duplicate`；
+> - `reuse` 按附录 A（independent 12 / reuse 10）；`render_env`/`render_argv` 从 `g_run1/<name>.log` 末行解析
+>   （canonical 校验：`env` 非空即 pair 级 FAIL）。
+> 默认产物 `target/p0-0/render/g-manifest-full.json`（gitignored）；§5.1 canonical 路径
+> `oracle/screens/l4-manifest.json` 仅在冻结安装时用 `--out` 显式写入（本卡不写 oracle/）。
+> `--validate PATH` 可对既有 manifest 独立复核 schema/registry/两跑去重；`--strict-line/--strict-log` 只
+> **采集/回填** `STRICT:` 行（**不执行 `diff_visual.py`、不写 oracle/screens**；是否已有合法 strict 行由 §8.1 决定）。
+> 单测：`tools/test_l4_render_all.py`（9/9）。
 
 ### 5.2 canonical 命令 + env 卫生（A 级关键）
 
@@ -1486,6 +1520,20 @@ manifest `dedupe.documented_duplicates` 找到同 name 集**（expected 重复�
 > `62a8ef06…`）一致，登记 documented_duplicates。公式：18 rendered = 14 unique + reductions 4（四联 3 + ending 1）；
 > expected 13 = 18 − 5。wrapper registry 需按 actual 组（四联 4 / ending-2）与 expected 组分别对账。
 
+> 【2026-10-18 task-155 实现状态：B2 去重 registry 工具化】`tools/l4_render_all.py` 内嵌 22 行 P0-0 裁定表
+> 并写出 `analysis/repro/mapping.tsv`（name/scene/frame/capture_tag/trigger/expected_source/status/reuse/duplicate_of）：
+> - 两侧按 manifest 22 名过滤（4 blocked 两侧无资产 ⇒ present=18），`unique == present − Σ(len(group)−1)`：
+>   **expected 13=18−5、actual 14=18−4**；
+> - `dedupe.documented_duplicates` 3 组：`title↔stg02`（side=expected；stg02 expected=`788d6984…`=title
+>   boot-black 复制品）、四联×4（side=expected+actual；expected `62a8ef06…` 旧件 / actual `406f3962…` 真实同画面）、
+>   `ending-4/5`（side=expected+actual；`6ff345dc…`/`5aa8a4f8…`）；
+> - mapping `duplicate_of`：`l4_stg02-start→title-menu_f00180_boot-black`、四联非主帧
+>   （`l4_stg08-combat/late/start`）→master `l4_stg06-late`、`l4_ending-4→l4_ending-5`；
+>   `registry_ok=true`（每个 expected/actual 重复组 ⊆ 某 mapping 组；非主帧均标 duplicate_of）。
+> - 输出行：`DEDUPE: expected 13=18-5 actual 14=18-4 registry_ok=True documented_ok=True -> PASS`；
+>   单测 `tools/test_l4_render_all.py` 9/9（含 registry 反例：四联孩子去掉 duplicate_of ⇒ registry_ok=False）。
+> - 与旧 headless 口径（expected 17/actual 11、6-group）的关系：superseded，不得再用于 GUI manifest。
+
 ### 7.6 trigger 标注纪律
 
 - 自然场景（title-menu/gameplay-stage1/stg03-timeline/stg08-timeline 无 poke）→ `trigger=natural`；
@@ -1707,6 +1755,9 @@ PY
 - [ ] **§3.7 四联来源更正落地**：四联 expected 来自 `l4-stg08b2-pass2`/`l4-stg06-pass2` 的选帧 capture
       （`l4-selected-frames.json` 含 `scene`/`frame`；`expected_source` 指向 pass2 场景），**不是**
       `l4-baseline-v5-pass2`(36500f)；I1-I6 采集与两跑集合已按 §2.3 更新；
+      **【2026-10-18 task-156 更新】** 旧 pass2 选帧口径**作废**：四联/#17/#18 expected 来源已由 GUI 重采恢复
+      （`stg08-timeline` f16500–33900 共 64 帧=`62a8ef06`；#17 f14600=`ddb322ac`；#18 f16000=`2824cb13`，
+      见 §3.7 末 task-156 块）；**安装（§7.7）+ `trigger` 登记 + §8.1 步骤 3 sha 核验仍未执行 ⇒ 本项 ❌**；
 - [ ] expected/actual 去重符合 §7.5 **B2 后口径**：两侧各自 `unique == 22 − Σ(len(group)−1)`；
       **expected 与 actual 的重复都**登记在 manifest `dedupe.documented_duplicates`，且每组非主帧在 mapping
       标 `duplicate_of`（wrapper `registry_ok=true`；**不是**旧账面 17/127）；
@@ -1738,6 +1789,31 @@ PY
 > **0/18 actual==expected sha** ⇒ **L4 0 容差未达成、不得宣称 L4 通过**（P0-1 修复目标）。
 > 去重 expected_unique=13 / actual_unique=14（见 §7.5）。**P0-0 全绿判定=否**（4 blocked + **5 对 expected 待重采** + 18 对 diff>0）。
 > 证据：`docs/findings/p0-0-readjudication-gui.md` §2/§3；manifest `target/p0-0/render/g-manifest-v2.json`。
+
+> **【2026-10-18 task-156 冻结前置状态（用户裁定：**冻结须 §8.2 全绿**）】** 12 条逐项预填（本块=2026-10-18 时点；
+> 后续任务完成一项即打勾更新）：
+> - **✅ 已达成 2 条**：
+>   1. **①环境接收**：GUI 重采 + 输入有效性已验证（`controller_held` 非零/`action_mode` 推进/trace sha 全面改变，
+>      见 `p0-0-recapture-gui-run.md` §4）；
+>   2. **⑤§3.6 组 D 条文**：**2 sourced（#9/#10 ending-4/5，assisted）+ 4 显式 `blocked:no-source`**
+>      （fade-clear/ending-1/2/3；dense 133 张零命中）——满足"winner 非空/或显式 blocked"口径（§3.6/§7.3/§7.4）。
+> - **❌ 未达成 9 条（冻结硬缺口）**：
+>   3. **②manifest 22 行字段齐**：`oracle/screens/l4-manifest.json` **当前不存在**（仅 target 内
+>      `g-manifest-v2.json`，gitignored；且缺 `trigger/input_sha256/render_env/render_argv/dedupe` 等字段）；
+>   4. **③`two_run_deterministic=true`（22/22）**：现 **18/18**（36/36 png+idx 同），4 对 blocked ⇒ 未达 22/22；
+>   5. **④expected 安装（§7.7）**：未执行；**5 对 `replaced-invalid-asset` 待安装**（四联 +#14；
+>      四联/#17/#18 来源已恢复、**#14 仍 invalid**）；§8.1 步骤 3 `expected_sha256` 核验亦未做；
+>   6. **⑥四联来源落地安装核验**：task-156 已恢复来源（§3.7 末块），**待 §7.7 安装 + sha 核验**；
+>   7. **⑦去重登记进 manifest**：`dedupe.documented_duplicates`/mapping `duplicate_of` 未写入
+>      （`expected_unique=13 / actual_unique=14` 目前只在报告）；
+>   8. **⑧`visual-report.md` 重生成 + `--strict` 回填**（`manifest.strict`）：未做；
+>   9. **⑩产物路径安装**：`oracle/screens/{expected,actual,diff}` 新基线未落位；
+>   10. **⑪冻结 commit**：**只有 §8.2 全绿后才做**（message=`P0-0 baseline freeze` + Evidence/Confidence；
+>       跑前 `git status --short oracle/screens` 无残留）；
+>   11. **⑫Lead 复核 + 独立对抗复核 pass**：未做。
+> - **另：⑨方案 §2.1/§2.6 旧数字 dated 更正 = 本卡（task-156）已完成**（提交后该项可打勾）。
+> **结论：§8.2 未全绿（2/12 ✅）⇒ 不得冻结、不得生成 `P0-0 baseline freeze` commit。**
+> 证据：`p0-0-readjudication-gui.md` §0/§3；`p0-0-recapture-gui-run.md` §4/§5；`target/p0-0/render/g-manifest-v2.json`。
 
 ### 8.3 与 R8 / 门禁的交互（引用复核 §7）
 
