@@ -14,7 +14,7 @@
 | S4 | `data/status/coverage_map.json` | **过期**（`generated: 2026-10-12`，t34）：`stats.l2_cases=54`、`rules_total=44` | [rewrite-completion-audit](../findings/rewrite-completion-audit.md) §1.4；本卡复算：`oracle/subroutines/l2_cases.jsonl` 现 **121** 例（54≠121） | **否**（仓库内无生成器脚本；为 t34 一次性审计的机器可读版，人读版 `docs/findings/coverage-audit.md`） | 另卡重建 coverage_map（schema 1 沿用）并同步引用方 |
 | S5 | `docs/findings/l4-final-localization-ending1.md` | **时点失效**：标题"7753 态残差 7380px/261 格"；现行 ending-1 diff = **4552** | [rewrite-completion-audit](../findings/rewrite-completion-audit.md) §4.4；[l4-zero-tolerance-attack-plan](../findings/l4-zero-tolerance-attack-plan.md) §1.2（判"时点失效"）；现行 `oracle/screens/visual-report.md` L15 `l4_ending-1.png: 差异像素 4552` | **否**（须 P0-0 新基线 + 重做定位） | P0-0 后 P0-3 重做定位账；在此之前引用须带"7753 态时点/失效" |
 | S6 | `docs/findings/residual-pixel-ledger.md` | **部分失效**：AR2-A（自机 −$30 锚点）一族已撤销；"每像素可归因/全族勾销"判据不成立（其余 9 族定位仍有效） | [rewrite-completion-audit](../findings/rewrite-completion-audit.md) §4.4；l4-zero-tolerance-attack-plan §1.2；`adversarial-audit-l4.md` §0（AR2-A 撤销） | **否**（须 P0-0 后重做） | P0-1/P0-3 后重做；先引用时须带"AR2-A 已撤销"限定 |
-| S7 | 生成物文案：`oracle/screens/whitelist-application.md`、`oracle/screens/visual-report.md`、`tools/diff_visual.py` 文案 | **口径过期**：仍列 W-C1/W-C4 为"强候选/申请项/候选未启用"；W-C1/W-C4 已于 2026-10-18 用户裁定撤销 | 撤销落档 `7625df8`（[l4-visual-plan](../spec/l4-visual-plan.md) §2 撤销注）；复核 [adversarial-review-wc1-revocation](../findings/adversarial-review-wc1-revocation.md) pass；生成物为 `tools/diff_visual.py` 输出（L189-190 报告头、L223-225 候选段、L227-236 申请清单），**按纪律不直接改生成物** | **是**：改 tools 文案后 `python tools/diff_visual.py` 重生成（gates visual 亦会重写） | `tools(docs)`：diff_visual 生成文案同步（W-C1/W-C4 撤销 + strict "外差异"提示；另卡） |
+| S7 | 生成物文案：`oracle/screens/whitelist-application.md`、`oracle/screens/visual-report.md`、`tools/diff_visual.py` 文案 | **口径过期**：仍列 W-C1/W-C4 为"强候选/申请项/候选未启用"；W-C1/W-C4 已于 2026-10-18 用户裁定撤销 | 撤销落档 `7625df8`（[l4-visual-plan](../spec/l4-visual-plan.md) §2 撤销注）；复核 [adversarial-review-wc1-revocation](../findings/adversarial-review-wc1-revocation.md) pass；生成物为 `tools/diff_visual.py` 输出——**定位用内容锚（行号易漂移，勿引用行号）**：①`grey_quantize` docstring「调色板未证 W-C1——公共域声明」串；②`main` 内分类串「规格缺口/平台差异候选 W-C1：条带内 …」；③报告头串「> 调色板映射未证（W-C1 候选**列而未启用**…）」；④报告节「## 白名单候选（未启用）」下「W-C1 调色板映射（强候选）/ … W-C4 色彩空间…」行；⑤`main` 生成 `whitelist-application.md` 的「## 申请项」下 W-C1/W-C4 两条「强候选」串。**按纪律不直接改生成物** | **是**：改 tools 文案后 `python tools/diff_visual.py` 重生成（gates visual 亦会重写） | `tools(docs)`：diff_visual 生成文案同步（W-C1/W-C4 撤销 + strict "外差异"提示；另卡） |
 
 **已核对为现行（无需处理，防误标）**：`oracle/screens/visual-report.md` 的**数值**现行（`ab6383c` 生成，与 22 对实测一致，[rewrite-completion-audit](../findings/rewrite-completion-audit.md) §1.4）；`data/status/baselines/baseline.json` 现行（knowledge 23 / tests 366 / naming 206 / completeness 19）；`data/status/completeness_matrix.json` 与 ratchet 同步（audit §1.4，但"证据覆盖"≠移植完成）。
 
@@ -24,7 +24,7 @@
 - **S3 影响**：m3-inventory 的 DAG **顺序**仍有历史参考价值，但其**状态列/底数/Stage A 现状**不可当现状；其 §3 第 5 行"L4 白名单候选用户确认"前置已随 W-C1/W-C4 撤销而作废（现行 L4 判据=0 容差，见 [master-plan §6](../master-plan.md) 与 [decision-l4-zero-tolerance-ruling](../knowledge/decision-l4-zero-tolerance-ruling.md)）。
 - **S4 影响**：L2 覆盖引用一律以 `oracle/subroutines/l2_cases.jsonl`（121 例）为准；coverage_map 只在追溯 t34 审计口径时使用。
 - **S5/S6 影响**：两者都属 L4 定位账，**必须绑定 P0-0 可复现基线**后重做；在此之前只可作"历史时点材料"，不得当现行残差账。
-- **S7 影响**：读者读到生成物会看到与 spec 矛盾的"白名单候选/申请"文案；**修复入口是 tools 文案**（改 `tools/diff_visual.py` 对应行后再重生成），不要手改 `oracle/screens/*` 生成物。
+- **S7 影响**：读者读到生成物会看到与 spec 矛盾的"白名单候选/申请"文案；**修复入口是 tools 文案**（改 `tools/diff_visual.py` 对应串〔内容锚见 S7 行〕后再重生成），不要手改 `oracle/screens/*` 生成物。
 
 ## 3. 复现命令（只读；工作目录=仓库根；本机用 `python`）
 
@@ -78,7 +78,7 @@ grep -n "AR2-A" docs/findings/residual-pixel-ledger.md | head   # 撤销注
 
 ```bash
 grep -n "W-C1\|W-C4" oracle/screens/whitelist-application.md oracle/screens/visual-report.md | head
-grep -n "W-C1\|W-C4" tools/diff_visual.py | head            # 生成源（L189-190/223-225/227-236）
+grep -n "W-C1\|W-C4" tools/diff_visual.py | head            # 生成源（内容锚见 S7 行；行号会漂移，勿硬编码）
 ```
 
 ## 4. 维护纪律 / 变更记录
