@@ -19,6 +19,11 @@
 | 总耗时 | ~66min（3976.6s；phase-batch 3 场景 + 32 次 render） |
 | manifest | `target/p0-0/render/manifest.json`（22 行 + env + summary + dedupe） |
 
+> **【F125-1】`status` 语义（provisional，勿误用）**：本 manifest 的 `status` 是 **`render_status`（provisional）**，
+> 只表示 **render 成功 + 两跑 deterministic**，**不代表 actual 与 expected blob 已确认相等**（P0-0-2 expected 尚未定稿）。
+> 实测：16 个 rendered pair **全部 actual≠expected**（其中 13 个 expected 文件存在、3 个 group A 的 expected 文件名带 tag 后缀）；
+> `status=ok` 的 11 个里 8 个属这 13 个「已知不等」集合。后续 wrapper/mapping 请改用 `render_status` 字段。
+
 > **实际重渲发现（需 §7.5/§8 裁定，不得静默）**：actual 侧 6 对重渲成**同一 blob**
 > `5f93bdbb2c84…`（`l4_stg06-late, l4_stg07-combat, l4_stg07-start, l4_stg08-combat, l4_stg08-late,
 > l4_stg08-start`，全部来自 `stg08-timeline`）——与旧 expected「同 blob 复制」现象一致/同族（OBS-1 商店冻结屏，
@@ -54,6 +59,11 @@ target/p0-0/build/debug/render-frame.exe <frame> <name> <scene> `
 **输入 sha**：每对记录 `analysis/traces/<scene>.frames.jsonl`、`<scene>.probe.jsonl`、
 `analysis/phase/<scene>-text.jsonl` 的 sha256（title-menu 的 probe/text = null，合法 M7）。
 
+> **【F125-3/4 口径注】**：①`phase-batch` 只打印「N 调用回放/M 写点」，**无 run.json/wall 字段**，故本报告
+> 总耗时 3976.6s 是 driver wall（含 phase-batch + 32 次 render），`§2` 的 wall 仅为 render-frame 单跑耗时；
+> ②manifest `env` 只记 **9 类基础键摘要 + REPO_ROOT/二进制 sha**（39 个诊断 env 全 unset），非完整 env dump
+> （完整 env 卫生见 `run1/<name>.log` 的 `env={}` 字段）。
+
 ## 2. 逐对结果（22 行；`png sha12` = run1 实际输出，两跑全等）
 
 | # | name | frame | scene | status | png sha12 | 两跑 png/idx | 单跑 wall（run1/run2） |
@@ -87,6 +97,21 @@ target/p0-0/build/debug/render-frame.exe <frame> <name> <scene> `
 - `l4_ending-1..5` / `l4_fade-clear` 六对**没有渲染**：来源 blocked:no-source（见
   `docs/findings/p0-0-groupD-source-decision.md`；C1/C2/C3 修复后重跑仍 blob 0/6）。
 
+### 2.1 actual 六对同 blob 的逐对 expected sha（F125-5；与 `p0-0-same-blob-adjudication.md` 一致）
+
+| name | frame | actual run1 sha（前 16） | expected sha（前 16） | expected 是否同 blob |
+|---|---:|---|---|---|
+| `l4_stg06-late` | 22000 | `5f93bdbb2c84612b` | `62a8ef06c4b9bcd1` | 是（四联同 blob） |
+| `l4_stg07-combat` | 16000 | `5f93bdbb2c84612b` | `2824cb134987c7b3` | 否（旧 expected 单独图） |
+| `l4_stg07-start` | 14600 | `5f93bdbb2c84612b` | `ddb322ac57021bc6` | 否（旧 expected 单独图） |
+| `l4_stg08-combat` | 18000 | `5f93bdbb2c84612b` | `62a8ef06c4b9bcd1` | 是（四联同 blob） |
+| `l4_stg08-late` | 28000 | `5f93bdbb2c84612b` | `62a8ef06c4b9bcd1` | 是（四联同 blob） |
+| `l4_stg08-start` | 16600 | `5f93bdbb2c84612b` | `62a8ef06c4b9bcd1` | 是（四联同 blob） |
+
+> 裁定（task-126）：actual 6 对同 blob = **真实 OBS-1 冻结屏**（源 Mesen 截图同 sha `2b2d6ab0…`、trace 内容键同、
+> 沙盒补渲 f5000 不同 vs f10000–34000 同），**非渲染缺陷**；expected 四联同 blob 仍按 §7.2 重采。详见
+> [`p0-0-same-blob-adjudication.md`](p0-0-same-blob-adjudication.md)。
+
 ## 3. 两跑确定性（16/16 PASS）
 
 - 逐对比较：`run1/<name>.png` vs `run2/<name>.png` sha256、`run1/<name>.idx.json` vs `run2/<name>.idx.json` sha256；
@@ -106,7 +131,10 @@ manifest `dedupe`：**expected_unique=14（reduction 5）、actual_unique=11（r
 | **actual** | `l4_stg06-late`, `l4_stg07-combat`, `l4_stg07-start`, `l4_stg08-combat`, `l4_stg08-late`, `l4_stg08-start` | `5f93bdbb2c84` | **本次实际渲染也同图（stg08-timeline 6 个帧域）** —— 需 §7.5/§8 明确裁定（见 §5） |
 
 > **口径**：本 manifest 是 P0-0-2 产物（expected 重采/裁定尚未定稿）；`duplicate_of`/`reuse` 需 mapping.tsv
-> （P0-0-1b）与 §7 裁定后回填，本报告不臆断"独立/复用"。
+> （P0-0-1b）与 §7 裁定后回填，本报告不臆断「独立/复用」。
+> **actual 6-group 裁定（task-126）**：真实同画面（OBS-1 冻结屏），非缺陷；建议登记 actual-only
+> documented_duplicate 并扩展 §7.5 `registry_ok`（actual 组非 mapping 四联组子集），详见
+> [`p0-0-same-blob-adjudication.md`](p0-0-same-blob-adjudication.md)。
 
 ## 5. 失败/跳过/待裁定清单
 
@@ -148,4 +176,6 @@ PY
 - [x] manifest 齐全（22 行 + env + summary + dedupe + blocked 列表）→ `target/p0-0/render/manifest.json`；
 - [x] 组 D 按 `blocked:no-source` 标注、未渲染/未 staging（§5）；无 stale-input 使用；
 - [x] 未跑 gates check/status/visual；未改代码/gates/基线；产物均在 target/、analysis/（gitignored）；
+- [x] actual 6 对同 blob 已裁定为真实 OBS-1 冻结屏（task-126，`p0-0-same-blob-adjudication.md`），非渲染缺陷；
+      F125-1（render_status/provisional，§0）、F125-5（§2.1 六对 expected sha）、F125-3/4（§1 注）已补；
 - [ ] docs-links PASS（提交前复核）；独立复核 pass（复核方可抽 1-2 对重渲核 sha）。
