@@ -4,8 +4,9 @@
 > PC 是第一实现（现名 `shell/win`；**是否更名 `shell-pc` 由用户裁定，本规格不擅自改名**）。
 > 本规格=**接口锁定依据**，接已证语义不发明；v2 由 task-5（平台抽象层 v1）升版。
 >
-> 实施状态（2026-10-18）：`game-platform` v1 缝补全 ✅；`game-shell` 平台无关宿主 v1 ✅；
-> `shell/win` 仍为骨架（PC 窗口/呈现/设备实现=task-1 待办）；`shell/android` 仅方案（§6），未实现。
+> 实施状态（2026-10-18，task-1 回填）：`game-platform` v1 缝补全 ✅；`game-shell` 平台无关宿主 v1 ✅；
+> `shell/win` v1 PC 宿主 ✅（winit/softbuffer 窗口+呈现、六 trait PC 实现、`--selftest-frames` 自检；
+> 见 §4.1）；`shell/android` 仅方案（§6），未实现。
 
 ## 1. 分层合同（AGENTS.md §2 延伸）
 
@@ -100,10 +101,50 @@ A3 R-l5-3..6）。
 | 资产 | `AssetSource`=`std::fs`（`rom/`） |
 | 存储 | `Storage`：Windows=`%APPDATA%/gunnac/`；Linux=`~/.local/share/gunnac/` |
 | 生命周期 | 关窗→`AppEvent::Quit`；最小化/焦点可选发 Suspend/Resume（桌面可不发） |
-| 实现状态 | **骨架**（lib 有映射/blit/AudioSink/旧 `GameHost` 雏形）；窗口主循环与 game-shell 接线=task-1 待办；旧 `GameHost` 由 game-shell 取代（迁移时删除重复宿主逻辑，避免两套状态机） |
+| 实现状态 | **v1 已落地**（task-1，2026-10-18）：六 trait PC 实现 + winit/softbuffer 主循环 + 确定性自检；逐件状态见 §4.1 |
 
 > 命名：本 crate 当前名 `shell-win`（=PC 第一实现，Win/Linux 同源）。**是否更名 `shell-pc` 由用户裁定**；
 > 本规格与任务不改名、不移动 crate。
+
+### 4.1 实现状态（2026-10-18，task-1 回填）
+
+| 件 | 实现（文件） | 验证 |
+|---|---|---|
+| 窗口 | `WindowRenderer`（`crates/shell-win/src/main.rs`）：winit 0.30 `ApplicationHandler` + softbuffer `Surface`；标题 `gunnac-remake (Stage A)`；初始 512×480（2×） | 本机实跑窗口 `MainWindowTitle`=`gunnac-remake (Stage A)`；标题常量单测 |
+| 帧驱动 | `about_to_wait`：`Instant`→整数 ns→`game_shell::Host::advance`（`FixedStep` 60Hz、追帧上限 4）；`ControlFlow::WaitUntil` 节流 | `--selftest-frames 300`：advanced=300（每采样 1 逻辑帧） |
+| 呈现 | `FrameRenderer` 合成 + `blit_scaled` 整数倍缩放/黑边（softbuffer `0x00RRGGBB`） | `view_rect`/`blit_scaled` 单测（2×/3×/黑边/小窗裁切） |
+| 输入 | `KeyboardInput`+`key_name`：winit 物理键码→`Buttons`（Z/X/Enter/RShift/方向）；对向同持交 game-shell `resolve_directions` 消解 | 键位表单测 + 按下/抬起状态单测 |
+| 音频 | `PcAudio`（`Audio` impl）：真实消费 game-shell `ApuWrite` 流（写序保真登记，计数不丢）；PCM=静音占位显式（`silent()=true`） | 单测：写流保序/计数/`end_frame`/零 PCM；自检注入 2 条写流被消费（audio_writes=2） |
+| 资产 | `FsAssets`（`AssetSource` impl）：`std::fs` 相对路径读 `rom/gunnac_cn.nes`；绝对路径/`..`/缺失⇒`None`（fail-closed） | 单测 + 自检 rom_len=262160 |
+| 存储 | `FileStorage`（`Storage` impl）：`%APPDATA%/gunnac`（Win）/`~/.local/share/gunnac`（Linux），`slot{n}.sav` | 单测：往返/空槽 fail-closed；**不自动保存**（原版存档语义未证） |
+| 生命周期 | `LifecycleQueue`：关窗→`Quit`；焦点丢失/获得→`Suspend`/`Resume`（最小平台策略）；宿主 suspend 停逻辑帧 | FIFO 单测；game-shell 门控测试 |
+| 渲染内容 | CHR 背景（`ChrBackground`：`game-data::chr` 解码字模区 tile 平铺，灰阶 `GREY4` **C 级占位**）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）；敌/弹/HUD/文本**显式不画** | 单测：短 ROM fail-closed、tile 解码、画布覆盖/清屏色保留；合成 hash 确定性 |
+| 自检 | `cargo run -p shell-win -- --selftest-frames N`：无窗口、真实 `AssetSource`、固定已证 `ModeEvent`/按钮脚本 | 300 帧连跑两次 stdout 逐行一致、退出码 0（§4.2） |
+
+**迁移**：旧骨架的 `FrameDriver`/`GameHost`（重复宿主逻辑）已删除，改接 `game_shell::FixedStep`/
+`Host`；`AudioSink` 改为 `PcAudio`（平台 `Audio` 实现，不是第二套宿主）。实现方案与未证域声明见
+[plan-shellwin-v1.md](../findings/plan-shellwin-v1.md)。
+
+**§4.2 自检记录值（2026-10-18 本机 Windows；连跑两次逐行一致）**
+
+```text
+selftest: frames=300 advanced=300 presents=300
+selftest: mode=Combat stage=1 frame=300
+selftest: host_signature=0xcde9dc99514b5f4b
+selftest: canvas_signature=0x963ac9a776a57625
+selftest: display_signature=0xf68f9ffc0607cbad
+selftest: audio_writes=2 audio_frames=300
+selftest: rom_len=Some(262160)
+selftest: OK
+```
+
+**口径**：`host_signature`/`canvas_signature`/`display_signature` 是**确定性回归锚**，
+**不声称**等价真机 trace 对拍（platform-shell.md §3/§9 同口径）；`display_signature` 含平台侧
+CHR 背景占位合成，非 L4 像素目标。GUI 视觉（缩放/黑边/CHR 背景）为手动验收项。
+
+**未证/未接（与 §8 一致）**：菜单输入门控不自动派发（主循环不投递 `ModeEvent`，窗口初始停在
+`Boot`，玩家块按已证坐标显示）、敌/弹/HUD/文本不画、音频 PCM 静音占位、关卡数据未装载、
+`shell-win→shell-pc` 更名待用户裁定。
 
 ## 5. 平台矩阵（PC / Android 对照）
 

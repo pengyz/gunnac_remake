@@ -174,4 +174,79 @@ platform-shell.md §4 状态与实现相符（不声称未实现能力）；独�
 
 ## 9. 实施状态（2026-10-18 回填）
 
-**结论**：**实施中**——本方案已落盘；实现与门禁结果待本卡实现 commit 后回填（不改写 §0-§8 历史主张）。
+**结论**：**v1 交付完成**——`shell-win` 从 177 行库骨架变成可运行 PC 宿主：
+六 trait PC 实现 + winit/softbuffer 主循环（经 `game_shell::Host::advance` 固定步 60Hz）+
+`--selftest-frames` 无窗口确定性自检；旧 `FrameDriver`/`GameHost` 重复宿主逻辑已删除。
+**未证域全部 fail-closed/TODO**（§6；§9.3 逐条列）。
+
+**§9.1 commit 列表（本任务写范围）**
+
+| commit | 主题 |
+|---|---|
+| `1be66e5` | `docs(platform)`：本方案（对照/迁移/呈现/自检设计 + 未证域声明） |
+| `7b5e4da` | `feat(platform)`：shell-win v1 实现（Cargo/lib/main/tests；六 trait + 主循环 + 自检） |
+| 本次 docs commit | `docs(spec)`：platform-shell.md §4.1/§4.2 状态回填 + 本 §9 回填 |
+
+**§9.2 门禁与实测输出（本机 Windows，2026-10-18）**
+
+| 验收项 | 实际命令 | 结果 |
+|---|---|---|
+| 编译 | `cargo build -p shell-win` | 成功（0 error；仅既有 game-core `scroll_frames` dead_code 警告） |
+| 单元/集成测试 | `cargo test -p shell-win` | lib 3 + smoke 17 = **20 passed / 0 failed** |
+| 全量 | `cargo test --workspace` | 全绿（rust-tests 门禁实测 338，基线 326） |
+| 总闸 | `python gates/cli.py check` | **CHECK: PASS**（PASS=11 FAIL=0 SKIP=1[addr-bridge] TOLERATED=0；rust_test_count ratchet WARN 见 §9.4） |
+| 自检（1） | `cargo run -p shell-win -- --selftest-frames 300` | 退出码 0，输出见下 |
+| 自检（2） | 同上第二次 | 退出码 0，stdout 与第一次**逐行完全一致** |
+| GUI 启动 | `target/debug/shell-win.exe` | 进程存活；`MainWindowTitle`=`gunnac-remake (Stage A)`；stderr `mode=Boot stage=1 frame=1`（宿主状态真实消费） |
+
+自检 stdout（两次一致；`host_signature`/`canvas_signature`/`display_signature` 仅作确定性回归锚，
+**不**声称等价真机 trace）：
+
+```text
+selftest: frames=300 advanced=300 presents=300
+selftest: mode=Combat stage=1 frame=300
+selftest: host_signature=0xcde9dc99514b5f4b
+selftest: canvas_signature=0x963ac9a776a57625
+selftest: display_signature=0xf68f9ffc0607cbad
+selftest: audio_writes=2 audio_frames=300
+selftest: rom_len=Some(262160)
+selftest: OK
+```
+
+**§9.3 交付文件清单**
+
+- `crates/shell-win/Cargo.toml`：`[[bin]] shell-win` + `game-shell`/`game-data` 依赖（平台依赖仍只在本 crate）
+- `crates/shell-win/src/lib.rs`：PC 六 trait 实现（`FsAssets`/`FileStorage`/`PcAudio`/`KeyboardInput`/
+  `LifecycleQueue`/`FrameRenderer`）+ `ChrBackground`/`compose_canvas`/`view_rect`/`blit_scaled` +
+  `run_selftest`；删除 `FrameDriver`/`GameHost`，`AudioSink`→`PcAudio`
+- `crates/shell-win/src/main.rs`：winit 0.30 `ApplicationHandler` + softbuffer `WindowRenderer`；
+  `Host::advance` 固定步主循环；`--selftest-frames N`
+- `crates/shell-win/tests/smoke.rs`：20 项契约测试（键位/路径/缩放黑边/CHR 合成/六 trait/自检确定性）
+- `docs/spec/platform-shell.md` §4.1/§4.2：状态回填 + 自检记录值
+
+**§9.4 遗留项 / TODO（未证域，未实现/未声称）**
+
+1. **菜单输入门控未接线**：主循环不自动投递 `ModeEvent`（菜单派发边集未定谳）⇒ 窗口启动后停在
+   `Boot`，按已证坐标显示玩家块；推进到战斗只能经 `Host::apply_event`（测试/后续已证战役）。
+2. **敌精灵/子弹/HUD/文本/结局卡不画**：game-shell v1 渲染契约未暴露（`FrameView` 只有玩家与活弹数）；
+   `TODO(shell-v1)` 已登记；H-01/H-16 未证不发明。
+3. **音频 PCM=静音占位显式**：`PcAudio` 真实消费 `ApuWrite` 流（计数/写序），`synth_pcm` 全 0；
+   cpal 设备流与 APU 合成器（AUD-2/3）属后续任务卡。
+4. **关卡数据未装载**：`StageState` 空 ⇒ `stage_clear_requested` 不会自然发生；自检用已证
+   `ModeEvent` 脚本推进，不冒充数据装载。
+5. **存储不自动保存**：`FileStorage` 只做字节块存取（原版存档语义未证）；主循环未接保存时机。
+6. **CHR 背景为可见性占位**：灰阶 `GREY4` 非原版调色板（C 级未证），不做 nametable/精灵优先级；
+   L4 像素目标仍 0 容差攻坚（独立任务）。
+7. **`shell-win`→`shell-pc` 更名**：待用户裁定（platform-shell.md §4 注；本任务不改名/不移动）。
+8. **ratchet WARN**：`rust_test_count` 现值 338 > 基线 326（只升不降=WARN 非 FAIL）；
+   `data/status/baselines/` 属本任务写范围外 ⇒ **报 Lead 处置**（用 `gates/cli.py baseline update --reason`）。
+9. **GUI 视觉验收**：窗口标题/启动已实跑验证；整数缩放/黑边/CHR 背景像素的肉眼验收为手动项
+   （本机无自动截图对拍；L4 门禁不覆盖 shell 呈现）。
+
+**§9.5 需 Lead/用户裁定事项**
+
+1. 是否将 `shell-win` 更名 `shell-pc`（平台矩阵口径）。
+2. 菜单输入门控/主循环自动事件派发是否为下一张任务卡（决定窗口可玩性；当前 fail-closed）。
+3. `rust_test_count` 基线上调（`data/status/` 写范围外，需 Lead/门禁属主执行）。
+4. 独立对抗复核（verifier 角色）为本步骤完成前置——本产出在复核 pass 前只算"待审稿"。
+
