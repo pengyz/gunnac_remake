@@ -87,6 +87,12 @@ shell FrameRenderer.present()
 （refresh 不计数）。多帧追帧时中间帧使用上一 view 覆盖层、最终采样帧用最新 view——按样本收敛，文档登记。
 **selftest** 同口径：每帧 `advance` 后 `set_frame_view(host.frame_view())`；报告 `view_digest` 取最终 view。
 
+**每采样上屏次数（task-36 E3 收口 / S1-S2 口径注）**：窗口模式 `Renderer::present`（`Host::tick` 内）
+只做合成+计数、**不 blit**；窗口上屏统一在 `refresh_view()`（最新 view）执行 ⇒ **每采样 1 次
+softbuffer present**。收口前为 **2 次**（tick 内 blit 上一帧 view + refresh 再 blit 最新帧），属
+**采样临时口径**（无可见错误，`task-12` E3）；`presents` 计数语义不变（=逻辑帧数），
+`display_signature`/`view_signature` 均不变。
+
 ## 4. view 摘要签名（独立、平台无关）
 
 `pub fn frame_view_digest(view: &FrameView) -> u64`：FNV-1a 64 over
@@ -103,10 +109,16 @@ shell FrameRenderer.present()
 | 敌精灵图样/尺寸/调色板/优先级 | 未证 | 8×8 纯色占位块（类型值→占位色）；`TODO(shell-v2)` |
 | 玩家子弹坐标/弹道（H-01） | 未证 | 不画；摘要只登记 `player_bullets_live` |
 | HUD 字形/位图/屏幕坐标/文本/图标 | 未证 | 2×2 点阵/位行占位编码 + 固定占位槽；**非原版 HUD** |
+| **HUD 可见性/显示时机（模式门）** | 未证 | v2 **所有模式**（含 Boot/Title/Menu/Shop）恒画 HUD 数值域占位；**不声称原版显示时机/可见性一致**；不改绘制行为（task-36 E5） |
 | 原版 BG/nametable/调色板/文本流/结局卡 | 未证 | CHR 背景沿用 v1 灰阶占位；不新增 |
 | 模式画面原版文字/美术/布局 | 未证 | 模式枚举→占位角标/纯色，不发明 |
 | 菜单输入门控细节（含 B1 跨键吞按） | task-9 域/另卡 | shell 不实现派发；只透传按键 |
 | L4 像素级一致 | 未达成 | 本卡不声称；仅提供可见性占位画面 |
+
+> 【摘要哨兵歧义（E4，task-36 已登记、不修）】`frame_view_digest` 对敌槽 `position=None` 使用
+> `(0xFF,0xFF)` 哨兵，与未来真实 `Some((255,255))` 理论同摘要；v1 `position` 恒 `None`
+> （坐标写者链未证）⇒ **无实际影响**。若未来接线真实坐标，需先给 None/Some 加 tag 区分
+> （会改变 `view_signature` 记录值，须按新时点更新 spec §4.2）。
 
 ## 6. 文件级改动计划
 
@@ -157,7 +169,7 @@ cargo run -p shell-win                             # GUI 手动：模式角标/H
 | 自检 | `cargo run -p shell-win -- --selftest-frames 300` ×2 | stdout 逐行一致、exit 0；`view_signature=0xf6603346bf818ffd`（新增行）；`display_signature=0xe99af5849b632fbd`（v2 覆盖层改变合成）；`canvas_signature=0x963ac9a776a57625` 不变 |
 | 自检 host 签名时点 | 同上 | `host_signature=0x5d7156266d6ac19d`（=task-29 B1 修后的树口径；platform-porter 独立复现同值。值链：task-1 `0xcde9…` → task-9 `0xf51d…` → task-29 `0x5d71…`；**非回归**） |
 | GUI 实跑 | `target/debug/shell-win.exe` + PrintWindow 截图 | 窗口标题 `gunnac-remake (Stage A)`；CHR 背景；**Title 模式黄色角标**（`MODE_MARKER_COLORS[2]`）；HUD 占位位行；整数缩放上屏（单元测试锁 2×/3×/黑边）。截图 `target/gui-shellwin-v2-printwindow.png`（可再生不入库） |
-| GUI 模式推进 | 键注入（SendKeys） | **环境限制**：本机会话 SendKeys 未送达 winit 窗口（stderr 仅自动锚 Boot→Black→Title）⇒ 键驱动推进以集成测试为证据；GUI 键推进仍为手动验收项（不声称已自动验证） |
+| GUI 模式推进 | 键注入 | **环境限制**：本会话 `SendKeys`/前台授权未送达 winit 窗口（stderr 仅自动锚 Boot→Black→Title）。**复核方（task-12）用 `PostMessage(WM_KEYDOWN)` 注入成功**并 PrintWindow 截图像素采样验证 StageStart 角标/HUD 位块 ⇒ 该链**可自动化**（E6）；后续 GUI 验收方法见 §8.5。键驱动推进以集成测试为证据、手动验收项。
 
 ### 8.3 未证域落实（与 §5 一致）
 
@@ -173,5 +185,30 @@ cargo run -p shell-win                             # GUI 手动：模式角标/H
    自检（view_signature）行、§4.2 新值（display `0xe99af5849b632fbd`、view `0xf6603346bf818ffd`、
    host 值链 cde9→f51d→5d71 时点口径）与 §4 未证/未接措辞（同一 docs commit）。
 2. **独立对抗复核**（task-12）：本产出在复核 pass 前只算"待审稿"。
-3. GUI 键驱动模式推进的手动验收（环境限制已如实登记）。
+3. GUI 键驱动模式推进的手动验收（环境限制已如实登记；自动化方法见 §8.5 E6）。
+
+### 8.5 task-36 复核 findings 收口（2026-10-18）
+
+来源：`task-12` 复核（verdict=pass，非阻塞 findings E3-E6/S1-S2）。本卡只做小修/登记，**不改游戏行为、
+不改已记录签名语义**。
+
+| finding | 处置 | 证据/位置 |
+|---|---|---|
+| **E5** HUD 可见性/模式门未证 | plan §5 增行 + platform-shell §8 增条：v2 **所有模式**恒画 HUD 数值域占位；**不声称原版显示时机/可见性一致**；不改绘制行为 | 本文件 §5；platform-shell §8 |
+| **E3** 双 blit/present | 窗口模式 `Renderer::present` **跳过 blit**（只合成+计数），统一由 `refresh_view()` 最新 view 上屏 ⇒ **每采样 1 次 softbuffer present**（旧=2 次，采样临时口径）；`presents` 计数语义不变（=逻辑帧数）、`display_signature`/`view_signature` 不变 | `crates/shell-win/src/main.rs` `WindowRenderer::present` 注释；本文件 §3 |
+| **E4** 摘要哨兵歧义 | **仅登记不修**：`frame_view_digest` 对 `position=None` 用 `(0xFF,0xFF)`，与未来 `Some((255,255))` 理论同摘要；v1 None 恒真无实际影响 | `crates/shell-win/src/lib.rs` `frame_view_digest` 注释；本文件 §5 注 |
+| **S1/S2** 2 次 present 采样临时口径 | plan §3 显式标注（收口前 2 次 / 收口后 1 次每采样），并注明 presents 计数语义不变 | 本文件 §3 |
+| **E6** GUI 自动化验证方法 | 写入本节 + §8.2：**`PostMessage(WM_KEYDOWN)` 注入 winit 窗口 + `PrintWindow` 截图像素采样**（复核方已成功复现模式推进与角标/HUD 位块颜色）；后续 GUI 验收复用该方法（本卡不实现脚本） | 本文件 §8.2/E6；复核报告 `docs/findings/adversarial-review-playable-b.md` §2 |
+
+**task-36 实测（本机 Windows，2026-10-18）**
+
+| 验收项 | 命令 | 结果 |
+|---|---|---|
+| 单 crate | `cargo test -p shell-win` | lib 12 + smoke 21 = **33 passed / 0 failed** |
+| 自检 | `cargo run -p shell-win -- --selftest-frames 300` ×2 | stdout 逐行一致、exit 0；四签名不变：host=`0x5d7156266d6ac19d` / canvas=`0x963ac9a776a57625` / display=`0xe99af5849b632fbd` / view=`0xf6603346bf818ffd`（E3 不改合成结果） |
+| 全量 | `cargo test --workspace` | exit 0 全绿 |
+| 总闸 | `python gates/cli.py check` | **CHECK: PASS** |
+
+> **提交说明**：按 task-36 卡指示，本卡改动**不 git add/commit**（留在工作树），完成后回报改动与实测，
+> 由 Lead/独立复核后统一提交。
 
