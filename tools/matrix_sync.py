@@ -209,7 +209,7 @@ def main() -> int:
     if args.export:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         doc = build_json()
-        args.json.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        args.json.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"EXPORT: {len(doc['cells'])} 格 → {args.json}")
     return check(args.json)
 

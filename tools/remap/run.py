@@ -299,7 +299,7 @@ def main() -> None:
         print("CHECK:", "一致" if old == text else "不一致（需重新生成）")
         return
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(text, encoding="utf-8")
+    OUT.write_text(text, encoding="utf-8", newline="\n")
     c = doc["counts"]
     print(f"wrote {OUT.relative_to(ROOT)}: subroutines={c['subroutines']} vectors={c['vectors']} "
           f"far_calls={c['far_call_sites']} tables={c['data_tables']} ram={c['ram_symbols']} "

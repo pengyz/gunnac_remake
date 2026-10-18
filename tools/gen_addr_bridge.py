@@ -132,7 +132,8 @@ def gen() -> int:
                     })
         result["banks"][f"bank{bi:02d}"] = entries
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(result, ensure_ascii=False, indent=1))
+    OUT.write_text(json.dumps(result, ensure_ascii=False, indent=1),
+                   encoding="utf-8", newline="\n")
     # 汇总
     from collections import Counter
 

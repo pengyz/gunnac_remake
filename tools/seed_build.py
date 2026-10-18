@@ -81,7 +81,7 @@ def main() -> None:
         lines.append("")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    OUT.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     n_lines = sum(1 for _ in open(OUT, encoding="utf-8"))
     print(f"wrote {OUT.relative_to(ROOT)} lines={n_lines} "
           f"items={totals['items']} funcs={totals['funcs']} "
