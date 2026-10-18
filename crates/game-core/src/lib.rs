@@ -210,3 +210,28 @@ pub fn audio_entry(
         _ => false,
     }
 }
+
+// ===== AUD-3 音频通道参数表（四件套输入齐——3a294bb）=====
+
+/// 音频指针表组（5 组 lo/hi 指针对=数据流基址——AUD-3 全集）。
+pub const AUDIO_PTR_GROUPS: [(u16, u16); 5] = [
+    (0x8AD7, 0x8B00), // 组 1（lo/hi）
+    (0x8B30, 0x8B60), // 组 2
+    (0x8B90, 0x8BC0), // 组 3
+    (0x8BF0, 0x8C20), // 组 4
+    (0x8C50, 0x8C80), // 组 5
+];
+
+/// 标量表 6 域（AUD-3——通道参数标量）。
+pub const AUDIO_SCALAR_DOMAINS: u8 = 6;
+
+/// 装载 8 点（STA $A/$B——间接指针装载）。
+pub const AUDIO_LOAD_POINTS: u8 = 8;
+
+/// ($A),Y 间接消费 13 点（AUD-3——数据流消费）。
+pub const AUDIO_INDIRECT_CONSUMERS: u8 = 13;
+
+/// AUD-2 字段切分（$8AD7 复合：低 5=音调/高 2=独立参——音频通道参数）。
+pub fn audio_field_split(composite: u8) -> (u8, u8) {
+    (composite & 0x1F, composite >> 5) // (音调, 独立参)
+}

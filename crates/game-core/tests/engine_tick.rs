@@ -1132,3 +1132,12 @@ fn audio_driver_seven_entries() {
     // 未知入口 fail-closed
     assert!(!audio_entry("nope", &mut d, 0, &mut w));
 }
+
+/// AUD-3 音频通道参数表（四件套）。
+#[test]
+fn audio_channel_params() {
+    use game_core::audio_field_split;
+    assert_eq!(audio_field_split(0xAD), (0x0D, 0x05), "低 5 音调/高 2 参");
+    assert_eq!(audio_field_split(0x00), (0, 0));
+    assert_eq!(audio_field_split(0xFF), (0x1F, 0x07));
+}
