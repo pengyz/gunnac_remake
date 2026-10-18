@@ -69,3 +69,15 @@ capture 12000 stg03-late
 
 watch_range 0000-00ff zp
 watch_range 0300-07ff iram
+watch_range 0000-00ff zp
+watch_range 0400-06ff shot_objs
+watch_range 0200-02ff oam
+watch_range 0130-016f bg_nmi
+probe_mem 0130 0160
+probe_mem 00d3 00da
+probe_mem 2005 2006
+probe_mem 008e 008f
+probe_mem 0161 016f
+probe_mem 008d 008d
+probe_mem 002f 0030
+probe_mem 2006 2007

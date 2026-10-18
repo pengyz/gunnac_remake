@@ -68,3 +68,5 @@ probe_mem 0161 016f
 probe_mem 008d 008d
 probe_mem 002f 0030
 probe_mem 2006 2007
+probe_mem 048c 048c
+probe_mem 4000 4017
