@@ -53,6 +53,22 @@ expected 四联仍按 §7.2 重采、组 D 仍 `blocked:no-source`（P0-0 不得
   两者都跨数万帧不变化（非正常游戏滚动/战斗画面）——与 **OBS-1「末关出店转场截断/结构冻结」** 一致
   （`docs/bug-ledger.md` 候选观察区：注入链下转场分叉后结构冻结，未立号）。
 - 6 对目标帧**全部落在** `2b2d6ab0…` 组 ⇒ 源画面同图。
+- **【F128-2】静态组 shots 名单（可复算；glob 命令见下）**：
+  - `2b2d6ab04350…` **51 张**，frames = `[9000,9600,10200,10800,11000,11400,12000,12600,13000,13200,13800,14400,14600,15000,15600,16000,16200,16600,16800,17400,18000,18600,19200,19800,20000,20400,21000,21600,22000,22200,22800,23400,24000,24600,25200,25800,26000,26400,27000,27600,28000,28200,28800,29400,30000,30600,31200,31800,32400,33000,33600]`
+  - `d531d33a65d3…` **45 张**，frames = `[7500,8100,8700,9300,9900,10500,11100,11700,12300,12900,13500,14100,14700,15300,15900,16500,17100,17700,18300,18900,19500,20100,20700,21300,21900,22500,23100,23700,24300,24900,25500,26100,26700,27300,27900,28500,29100,29700,30300,30900,31500,32100,32700,33300,33900]`
+  - 另有小重复组（`988809e0b414af92`×3 = 7200/7800/8400 等，见命令输出）。
+  ```bash
+  python - <<'PY'
+  import hashlib, pathlib, collections
+  g=collections.defaultdict(list)
+  for p in pathlib.Path('shots').glob('stg08-timeline_f*_*.png'):
+      try: f=int(p.stem.split('_f')[1].split('_')[0])
+      except Exception: continue
+      g[hashlib.sha256(p.read_bytes()).hexdigest()].append(f)
+  for h,fs in g.items():
+      if len(fs)>1: print(h[:16], len(fs), sorted(fs))
+  PY
+  ```
 - 附：expected 中四联 4 张同 blob `62a8ef06…`（旧 expected 侧同族现象）；#17/#18 的 expected 不同 blob
   （`2824cb13…`/`ddb322ac…`）——**旧 expected 来自另一条历史 run 的帧域**（跨 run 帧号不可硬映射，
   已在 groupD 决策 §3 记录）；本裁定**不判 expected #17/#18 哪侧有效**（那是 §7.1/§7.2 重采范围）。
@@ -114,7 +130,11 @@ for n,f in {"l4_stg06-late":22000,"l4_stg07-combat":16000,"l4_stg07-start":14600
                        "l4_stg07-start":"stg07-start-approx","l4_stg08-combat":"stg08-combat",
                        "l4_stg08-late":"stg08-late","l4_stg08-start":"stg08-start-approx"}[n]+".png")[:16])
 PY
-# ② 沙盒补渲对照（f5000 不同；f10000–34000 同）
+# ② 沙盒补渲对照（f5000 不同；f10000–34000 同；compare.json 为 {frame:{rc,exists,sha}} 映射，
+#    "同图"判据 = sha == d['14600']['sha']；重生成命令见下）
+#   python 生成：对 f in [5000,10000,14600,22000,28000,34000] 用 target/p0-0/build/debug/render-frame.exe
+#   `--out-dir target/p0-0/adjudicate --log-path .../adj_stg08_f<f>.log`（canonical env、无 Mesen），
+#   结果 dict {f:{rc,exists,sha}} 写 target/p0-0/adjudicate/compare.json
 python - <<'PY'
 import json, pathlib
 d=json.loads(pathlib.Path("target/p0-0/adjudicate/compare.json").read_text(encoding="utf-8"))
@@ -141,4 +161,4 @@ PY
 - [x] F125-2 证据（源 shots 同 sha `2b2d6ab04350`）已并入 §1/§0；F125-1/5 在
       `p0-0-render-run1.md` 的注记/§5 同步；
 - [x] `analysis/`、`target/`、`shots/` 未入库；未跑 Mesen/gates；
-- [ ] docs-links PASS（提交前复核）；独立复核 pass（platform-verifier task-128）。
+- [x] docs-links PASS（374 md/459 链接；platform-verifier task-128 复核 pass）。

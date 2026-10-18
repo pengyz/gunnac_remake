@@ -178,4 +178,4 @@ PY
 - [x] 未跑 gates check/status/visual；未改代码/gates/基线；产物均在 target/、analysis/（gitignored）；
 - [x] actual 6 对同 blob 已裁定为真实 OBS-1 冻结屏（task-126，`p0-0-same-blob-adjudication.md`），非渲染缺陷；
       F125-1（render_status/provisional，§0）、F125-5（§2.1 六对 expected sha）、F125-3/4（§1 注）已补；
-- [ ] docs-links PASS（提交前复核）；独立复核 pass（复核方可抽 1-2 对重渲核 sha）。
+- [x] docs-links PASS（374 md/459 链接）；独立复核 pass（task-125）。

@@ -1360,6 +1360,10 @@ if __name__ == "__main__":
 > §7b（actual 侧）仍独立执行（canonical 渲染后的两两不同/documented duplicate 判定与来源无关）。
 > 恢复条件 = §3.6 顶部更正块第 4 条（先有到达 ending 的合法 run + any-frame blob 搜索命中）。
 > 证据：`docs/findings/p0-0-groupD-source-decision.md` §0/§2；`analysis/repro/p0-0-groupD/decision.json`。
+>
+> **【2026-10-18 task-130 重裁现状】** P0-0-2 重渲（16 对 deterministic）后本组仍**无 actual**（blocked）——
+> 5 对（#6-#10）不重渲/不 staging、旧 expected 保留；§7b「actual 两两不同」核对**当前不适用**（无 actual）。
+> 差异像素重裁表见 `docs/findings/p0-0-readjudication.md` §2（#6-#10 均 `blocked`）；**P0-0 不得宣称全绿**。
 
 **§7a（§5 之前，expected 侧）**：
 - **现状（A）**：五张 actual 同 blob（TBLDRV=1 共用 ending-1 golden 表）；expected-4/5 同文件。
@@ -1386,11 +1390,18 @@ documented duplicate（静态同图），必须已在 manifest `dedupe.documente
 不等/无来源 ⇒ 按 §3.6 走 `blocked:no-source` + 新采集 `s5-full-inject`（命中后再 staging 到
 `analysis/expected-new/`，`status=replaced-invalid-asset`，记录 run/帧/trigger）。**须在 §5 前完成安装**（B1）。
 （**2026-10-18 定谳：现状已落 `blocked:no-source`、不 staging；`s5-full-inject` 尚未采集。**）
+> **【2026-10-18 task-130】#11 维持 `blocked:no-source`**（P0-0-2 无 actual；旧 expected `14802bcf…` 保留）；
+> 重裁逐对状态见 `docs/findings/p0-0-readjudication.md` §2 #11。
 
 ### 7.5 去重判据与登记（**F2/F8/B2：按 manifest 22 名过滤 + 按组核对 + 重复 ⊆ manifest**）
 
 > 现状背景（P0-0 前）：expected unique **17/22**；`oracle/screens/actual/` 有 **257 张实验 PNG/127 unique**
 > ——所以任何"glob actual 目录"的脚本都会误判（F2）。判据一律**只用 manifest 的 22 个 name**。
+
+> **【F2·历史口径标注】** 下面 bash 块为 **task-130 前**旧口径（`oracle/screens/l4-manifest.json`、
+> `len(E)/len(A) in (21,22)` 断言）；**现行口径以本节紧邻下方的 2026-10-18 task-130 注为准**
+> （manifest=`target/p0-0/render/manifest.json`；expected_unique=17 / actual_unique=11；actual-only 6-group）。
+> 保留本块仅作历史/复算方法参考，**不得据此判 P0-0 去重 PASS**。
 
 ```bash
 python - <<'PY'
@@ -1431,6 +1442,14 @@ PY
 manifest `dedupe.documented_duplicates` 找到同 name 集**（expected 重复也登记，不能只在 actual 侧登记）；
 ④每组"非主帧"成员在 mapping.tsv 标 `duplicate_of`（wrapper 的 `registry_ok` 会再核一次）。
 未登记/公式不符 ⇒ `blocked` 排查。所有 **DUP**（非 DUO）写入该表与 manifest（F17）。
+
+> **【2026-10-18 task-130 去重实况（P0-0-2/3）】** 按 manifest 22 名过滤：**expected_unique=17**
+> （3 组：`l4_ending-4/5`；`l4_stg02-start`↔`title-menu_f00180_boot-black`；四联 4 张 `62a8ef06…`）、
+> **actual_unique=11**（1 组 ×6：`l4_stg06-late, l4_stg07-combat, l4_stg07-start, l4_stg08-combat,
+> l4_stg08-late, l4_stg08-start` = **真实 OBS-1 冻结屏 documented_duplicates**，task-126/128 pass，**不剔除**）。
+> **registry 扩展**：actual 6-group **不是** mapping 四联组（4 名）子集 ⇒ wrapper `registry_ok` 需允许
+> actual-only 组显式登记（`adjudicated_by=task-126`），否则会误判异常；expected 四联同 blob 仍属「expected
+> 待 §7.2 重采」不得与 actual 同 blob 混用。公式核对：expected 17 = 22−5；actual 11 = 16 rendered−5。
 
 ### 7.6 trigger 标注纪律
 
@@ -1664,6 +1683,16 @@ PY
       `git status --short oracle/screens` 无残留；禁止部分/截断 trace 的 actual 混入基线
       （见 §2.2 采集窗口纪律 + 知识库 gotcha-visual-gate-rewrites-tracked-screens）；
 - [ ] Lead 复核 + 独立对抗复核 pass。
+
+> **【2026-10-18 task-130 现状（P0-0-2/3 后）】**（F3 注：任务卡写「组 A–F」，手册实际分组 A–E，title=E，无 F 组）
+> 22 对 = **16 可渲**（其中 **1 对像素级 0 差异**：
+> `title-menu_f00180_boot-black`，actual 与 expected sha 不同但像素全等；**15 对 diff>0**：min 2918 /
+> median 12,854.5（16 可渲含 1 个 0 差异口径；**15 正值口径 13,501**）/ max 58,364，属 P0-1 修复目标，
+> **不是 P0-0 验收失败**）+ **6 对组 D `blocked:no-source`**
+> + **5 对 `replaced-invalid-asset`（expected 待 §7.2 重采）**。去重：expected_unique=17、actual_unique=11
+> （actual 6-group=真实 OBS-1 冻结屏，登记 documented_duplicates、不剔除）。
+> ⇒ **本清单在组 D 取得合法来源 + expected 5 对重采安装前维持不通过；P0-0 不得宣称全绿**。
+> 逐对证据：`docs/findings/p0-0-readjudication.md` §2/§3；manifest：`target/p0-0/render/manifest.json`。
 
 ### 8.3 与 R8 / 门禁的交互（引用复核 §7）
 
