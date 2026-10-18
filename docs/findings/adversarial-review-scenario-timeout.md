@@ -106,3 +106,45 @@ failure path: ok = done_info is not None and not timed_out and n_lines>0; main r
 **pass（静态面）/ 动态 >100s 待 P0-0 采集确认**：命令构造/超时公式、POSIX 不回归、短场景不回归与
 修复前截断反证均成立；P0-0 用修复后驱动跑出的 `done/trace_lines==frames` 是最终动态验收。
 F90-1（单场景失败仍 exit 0）为中优先级失败路径建议，建议在 P0-0 自动化前顺手修，不阻塞本次提交。
+
+---
+
+## 点验（2026-10-18，task-93）
+
+> 对象：`tools/scenario_run.py` commit `93a8025`（`fix(tools): scenario_run run 分支未完成时非零退出（task-90 F90-1）+ timeout 复核报告`）。
+> 只核 F90-1 的 run/run-all 判据/退出码；只读 + 本文件写入，未 git add/commit。锁被 l4-analyst 占用时按
+> 纪律等待（本轮未触发长时间争锁）。
+
+### 点验 VERDICT：**pass**
+
+- **代码**：`main` 的 `run` 分支不再固定 `return 0`；判据为
+  `m.done is not None ∧ ¬m.timed_out ∧ trace_lines == frames`，不满足打印 `RUN: FAIL(...)` 并 **return 1**；
+  `run-all` 同步增加 `trace_lines == frames` 判据 ✅。
+- **失败路径实测**：`title-menu --timeout 1` → 驱动级 timeout，输出
+  `trace_lines=256/1080, timed_out=True, done=False`，`RUN: FAIL`，**exit=1** ✅。
+- **正常路径实测**：`title-menu --timeout 600` → **1080/1080/37/37 DONE，exit=0** ✅。
+- 退出码与 P0-0 验收统一判据 `done != null ∧ ¬timed_out ∧ trace_lines == frames` 一致：
+  失败退出码由单场景/manifest 判据驱动，不再依赖 `timed_out` 单字段（旧 Mesen 100s 自停场景
+  `timed_out=False` 但 done=None/截断，也会被新判据判 FAIL）✅。
+- **剩余 info**：`run-all` 用 `m["done"]` 真值判据（与 `is not None` 等价）；无阻塞问题。
+
+### 命令/结果摘要
+
+```text
+git log: 93a8025 fix(tools): scenario_run run 分支未完成时非零退出（task-90 F90-1）
+run title-menu --timeout 1:
+  frames=1080 trace_lines=256 captures=8 shots=8 wall=1.0s
+  !! 未完成 (timed_out=True, done=False, trace_lines=256)
+  RUN: FAIL (done=False timed_out=True trace_lines=256/frames=1080)
+  exit=1
+run title-menu --timeout 600:
+  frames=1080 trace_lines=1080 captures=37 shots=37 DONE
+  exit=0
+run-all 判据: m["done"] and not m["timed_out"] and trace_lines == frames
+```
+
+### 结论
+
+**pass**：F90-1 已闭环；失败/成功退出码与 P0-0 判据一致，旧 100s 自停截断（done=None/`timed_out=False`）
+也会被单场景判据抓住。动态 >100s（stg08/tas-stg08b2）仍按 Lead 协调由 P0-0 采集产出（task-86）确认。
+
