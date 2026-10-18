@@ -129,6 +129,16 @@ python tools/scenario_run.py run <name> --timeout 3600
   §3.6/§3.7 改用候选 **C2 `tas-stg07-relay`**（`stg07-clear f28683` 已在 `tas-clear-full.l5.jsonl`）或
   **C3 `tas-stg08-direct`**，并在 mapping 中写明取舍（Lead 已确认此 fallback 方向）。
 
+## 4.4 【2026-10-18 晚·dated】I5 在 capture.lua/tas_bot 修复后重跑：采集层合法通过（组 D 仍无来源）
+
+- 修复后（最终 lua）重跑 `tas-stg08b2-direct --timeout 5400`：`rc=0`、**frames=40000 / trace_lines=40000**、
+  `done={frames_actual:40000,overshoot:false,finalize_by:endFrame,frame_errors:0}`、captures/shots=26、wall 346.6s
+  ⇒ 判据 `done!=null ∧ ¬timed_out ∧ trace_lines==done.trace_lines ∧ frame_errors==0` **通过**；
+  trace sha256=`486a157e968e1665c77049af63840b054e3a1d581dc912ff3401d008aa16c198`。
+- **I5 采集层 BLOCKED 解除**（`failed:over-budget`/`capture-termination` 均为旧 lua 时期记录，保留历史）；
+  **但组 D 来源结论不变**：blob 0/6、目标帧语义仍 stage1/2（见 `p0-0-groupD-source-decision.md` §2.4）。
+- 证据：`analysis/repro/p0-0-groupD/capture-tas-stg08b2-direct-final.json` + `ledger-rerun.jsonl`（gitignored）。
+
 ## 5. 台账与产物清单
 
 | 内容 | 路径（均 gitignored） |
