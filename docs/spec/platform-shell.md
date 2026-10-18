@@ -106,6 +106,7 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 | 件 | 实现 | 验证 |
 |---|---|---|
 | 菜单/模式派发 | `Host::dispatch_menu`/`auto_advance`/`due_events`（`InputLatch`+`MenuInputGate`+`ShopState::on_b`+帧锚/常数/延迟队列） | 单元测试：Boot→…→Combat 完整序列、标题锁窗内 Start 无效、Shop 内 Start 无效 |
+| 菜单派发**触发键分离**（task-29 B1 修） | `Title/Menu`：层 1 **只喂 START 位**（A 级 START 专用早退门 bank00:92AA/9400 `AND #$10`）；`Shop/ShopInfo`：`$16` **原始按下沿**（键级；B 保持/边沿门未证 ⇒ 边沿模型 fail-closed，不发明连发） | 回归：`menu_start_not_swallowed_by_other_keys`、`shop_two_b_presses_within_12_frames_both_register`；方案见 [plan-menuinput-fix.md](../findings/plan-menuinput-fix.md) |
 | STG-01 装载 | `Host::load_stg01`（`AssetSource`→`game_data::rom::prg_bank(8)`→`decode_sched($A26D,64)`=43 记录→`StageState`）；转场帧自动装载（A 级 f1193 锚） | `tests/stg01_replay.rs`：43 记录 + tick 锚 [1,33,49,65,81]（A 级 golden） |
 | 滚动源 | `Host::stage_scroll_delta`=`-stage::scroll_delta(abs)`；`abs=1193+(frame-load_frame)` | **C1：vs `.scroll.jsonl` 1207/1207 帧 0 失配**（A 级） |
 | spawn 落地/摘要 | `apply_stage_effects`（`land_pair`/`land_leader`）+ `scan_spawns`（`$0400` 0→非0 判定式） | C4：共同槽 16/16、engine 型集 ⊆ oracle 型集；帧列不可对拍（见 §8） |
@@ -114,7 +115,8 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 | 玩家列对拍（新增 C6） | `player::tick` vs `.player.jsonl`（死亡窗剔除 f1260..=1830） | **571/571 帧一致**（A 级） |
 
 > `Host::signature()` 语义在 task-9 扩展（新增菜单锁存/门控/装载/spawn 日志/阶段计时覆盖）；
-> shell-win 自检 `host_signature` 值随之更新（§4.2，记录新值；非回退）。
+> task-29 修 B1 后触发键域/层 1 状态更新时机变化 ⇒ 签名值再次更新（§4.2；**非回归**，两次运行确定性不变）。
+> 值链：task-1 `0xcde9dc99514b5f4b` → task-9 `0xf51d5a517e7458b7` → task-29 `0x5d7156266d6ac19d`。
 
 ## 4. shell-pc 架构（首实现，现名 `shell/win`）
 
@@ -163,7 +165,7 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 ```text
 selftest: frames=300 advanced=300 presents=300
 selftest: mode=Combat stage=1 frame=300
-selftest: host_signature=0xf51d5a517e7458b7
+selftest: host_signature=0x5d7156266d6ac19d
 selftest: canvas_signature=0x963ac9a776a57625
 selftest: display_signature=0xf68f9ffc0607cbad
 selftest: audio_writes=2 audio_frames=300
@@ -171,11 +173,17 @@ selftest: rom_len=Some(262160)
 selftest: OK
 ```
 
-> 【2026-10-18 task-9 更新】`host_signature` 记录值由 `0xcde9dc99514b5f4b` → **`0xf51d5a517e7458b7`**：
+> 【2026-10-18 task-9 更新】`host_signature` 记录值由 `0xcde9dc99514b5f4b` → `0xf51d5a517e7458b7`：
 > 原因=`Host::signature()` 语义扩展（新增菜单锁存/门控/STG-01 装载/spawn 日志/阶段计时覆盖），
 > **非回归**；`canvas_signature`/`display_signature` 不变（渲染面未改）。shell-win selftest 用
 > `apply_event`（无转场装载挂钩）⇒ selftest 内 stage_loaded=false、引擎不 tick；GUI 主循环走
 > game-shell 菜单派发自动接线（转场帧自动装载 STG-01）。
+>
+> 【2026-10-18 task-29 更新】`host_signature` 由 `0xf51d5a517e7458b7` → **`0x5d7156266d6ac19d`**：
+> 原因=B1 修复（菜单触发键域分离：`menu_latch` 仅锁存 START、层 1 `prev_held` 只在 Title/Menu 更新；
+> 见 [plan-menuinput-fix.md](../findings/plan-menuinput-fix.md)），签名覆盖 `menu_latch/gate` 状态；
+> **非回归**，两次运行逐行一致、`canvas/display` 不变。shell-win `plan-shellwin-v1.md` 的时点值
+> 需由 shell-porter 同步（不在本卡写范围）。
 
 **口径**：`host_signature`/`canvas_signature`/`display_signature` 是**确定性回归锚**，
 **不声称**等价真机 trace 对拍（platform-shell.md §3/§9 同口径）；`display_signature` 含平台侧
@@ -268,14 +276,15 @@ cargo test -p game-data
 cargo test -p game-shell
 cargo test -p game-shell --test mock_platform mock_platform_drives_300_frames_deterministically -- --nocapture
 cargo test -p game-shell --test stg01_replay -- --nocapture
-#   2026-10-18 task-9 记录值：mock-300 host=0x63b5a6195287a6d8 canvas=0x963ac9a776a57625 advanced_frames=290
-#    （签名语义 task-9 扩展后；两次运行 AssertEq）
-#   STG-01 replay 记录值：host=0x521d397a6c609f34 canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807
+#   2026-10-18 task-29 记录值：mock-300 host=0x3085adda845a078d canvas=0x963ac9a776a57625 advanced_frames=290
+#    （task-9 旧值 0x63b5a6195287a6d8；B1 修改变更触发键域/层1状态，非回归；两次 AssertEq）
+#   STG-01 replay 记录值（task-9/29 均未变，replay 输入无 START 菜单键）：host=0x521d397a6c609f34
+#    canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807
 #   对拍：C1 滚动 1207/1207 0 失配；C6 玩家列 571/571 一致；C4 共同槽 16/16（帧列不可对拍，见 §8）
 
 # 4) 平台侧回归（shell-win 未改；selftest 两次逐行一致）
 cargo run -p shell-win -- --selftest-frames 300
-#   2026-10-18 task-9 后 host_signature=0xf51d5a517e7458b7（语义扩展见 §3.1；canvas/display 不变）
+#   2026-10-18 task-29 后 host_signature=0x5d7156266d6ac19d（B1 修复语义更新；canvas/display 不变）
 
 # 5) 全量 + 总闸
 cargo test --workspace

@@ -554,23 +554,43 @@ impl Host {
 
     // ================= 菜单/模式派发（输入驱动；证据见 plan-playable-loop §4） =================
 
-    /// 标题/菜单/商店段输入派发（`MenuInputGate` 两层门 + `ShopState::on_b`）。
-    fn dispatch_menu(&mut self, frame: u64) {
-        let Some(bits) = self.menu_gate.dispatch(self.menu_latch.bitmap_18) else {
-            return;
+    /// 标题/菜单/商店段输入派发（**触发键按模式分离**；证据/未证域见
+    /// `docs/findings/plan-menuinput-fix.md` §4/§5）。
+    ///
+    /// - `Title | Menu`：`$18` 锁存 + `MenuInputGate` 两层门，**只喂 START 位**——严格对齐 A 级
+    ///   START 专用早退门（bank00:92AA/9400 `LDA $18 / AND #$10`；`flow-response-latency.md` §8），
+    ///   消除其它键 12f 保持导致的跨键吞按；
+    /// - `Shop | ShopInfo`：`$16` **原始按下沿**（键级边沿）——Shop B 的保持/边沿门未证，
+    ///   边沿模型=一次按下一次动作（fail-closed，不发明连发/保持重复）；两连 B 短间隔（2..12f）可识别；
+    /// - 其它模式不派发（避免层 1 状态被 gameplay 输入污染）。
+    fn dispatch_menu(&mut self, frame: u64, pressed: u8) {
+        let trigger = match self.flow.mode {
+            Mode::Title | Mode::Menu => {
+                if self
+                    .menu_gate
+                    .dispatch(self.menu_latch.bitmap_18 & crate::input::MENU_START)
+                    .is_some()
+                {
+                    crate::input::MENU_START
+                } else {
+                    0
+                }
+            }
+            Mode::Shop | Mode::ShopInfo => pressed & crate::input::MENU_B,
+            _ => 0,
         };
         match self.flow.mode {
-            Mode::Title if bits & crate::input::MENU_START != 0 => {
+            Mode::Title if trigger & crate::input::MENU_START != 0 => {
                 let _ = self.apply_event_with_side_effects(ModeEvent::Menu);
             }
-            Mode::Menu if bits & crate::input::MENU_START != 0 => {
+            Mode::Menu if trigger & crate::input::MENU_START != 0 => {
                 let _ = self.apply_event_with_side_effects(ModeEvent::ShopArrival);
             }
-            Mode::Shop if bits & crate::input::MENU_B != 0 => {
+            Mode::Shop if trigger & crate::input::MENU_B != 0 => {
                 self.shop_state = self.shop_state.on_b(); // Main→Info（R-shop-6）
                 let _ = self.apply_event_with_side_effects(ModeEvent::ShopPage);
             }
-            Mode::ShopInfo if bits & crate::input::MENU_B != 0 => {
+            Mode::ShopInfo if trigger & crate::input::MENU_B != 0 => {
                 self.shop_state = self.shop_state.on_b(); // Info→Exited（R-shop-7 两连 B）
                 // 出店转场响应 +33f（A 级：press@1160→f1193）⇒ 延迟投递 ExitTransition。
                 let due = frame.saturating_add(SHOP_EXIT_RESPONSE_FRAMES.saturating_sub(1));
@@ -741,16 +761,18 @@ impl Host {
         }
 
         // ① 菜单 `$18` 锁存：先推进上一帧 pending（press@N→N+1f），再压入本帧按下沿。
+        //    **只锁存 START 位**：A 级早退门=bank00:92AA/9400 `LDA $18/AND #$10`（START 专用），
+        //    其它键（方向/A/B）不得参与层 1 保持判定（修跨键吞按，task-29 / plan-menuinput-fix §5）。
         self.menu_latch.tick_frame();
-        self.menu_latch.press(menu_pressed_bitmap(&self.prev_buttons, &buttons));
+        self.menu_latch.press(menu_pressed_bitmap(&self.prev_buttons, &buttons) & crate::input::MENU_START);
 
         // ② 标题段输入锁（九班 (450,550]，A 级引证）：>550 解锁。
         if frame > MENU_INPUT_UNLOCK_FRAME {
             self.menu_gate.phase_unlocked = true;
         }
 
-        // ③ 菜单/模式派发（输入驱动已证序列）
-        self.dispatch_menu(frame);
+        // ③ 菜单/模式派发（输入驱动已证序列；触发键按模式分离，见 dispatch_menu 文档）
+        self.dispatch_menu(frame, pressed);
 
         // ④ 帧锚自动推进 + 转场/关始阶段计时
         self.auto_advance(frame);
@@ -1329,6 +1351,73 @@ mod tests {
         let presses = [(600u64, true, false), (700, true, false), (800, true, false), (900, true, false)];
         let modes = run_with_presses(&mut host, 1000, &presses);
         assert_eq!(modes, vec![Mode::Boot, Mode::Black, Mode::Title, Mode::Menu, Mode::Shop], "Shop 内 Start 无效果");
+    }
+
+    // ---------------- task-29 B1 回归：跨键/短间隔吞按 ----------------
+
+    /// 逐帧按钮脚本驱动（未列帧=无按键；每帧单次采样）。
+    fn run_with_button_script(
+        host: &mut Host,
+        frames: u64,
+        script: &[(u64, Buttons)],
+    ) -> Vec<Mode> {
+        let mut renderer = NullRenderer::new();
+        let mut audio = RecAudio::default();
+        let mut modes = vec![host.mode()];
+        for f in 0..frames {
+            let buttons = script
+                .iter()
+                .find(|(pf, _)| *pf == f)
+                .map(|(_, b)| *b)
+                .unwrap_or_default();
+            host.tick(&FixedInput(buttons), &mut renderer, &mut audio);
+            if modes.last() != Some(&host.mode()) {
+                modes.push(host.mode());
+            }
+        }
+        modes
+    }
+
+    #[test]
+    fn menu_start_not_swallowed_by_other_keys() {
+        // B1 回归：right@590 / A@595 的 12f `$18` 保持不得吞掉 START@600 的按下沿
+        // （A 级层 1 为 START 专用早退门 bank00:92AA/9400 `AND #$10`）。
+        let mut host = Host::new();
+        let dir = Buttons { right: true, ..Buttons::default() };
+        let a = Buttons { a: true, ..Buttons::default() };
+        let start = Buttons { start: true, ..Buttons::default() };
+        let script = [(590u64, dir), (595, a), (600, start)];
+        let modes = run_with_button_script(&mut host, 700, &script);
+        assert_eq!(
+            modes,
+            vec![Mode::Boot, Mode::Black, Mode::Title, Mode::Menu],
+            "其它键 12f 保持内 START 仍须派发（修复前被吞⇒停在 Title）"
+        );
+    }
+
+    #[test]
+    fn shop_two_b_presses_within_12_frames_both_register() {
+        // B1 回归：两连 B 间隔 4f（<12f 锁存保持）也须各自派发（Shop B 走 `$16` 原始按下沿）。
+        let mut host = Host::new();
+        let start = Buttons { start: true, ..Buttons::default() };
+        let b = Buttons { b: true, ..Buttons::default() };
+        let script = [(600u64, start), (700, start), (800, b), (804, b)];
+        let modes = run_with_button_script(&mut host, 900, &script);
+        assert_eq!(
+            modes,
+            vec![
+                Mode::Boot,
+                Mode::Black,
+                Mode::Title,
+                Mode::Menu,
+                Mode::Shop,
+                Mode::ShopInfo,
+                Mode::Transition,
+                Mode::StageStart,
+            ],
+            "两连 B 间隔 4f：Shop→ShopInfo→(+33f)Transition→(33f)StageStart（修复前第二 B 被吞）"
+        );
+        assert_eq!(host.shop_state(), game_core::ui::ShopState::Exited, "第二 B 已注册（Info→Exited）");
     }
 
     // ---------------- FrameView / spawn 摘要 ----------------
