@@ -31,7 +31,6 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import json
 import os
@@ -42,13 +41,32 @@ import sys
 import time
 from pathlib import Path
 
+try:  # POSIX（Linux 原生 / WSL）
+    import fcntl
+except ImportError:  # Windows: headless（testRunner）驱动模式
+    fcntl = None  # type: ignore[assignment]
+
 ROOT = Path(__file__).resolve().parent.parent
-MESEN = ROOT / "tools" / "mesen2" / "Mesen"
-import os
+
+
 def _abs(env: str, default: str) -> Path:
     v = os.environ.get(env)
     q = Path(v) if v else Path(default)
     return q if q.is_absolute() else (ROOT / q)
+
+
+# Mesen2 可执行：优先 GUNNAC_MESEN 覆盖；否则按宿主平台选 Linux 无扩展名版 / Windows .exe 版。
+if os.environ.get("GUNNAC_MESEN"):
+    MESEN = _abs("GUNNAC_MESEN", "tools/mesen2/Mesen")
+elif os.name == "nt":
+    MESEN = ROOT / "tools" / "mesen2" / "Mesen.exe"
+else:
+    MESEN = ROOT / "tools" / "mesen2" / "Mesen"
+# headless：Windows 版（.exe）默认走 `--testRunner <lua> <rom>`；可用 GUNNAC_HEADLESS=0/1 强制。
+HEADLESS = os.environ.get(
+    "GUNNAC_HEADLESS",
+    "1" if MESEN.suffix.lower() == ".exe" else "0",
+) == "1"
 ROM = _abs("GUNNAC_ROM", "rom/gunnac_cn.nes")
 TRACES_DIR = _abs("GUNNAC_TRACES", "analysis/traces")
 SHOTS_DIR = _abs("GUNNAC_SHOTS", "shots")
@@ -398,37 +416,95 @@ def normalize_paths_in_outputs(name: str) -> None:
 
     Lua 落盘需要绝对目录（PLAN.shots_dir），但 captures.jsonl/run.json 对外
     暴露的路径必须相对——2026-10-14 用户裁定。
+
+    Windows（headless 驱动）额外注意：Lua 侧路径为 `D:\\workspace\\...`，写进 JSON 后
+    反斜杠被转义成 `D:\\\\workspace\\\\...`；且 `/` 与 `\\` 可能混用（`shots/...`）。
+    因此对 ROOT 的 4 种字面形式（原生/正斜杠 × 原始/JSON 转义）全部归一，并在归一后
+    断言产物中不再出现绝对路径（fail-closed，避免"看起来归一了其实没归"）。
     """
-    prefix = str(ROOT) + "/"
+    root_s = str(ROOT)
+    variants = {
+        root_s + "/",
+        root_s + "\\",
+        ROOT.as_posix() + "/",
+        root_s.replace("\\", "\\\\") + "\\\\",  # JSON 转义后的 `D:\\workspace\\...`
+        root_s.replace("\\", "\\\\") + "/",
+        ROOT.as_posix().replace("/", "\\/") + "/",
+    }
     for f in [TRACES_DIR / f"{name}.captures.jsonl", TRACES_DIR / f"{name}.run.json"]:
         if not f.is_file():
             continue
         txt = f.read_text(encoding="utf-8")
-        if prefix in txt:
-            f.write_text(txt.replace(prefix, ""), encoding="utf-8", newline="\n")
+        for p in variants:
+            if p in txt:
+                txt = txt.replace(p, "")
+        f.write_text(txt, encoding="utf-8", newline="\n")
+        # 零绝对路径回归断言：捕获 `"C:\\` / `"D:/` 之类仓库绝对路径残留。
+        for bad in (f'"{root_s[0]}:\\\\', f'"{root_s[0]}:/'):
+            if bad in txt:
+                rel = f.relative_to(ROOT).as_posix()
+                raise ScenarioError(
+                    f"产物仍含绝对路径（归一失败）：{rel} 命中 {bad!r}；"
+                    "请检查 normalize_paths_in_outputs 的转义变体"
+                )
 
 
 def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = True) -> dict:
     spath = scenario_path_of(name_or_path)
     plan = parse_scenario(spath)
     name = plan["name"]
-    # 串行锁（t24 事故）：同一时刻只允许一个 Mesen 场景运行
-    lock_f = open(ROOT / "analysis" / ".scenario.lock", "w")
+    # 快速前置检查（F3/F4）：缺 ROM / 缺 Mesen 立即失败，不干等到 timeout。
+    if not ROM.is_file():
+        raise ScenarioError(f"ROM 不存在：{ROM}（GUNNAC_ROM 可覆盖）")
+    if not MESEN.is_file():
+        raise ScenarioError(
+            f"Mesen2 不存在：{MESEN}（GUNNAC_MESEN 可覆盖；"
+            "Windows 需 tools/mesen2/Mesen.exe，POSIX 需 tools/mesen2/Mesen）"
+        )
+    # 串行锁（t24 事故）：同一时刻只允许一个 Mesen 场景运行。
+    # POSIX=flock；Windows（headless 驱动）=msvcrt 锁 1 字节（无 fcntl 依赖）。
+    (ROOT / "analysis").mkdir(parents=True, exist_ok=True)
+    lock_f = open(ROOT / "analysis" / ".scenario.lock", "a+")
     try:
-        fcntl.flock(lock_f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if fcntl is not None:
+            fcntl.flock(lock_f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        else:
+            import msvcrt  # type: ignore
+            lock_f.seek(0)
+            msvcrt.locking(lock_f.fileno(), msvcrt.LK_NBLCK, 1)
     except OSError:
+        lock_f.close()
         raise ScenarioError("另一场景运行中（串行纪律）：analysis/.scenario.lock 被占用")
     # t54 F3 根因防护：串行锁只罩驱动进程——驱动崩溃/被强杀后 Mesen/Xvfb 孤儿仍在跑，
     # 与后续运行争显示/写同一批产物（实测 trace 交错、DONE 不落、30x 变慢）。启动前显式清扫。
-    stale = subprocess.run(["pgrep", "-f", "tools/mesen2/Mesen"], capture_output=True, text=True).stdout.split()
-    if stale:
-        for pid in stale:
-            try:
-                os.kill(int(pid), signal.SIGKILL)
-            except (ProcessLookupError, ValueError):
-                pass
-        print(f"  [清场] 清除孤儿 Mesen {len(stale)} 个（驱动侧锁覆盖不到的残留）")
+    # headless（Windows .exe）：无 Xvfb；testRunner 由脚本 emu.stop 自行退出，孤儿风险低，跳过 pgrep。
+    if not HEADLESS:
+        stale = subprocess.run(["pgrep", "-f", "tools/mesen2/Mesen"], capture_output=True, text=True).stdout.split()
+        if stale:
+            for pid in stale:
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except (ProcessLookupError, ValueError):
+                    pass
+            print(f"  [清场] 清除孤儿 Mesen {len(stale)} 个（驱动侧锁覆盖不到的残留）")
     archived = archive_existing(name)
+    # F2（复核 task-80）：per-scenario 截图/产物若未被 archive_existing 清走（历史遗留、
+    # 手工实验产物），会进入 glob 计数并与本次写入混合 ⇒ 双跑误判。这里再次显式清场：
+    # 把残留 `<name>_f*.png` / `<name>_f*.ram.hex` 移入本次归档目录，跑前 shots/traces 干净。
+    def _clear_leftovers() -> None:
+        leftover_shots = sorted(SHOTS_DIR.glob(f"{name}_f*.png")) if SHOTS_DIR.is_dir() else []
+        leftover_rams = sorted(TRACES_DIR.glob(f"{name}_f*.ram.hex")) if TRACES_DIR.is_dir() else []
+        if not (leftover_shots or leftover_rams):
+            return
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        dst = TRACES_DIR / ".archive" / f"{name}-{stamp}-leftovers"
+        (dst / "shots").mkdir(parents=True, exist_ok=True)
+        for p in leftover_shots:
+            shutil.move(str(p), str(dst / "shots" / p.name))
+        for p in leftover_rams:
+            shutil.move(str(p), str(dst / p.name))
+        print(f"  [清场] 残留产物 {len(leftover_shots)} 截图 / {len(leftover_rams)} RAM 转入 {dst.relative_to(ROOT)}")
+    _clear_leftovers()
     (TRACES_DIR).mkdir(parents=True, exist_ok=True)
     (SHOTS_DIR).mkdir(parents=True, exist_ok=True)
     GEN_DIR.mkdir(parents=True, exist_ok=True)
@@ -465,21 +541,36 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     t0 = time.time()
     mesen_log = open(TRACES_DIR / f"{name}.mesen.log", "w", encoding="utf-8", newline="\n")
     # 自管 Xvfb（t24 实测：xvfb-run 包装层偶发提前退出 → Xvfb 随之死 → Mesen 冻在中途帧、
-    # DONE 不落）。直接拉 Xvfb + DISPLAY 注入，Mesen 为直接子进程；进程组清理见 finally。
     # 场景仍必须**串行**运行（run-all 已是串行；勿并行多个 Mesen）。
-    display = pick_display()
-    xvfb = subprocess.Popen(
-        ["Xvfb", display, "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
-    )
-    wait_for_x(display, xvfb)
-    env = dict(os.environ)
-    env["DISPLAY"] = display
-    proc = subprocess.Popen(
-        [str(MESEN), str(ROM), str(lua_path), "/DoNotSaveSettings"],
-        cwd=ROOT, stdout=mesen_log, stderr=subprocess.STDOUT, text=True,
-        start_new_session=True, env=env,
-    )
+    # headless（Mesen2 .exe + --testRunner <lua> <rom>）：不需要显示/Xvfb；脚本 emu.stop 后
+    # testRunner 自行退出。GUI 模式（Linux）：自管 Xvfb + DISPLAY 注入（原逻辑保留）。
+    xvfb = None
+    try:
+        if HEADLESS:
+            proc = subprocess.Popen(
+                [str(MESEN), "--testRunner", str(lua_path), str(ROM)],
+                cwd=ROOT, stdout=mesen_log, stderr=subprocess.STDOUT, text=True,
+            )
+        else:
+            display = pick_display()
+            xvfb = subprocess.Popen(
+                ["Xvfb", display, "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+            )
+            wait_for_x(display, xvfb)
+            env = dict(os.environ)
+            env["DISPLAY"] = display
+            proc = subprocess.Popen(
+                [str(MESEN), str(ROM), str(lua_path), "/DoNotSaveSettings"],
+                cwd=ROOT, stdout=mesen_log, stderr=subprocess.STDOUT, text=True,
+                start_new_session=True, env=env,
+            )
+    except FileNotFoundError as exc:
+        mesen_log.close()
+        if xvfb is not None:
+            xvfb.kill()
+        raise ScenarioError(f"启动 Mesen2 失败（可执行/依赖缺失）：{exc}")
+
     timed_out = False
     dead_since: float | None = None
     try:
@@ -507,6 +598,12 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
             time.sleep(0.5)
     finally:
         def kill_group(sig) -> None:
+            if os.name == "nt":
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+                return
             try:
                 os.killpg(os.getpgid(proc.pid), sig)
             except (ProcessLookupError, PermissionError, OSError):
@@ -520,14 +617,15 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
             kill_group(signal.SIGKILL)
             proc.wait(timeout=10)
         mesen_log.close()
-        try:
-            xvfb.terminate()
-            xvfb.wait(timeout=5)
-        except Exception:
+        if xvfb is not None:
             try:
-                xvfb.kill()
+                xvfb.terminate()
+                xvfb.wait(timeout=5)
             except Exception:
-                pass
+                try:
+                    xvfb.kill()
+                except Exception:
+                    pass
     wall = round(time.time() - t0, 1)
 
     done_info = None
@@ -537,8 +635,8 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     if trace_path.exists():
         with open(trace_path, encoding="utf-8") as f:
             n_lines = sum(1 for _ in f)
-    shots = sorted(str(p.relative_to(ROOT)) for p in (SHOTS_DIR).glob(f"{name}_f*.png"))
-    rams = sorted(str(p.relative_to(ROOT)) for p in (TRACES_DIR).glob(f"{name}_f*.ram.hex"))
+    shots = sorted(p.relative_to(ROOT).as_posix() for p in (SHOTS_DIR).glob(f"{name}_f*.png"))
+    rams = sorted(p.relative_to(ROOT).as_posix() for p in (TRACES_DIR).glob(f"{name}_f*.ram.hex"))
 
     manifest = {
         "scenario": relp(spath),
@@ -558,7 +656,7 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
             else None
         ),
         "outputs": {
-            "trace": str(trace_path.relative_to(ROOT)),
+            "trace": trace_path.relative_to(ROOT).as_posix(),
             "captures": f"analysis/traces/{name}.captures.jsonl",
             "shots": shots,
             "ram_dumps": rams,
@@ -569,7 +667,15 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     mpath = TRACES_DIR / f"{name}.run.json"
     mpath.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
-    fcntl.flock(lock_f, fcntl.LOCK_UN)
+    if fcntl is not None:
+        fcntl.flock(lock_f, fcntl.LOCK_UN)
+    else:
+        try:
+            import msvcrt  # type: ignore
+            lock_f.seek(0)
+            msvcrt.locking(lock_f.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
     lock_f.close()
     if archived:
         print(f"  已归档旧产物: {archived}（run 隔离，防踩踏）")
