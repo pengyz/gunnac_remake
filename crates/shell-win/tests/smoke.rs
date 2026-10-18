@@ -12,11 +12,10 @@
 //! - `--selftest-frames` 确定性（两次运行报告逐字段一致，含独立 view 摘要）+ 异 cwd 资产定位。
 
 use game_core::flow::Mode;
-use game_core::player::PlayerState;
 use game_platform::{
     AppEvent, AssetSource, Audio, Buttons, Input, Lifecycle, Renderer, Storage, CANVAS_LEN, CANVAS_W,
 };
-use game_shell::{EnemySlotView, FrameView, Host, HudView};
+use game_shell::{EnemySlotView, FrameView, Host};
 use shell_win::{
     asset_root, blit_scaled, compose_canvas, frame_view_digest, map_key, run_selftest, storage_dir,
     view_rect, ChrBackground, FileStorage, FrameRenderer, FsAssets, KeyboardInput, LifecycleQueue,
@@ -356,14 +355,9 @@ fn selftest_zero_frames_is_well_defined() {
 #[test]
 fn frame_view_overlay_renders_mode_hud_enemy_placeholders_only() {
     let mut view = FrameView {
-        frame: 0,
         mode: Mode::Menu,
-        stage: 1,
-        player: PlayerState::default(),
-        live_bullets: 0,
         player_bullets_live: 2,
-        enemy_slots: [EnemySlotView::EMPTY; 20],
-        hud: HudView::ZERO,
+        ..FrameView::default()
     };
     view.hud.money_digits[0] = (3, true); // 0b0011 ⇒ 上排两 2×2 点阵
     view.hud.bomb_ammo = 0b0000_0001;

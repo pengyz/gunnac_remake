@@ -712,6 +712,9 @@ pub fn frame_view_digest(view: &FrameView) -> u64 {
     for slot in &view.enemy_slots {
         hash_bytes(&mut h, &[slot.slot]);
         hash_bytes(&mut h, &[slot.type_code.unwrap_or(0)]);
+        // 摘要哨兵歧义（E4 已登记，v1 不修）：`position=None` 用 `(0xFF,0xFF)` 与未来真实
+        // `Some((255,255))` 理论同摘要；因 v1 position 恒 None（坐标写者链未证）无实际影响。
+        // 若未来接线真实坐标，需先给 None/Some 加 tag 区分（会改变 view_signature 记录值）。
         let pos = slot.position.unwrap_or((0xFF, 0xFF));
         hash_bytes(&mut h, &[pos.0, pos.1]);
     }
@@ -1109,22 +1112,12 @@ mod view_tests {
         HUD_PLACEHOLDER_RGBA, HUD_STAGE_SLOT_X, HUD_STAGE_SLOT_Y, MODE_MARKER_COLORS,
     };
     use game_core::flow::Mode;
-    use game_core::player::PlayerState;
     use game_platform::{Renderer, CANVAS_LEN, CANVAS_W};
-    use game_shell::{EnemySlotView, HudView};
+    use game_shell::EnemySlotView;
 
-    /// 基线 FrameView（Combat + 玩家默认 + 空敌槽 + 零 HUD）。
+    /// 基线 FrameView（Combat + 其余默认：空敌槽/零 HUD；task-37 起用 `..Default::default()`）。
     fn view_fixture() -> FrameView {
-        FrameView {
-            frame: 0,
-            mode: Mode::Combat,
-            stage: 1,
-            player: PlayerState::default(),
-            live_bullets: 0,
-            player_bullets_live: 0,
-            enemy_slots: [EnemySlotView::EMPTY; 20],
-            hud: HudView::ZERO,
-        }
+        FrameView { mode: Mode::Combat, ..FrameView::default() }
     }
 
     fn black_canvas() -> Vec<u8> {

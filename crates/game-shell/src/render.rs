@@ -10,6 +10,7 @@
 //! 实现侧（`shell-pc`/`shell-android`）负责把本画布整数倍缩放/黑边/上屏；
 //! 本模块只写逻辑画布并返回确定性画布 hash（宿主签名用）。
 
+use crate::fire::{BulletView, EnemyHitEvent};
 use game_core::flow::Mode;
 use game_core::player::PlayerState;
 use game_platform::{CANVAS_H, CANVAS_W};
@@ -72,12 +73,33 @@ pub struct FrameView {
     pub player: PlayerState,
     /// 活弹数（全槽；engine 已暴露面；v1 **不画**）。
     pub live_bullets: u16,
-    /// 玩家子弹活弹数（`PLAYER_ONLY_SLOTS`∪`SHARED_SLOTS` 活槽；A 级槽分类；v1 **不画**）。
+    /// 玩家子弹活弹数（`PLAYER_ONLY_SLOTS`∪`SHARED_SLOTS` 活槽；A 级槽分类）。
     pub player_bullets_live: u16,
-    /// 敌槽视图（20 槽＝槽 8..=27；v1 **不画**，供 task-10 渲染侧消费）。
+    /// 玩家子弹视图（20 槽按玩家槽序；空槽 None；坐标=`$04EE/$055E`、型码=`$063E`，A 级弹网格面）。
+    pub player_bullets: [Option<BulletView>; 20],
+    /// 本帧敌命中事件（engine 命中管线可观测结果；最多 4 条，超过只计数）。
+    pub hits_this_frame: [Option<EnemyHitEvent>; 4],
+    /// 敌槽视图（20 槽＝槽 8..=27；v1 **不画**，供 shell 渲染侧消费）。
     pub enemy_slots: [EnemySlotView; 20],
     /// HUD 已证数值域（v1 **不画**）。
     pub hud: HudView,
+}
+
+impl Default for FrameView {
+    fn default() -> Self {
+        Self {
+            frame: 0,
+            mode: Mode::Boot,
+            stage: 1,
+            player: PlayerState::default(),
+            live_bullets: 0,
+            player_bullets_live: 0,
+            player_bullets: [None; 20],
+            hits_this_frame: [None; 4],
+            enemy_slots: [EnemySlotView::EMPTY; 20],
+            hud: HudView::ZERO,
+        }
+    }
 }
 
 /// 画布 hash（FNV-1a 64，逐字节）。
@@ -146,6 +168,8 @@ mod tests {
             player,
             live_bullets: 0,
             player_bullets_live: 0,
+            player_bullets: [None; 20],
+            hits_this_frame: [None; 4],
             enemy_slots: [EnemySlotView::EMPTY; 20],
             hud: HudView::ZERO,
         }

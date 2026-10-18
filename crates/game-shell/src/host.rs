@@ -25,7 +25,7 @@ use game_core::engine::{
 };
 use game_core::flow::{FlowState, Mode, ModeEvent};
 use game_core::player::{self, PlayerState};
-use game_core::shot::{PLAYER_ONLY_SLOTS, SHARED_SLOTS};
+use game_core::shot::{BulletGrid, PLAYER_ONLY_SLOTS, SHARED_SLOTS};
 use game_core::ui::{render_digits, ShopState};
 use game_core::wave::{decode_sched, SchedItem};
 use game_core::FrameClock;
@@ -34,9 +34,11 @@ use game_platform::{
 };
 
 use crate::audio::AudioPipe;
+use crate::fire::{self, EnemyHitEvent};
 use crate::fixed_step::FixedStep;
 use crate::input::{held_bitmap, menu_pressed_bitmap, pressed_bitmap, resolve_directions};
 use crate::render::{compose_frame, EnemySlotView, FrameView, HudView};
+use crate::shape;
 use crate::snapshot::{decode_snapshot, encode_snapshot, mode_tag, HostSnapshot};
 
 /// 玩家初始 X（`$04E0`）：已证重生复位锚点 (128,160)（`respawn-window.md` R-respawn-3，A 级）。
@@ -180,6 +182,15 @@ pub struct Host {
     last_mode: Mode,
     mode_frames: u32,
     auto_flow: bool,
+    // ===== task-37：玩家弹丸生成/运动/命中接线 =====
+    /// 玩家弹网格（**game-shell 自有**；不写 `StageState.bullets` ⇒ engine combat_frame 惰性，
+    /// 避免双步进/双份命中；敌弹不参与）。
+    player_bullets: BulletGrid,
+    shot_timer: u8,
+    hits_this_frame: [Option<EnemyHitEvent>; 4],
+    hit_overflow: u16,
+    enemy_hit_log: Vec<EnemyHitEvent>,
+    shape_data_shapes: usize,
 }
 
 impl Host {
@@ -221,6 +232,12 @@ impl Host {
             last_mode: Mode::Boot,
             mode_frames: 0,
             auto_flow: true,
+            player_bullets: BulletGrid::default(),
+            shot_timer: 1,
+            hits_this_frame: [None; 4],
+            hit_overflow: 0,
+            enemy_hit_log: Vec::new(),
+            shape_data_shapes: 0,
         }
     }
 
@@ -442,7 +459,28 @@ impl Host {
         };
         // 复制 bank8 以避免同时借用 self.rom 与 &mut self（8KB，装载期一次开销）。
         let bank8 = bank8.to_vec();
-        self.load_stg01_from_bank8(&bank8)
+        if !self.load_stg01_from_bank8(&bank8) {
+            return false;
+        }
+        // 框形数据（engine 命中管线所需；task-37）；失败=0 形 ⇒ 命中路径 fail-closed（不伪造）
+        self.load_shape_data();
+        true
+    }
+
+    /// 从 ROM bank2（`$8000` 窗）解析敌框形流填 `StageState.shape_data`（task-37；A 级表/格式）。
+    ///
+    /// 返回装载形数；ROM 未装载/bank 越界 ⇒ 0（fail-closed）。重复地址只保留首个。
+    pub fn load_shape_data(&mut self) -> usize {
+        let Some(rom) = self.rom.as_deref() else {
+            return 0;
+        };
+        let Some(bank2) = game_data::rom::prg_bank(rom, shape::SHAPE_BANK) else {
+            return 0;
+        };
+        let bank2 = bank2.to_vec();
+        let n = shape::load_shape_data_from_bank2(&bank2, &mut self.stage_state);
+        self.shape_data_shapes = n;
+        n
     }
 
     /// 从 PRG bank8 窗口字节装载 STG-01（上游已装载 ROM 窗/门禁测试用；语义同 [`Host::load_stg01`]）。
@@ -473,6 +511,13 @@ impl Host {
         self.stage_sched_records = STG01_SCHED_RECORDS;
         self.prev_slot_types = [0; 28];
         self.spawn_log.clear();
+        // task-37：弹/命中接线状态随关卡重置
+        self.player_bullets = BulletGrid::default();
+        self.shot_timer = 1;
+        self.hits_this_frame = [None; 4];
+        self.hit_overflow = 0;
+        self.enemy_hit_log.clear();
+        self.shape_data_shapes = 0;
         true
     }
 
@@ -491,6 +536,38 @@ impl Host {
         } else {
             0
         }
+    }
+
+    // ================= 玩家弹丸/命中（task-37） =================
+
+    /// 已装载敌框形流数（0=命中路径 fail-closed，见 plan-bullets-hit §6）。
+    pub fn shape_data_shapes(&self) -> usize {
+        self.shape_data_shapes
+    }
+
+    /// `$39/$3A` 重复计时器当前值（`B` 长按门控；只读）。
+    pub fn shot_timer(&self) -> u8 {
+        self.shot_timer
+    }
+
+    /// 本帧敌命中事件（≤4；观测 engine 命中管线结果）。
+    pub fn hits_this_frame(&self) -> &[Option<EnemyHitEvent>; 4] {
+        &self.hits_this_frame
+    }
+
+    /// 本帧命中事件溢出计数（>4 条时；完整列表见 [`Host::enemy_hit_log`]）。
+    pub fn hit_overflow(&self) -> u16 {
+        self.hit_overflow
+    }
+
+    /// 全部敌命中事件日志（replay/单测；观测式，见 fire.rs `scan_enemy_hits`）。
+    pub fn enemy_hit_log(&self) -> &[EnemyHitEvent] {
+        &self.enemy_hit_log
+    }
+
+    /// 本帧玩家子弹视图（20 槽按玩家槽序；只读）。
+    pub fn player_bullets(&self) -> [Option<crate::fire::BulletView>; 20] {
+        crate::fire::player_bullet_views(&self.player_bullets)
     }
 
     // ================= 宿主状态机（接 flow 已证边集） =================
@@ -695,14 +772,14 @@ impl Host {
     }
 
     fn live_bullet_count(&self) -> u16 {
-        self.stage_state.bullets.state.iter().filter(|&&s| s != 0).count() as u16
+        self.player_bullets.state.iter().filter(|&&s| s != 0).count() as u16
     }
 
     fn player_bullet_count(&self) -> u16 {
         PLAYER_ONLY_SLOTS
             .iter()
             .chain(SHARED_SLOTS.iter())
-            .filter(|&&i| self.stage_state.bullets.state[i as usize] != 0)
+            .filter(|&&i| self.player_bullets.state[i as usize] != 0)
             .count() as u16
     }
 
@@ -794,18 +871,59 @@ impl Host {
         // ⑥b 引擎 tick（已装载 + 已接线模式）
         if self.stage_loaded && Self::engine_tick_active(mode_before) {
             gameplay_tick = true;
+            self.hits_this_frame = [None; 4];
+            self.hit_overflow = 0;
+            // ⑥b-1 玩家主武器（task-37）：B 长按（`$18` bit6）门控 + `$39/$3A` 计时器 → 六型生成器；
+            //        然后**直接 `shot::tick`** 推进玩家弹（寿命/脚本机/LUT/死亡回收）。只在 Combat 段；
+            //        其它 engine 模式玩家弹冻结（未证域，fail-closed；不生成不移动）。
+            if mode_before == Mode::Combat {
+                // R-shot-gen-4：`$34` weapon_slot=0 六型连发（本卡唯一已接分派）；
+                // 非 0 分派（type3/4/6 齐射/退出）未接 ⇒ fail-closed 不生成（登记 plan §6）。
+                if self.flow.data.weapon_slot == 0 {
+                    let b_held = held & crate::input::MENU_B != 0;
+                    if fire::fire_gate(b_held, &mut self.shot_timer) {
+                        let _ = fire::generate_shots(
+                            &mut self.player_bullets,
+                            self.player.x,
+                            self.player.y,
+                            self.flow.data.weapon_level,
+                        );
+                    }
+                } else {
+                    self.shot_timer = 1;
+                }
+                let _released = fire::step_player_bullets(&mut self.player_bullets);
+            } else {
+                self.shot_timer = 1;
+            }
             let scroll_delta = self.stage_scroll_delta(frame);
             let fx = engine::stage_tick(&mut self.stage_state, &TickInputs { scroll_delta });
             self.last_fx = StageFxSummary::from_effects(&fx);
             stage_clear_requested = fx.stage_clear_requested;
             self.apply_stage_effects(&fx);
             self.scan_spawns(frame);
+            // ⑥b-2 shell 侧命中管线（task-38 §2.4）：注册/敌框/4 边属性/清框回收 + 受限额伤害。
+            //        engine combat_frame 只见空 `StageState.bullets`（玩家弹在自有网格）⇒ 不重复判定。
+            if mode_before == Mode::Combat {
+                let events =
+                    fire::resolve_player_hits(&mut self.player_bullets, &mut self.stage_state, frame);
+                for event in events {
+                    self.enemy_hit_log.push(event);
+                    if let Some(free) = self.hits_this_frame.iter_mut().find(|e| e.is_none()) {
+                        *free = Some(event);
+                    } else {
+                        self.hit_overflow = self.hit_overflow.saturating_add(1);
+                    }
+                }
+            }
             // 已证自动接线：Combat→StageClear（flow 边集 + engine `$26 bit4` 门）。
             if mode_before == Mode::Combat && stage_clear_requested {
                 if self.apply_event_with_side_effects(ModeEvent::StageClear).is_some() {
                     flow_event = Some(ModeEvent::StageClear);
                 }
             }
+        } else {
+            self.shot_timer = 1;
         }
 
         // ⑦ Audio 流消费（每帧恰一次 end_frame；v1 生产者空）。
@@ -861,6 +979,8 @@ impl Host {
             player: self.player,
             live_bullets: self.live_bullet_count(),
             player_bullets_live: self.player_bullet_count(),
+            player_bullets: crate::fire::player_bullet_views(&self.player_bullets),
+            hits_this_frame: self.hits_this_frame,
             enemy_slots,
             hud: HudView {
                 money_digits: render_digits(&self.flow.data.money),
@@ -933,6 +1053,29 @@ impl Host {
         }
         hash_u64(&mut h, u64::from(self.live_bullet_count()));
         hash_u64(&mut h, u64::from(self.player_bullet_count()));
+        // task-37：玩家弹 20 槽六字段（坐标/型/寿命/动作指针/运动码）——逐槽哈希（确定性回归锚）
+        for &slot in crate::fire::PLAYER_SLOT_ORDER.iter() {
+            let i = slot as usize;
+            hash_bytes(
+                &mut h,
+                &[
+                    self.player_bullets.state[i],
+                    self.player_bullets.x[i],
+                    self.player_bullets.y[i],
+                    self.player_bullets.type_code[i],
+                    self.player_bullets.motion[i],
+                    self.player_bullets.action_ptr[i],
+                ],
+            );
+        }
+        hash_u64(&mut h, u64::from(self.shot_timer));
+        hash_u64(&mut h, self.shape_data_shapes as u64);
+        hash_u64(&mut h, self.enemy_hit_log.len() as u64);
+        for event in &self.enemy_hit_log {
+            hash_u64(&mut h, event.frame);
+            hash_bytes(&mut h, &[event.enemy_slot, event.bullet_slot, event.damage, u8::from(event.fail_closed)]);
+        }
+        hash_u64(&mut h, u64::from(self.hit_overflow));
         hash_u64(&mut h, self.spawn_log.len() as u64);
         for event in &self.spawn_log {
             hash_u64(&mut h, event.frame);
@@ -1574,5 +1717,126 @@ mod tests {
         assert_eq!(audio.writes, vec![(0, 0x0000, 0x30), (1, 0x0015, 0x0F)], "写序保真");
         assert_eq!(audio.frames, vec![0], "每帧 end_frame");
         assert_eq!(host.audio().queued(), 0);
+    }
+
+    // ---------------- task-37：玩家弹丸生成 / 运动 / 命中 ----------------
+
+    /// 注入合成敌框形（形 0：单框 x±16/y±16；A 格式：`[count][4B 符号偏移]`）。
+    fn inject_synthetic_shape(host: &mut Host) {
+        let addr = game_core::enemy::shape_stream_addr(0).expect("形 0 地址");
+        host.stage_state_mut().shape_data.push((addr, vec![1, 0xF0, 16, 0xF0, 16]));
+    }
+
+    /// 注入玩家弹到 **shell 自有弹网格**（寿命 1/指针 0x0C：首帧 `shot::tick` 取指后运动
+    /// `LUT_X[0x0C]=0 / LUT_Y[0x0C]=-9`）。
+    fn inject_bullet(host: &mut Host, slot: u8, x: u8, y: u8, type_idx: u8) {
+        let g = &mut host.player_bullets;
+        g.state[slot as usize] = 1;
+        g.action_ptr[slot as usize] = 0x0C;
+        g.x[slot as usize] = x;
+        g.y[slot as usize] = y;
+        g.motion[slot as usize] = 0;
+        g.type_code[slot as usize] = type_idx;
+    }
+
+    /// 注入敌槽（框形 0、属性 bit4 与弹 attr 0x30 相交、HP 字段=4）。
+    fn inject_enemy(host: &mut Host, slot: usize, type_: u8, x: u8, y: u8, attr: u8) {
+        host.stage_state_mut().grid.slots[slot] = game_core::engine::ObjectSlot {
+            type_,
+            x,
+            y,
+            f518: 0,
+            f4c4: attr,
+            f630: 4,
+            ..game_core::engine::ObjectSlot::default()
+        };
+    }
+
+    #[test]
+    fn player_fire_gate_spawns_bullets_when_b_held() {
+        let mut host = Host::new();
+        host.set_auto_flow(false);
+        walk_to_combat(&mut host);
+        assert!(host.load_stg01_from_bank8(&synthetic_stg01_bank8()));
+        let mut renderer = NullRenderer::new();
+        let mut audio = RecAudio::default();
+        let b_held = Buttons { b: true, ..Buttons::default() };
+        host.tick(&FixedInput(b_held), &mut renderer, &mut audio);
+        assert_eq!(host.player_bullets().iter().filter(|b| b.is_some()).count(), 1, "首按帧生成 1 弹");
+        // 7f 周期（默认 STG-01 `$39`=7，bank02:$94DF[0]）：再 7 帧后第 2 发
+        for _ in 0..super::fire::SHOT_TIMER_RELOAD {
+            host.tick(&FixedInput(b_held), &mut renderer, &mut audio);
+        }
+        assert_eq!(
+            host.player_bullets().iter().filter(|b| b.is_some()).count(),
+            2,
+            "$39/$3A 计时器 7f 周期生成"
+        );
+        assert_eq!(host.shot_timer(), super::fire::SHOT_TIMER_RELOAD);
+        assert!(
+            host.stage_state().bullets.state.iter().all(|&s| s == 0),
+            "玩家弹在 shell 自有网格：engine StageState.bullets 保持空（避免双步进）"
+        );
+        // B 松开 ⇒ 计时器回 1（下按帧即发）
+        host.tick(&no_input(), &mut renderer, &mut audio);
+        assert_eq!(host.shot_timer(), 1);
+    }
+
+    #[test]
+    fn player_bullet_hits_enemy_slot_positive_and_negative() {
+        // 正例：弹 (91,100) 首帧 tick 后 (91,91)（y-9），弹框 y86..96 与敌框 y84..116 交叠 ⇒ 命中
+        let mut host = Host::new();
+        host.set_auto_flow(false);
+        walk_to_combat(&mut host);
+        assert!(host.load_stg01_from_bank8(&synthetic_stg01_bank8()));
+        inject_synthetic_shape(&mut host);
+        inject_enemy(&mut host, 8, 0x2B, 100, 100, 0x10);
+        inject_bullet(&mut host, 0x80, 91, 100, 0);
+        let mut renderer = NullRenderer::new();
+        let mut audio = RecAudio::default();
+        let out = host.tick(&no_input(), &mut renderer, &mut audio);
+        assert!(out.gameplay_tick);
+        let events = host.enemy_hit_log();
+        assert_eq!(events.len(), 1, "命中事件=1（shell 侧已证命中管线）");
+        assert_eq!(events[0].enemy_slot, 8);
+        assert_eq!(events[0].damage, 0, "非 $4A ⇒ 0 伤");
+        assert!(events[0].fail_closed, "未证 HP 域 ⇒ fail-closed 登记");
+        assert_eq!(host.stage_state().grid.slots[8].f630, 4, "非白名单不写 HP 字段");
+        assert_eq!(host.player_bullets.state[0x80], 0, "命中弹回收（$87FD）");
+        assert_eq!(host.hits_this_frame()[0], Some(events[0]));
+        assert!(host.frame_view().player_bullets.iter().all(|b| b.is_none()), "弹已释放");
+
+        // 负例 1：敌框远离 ⇒ 无命中事件、弹仍活（FrameView 暴露坐标）
+        let mut host2 = Host::new();
+        host2.set_auto_flow(false);
+        walk_to_combat(&mut host2);
+        assert!(host2.load_stg01_from_bank8(&synthetic_stg01_bank8()));
+        inject_synthetic_shape(&mut host2);
+        inject_enemy(&mut host2, 8, 0x2B, 220, 220, 0x10);
+        inject_bullet(&mut host2, 0x80, 91, 100, 0);
+        let mut r2 = NullRenderer::new();
+        let mut a2 = RecAudio::default();
+        host2.tick(&no_input(), &mut r2, &mut a2);
+        assert!(host2.enemy_hit_log().is_empty(), "框远离 ⇒ 无命中（负例）");
+        assert_ne!(host2.player_bullets.state[0x80], 0, "未命中弹不回收");
+        assert_eq!(
+            host2.player_bullets().iter().filter(|b| b.is_some()).count(),
+            1,
+            "FrameView 暴露弹坐标（弹网格 A 地址面）"
+        );
+
+        // 负例 2：属性不相交（敌 `$04C4 & 0xF0 = 0`）⇒ 无命中、弹不回收
+        let mut host3 = Host::new();
+        host3.set_auto_flow(false);
+        walk_to_combat(&mut host3);
+        assert!(host3.load_stg01_from_bank8(&synthetic_stg01_bank8()));
+        inject_synthetic_shape(&mut host3);
+        inject_enemy(&mut host3, 8, 0x2B, 100, 100, 0x00);
+        inject_bullet(&mut host3, 0x80, 91, 100, 0);
+        let mut r3 = NullRenderer::new();
+        let mut a3 = RecAudio::default();
+        host3.tick(&no_input(), &mut r3, &mut a3);
+        assert!(host3.enemy_hit_log().is_empty(), "属性不交 ⇒ 无命中（负例）");
+        assert_ne!(host3.player_bullets.state[0x80], 0, "属性不交不回收弹");
     }
 }

@@ -111,12 +111,18 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 | 滚动源 | `Host::stage_scroll_delta`=`-stage::scroll_delta(abs)`；`abs=1193+(frame-load_frame)` | **C1：vs `.scroll.jsonl` 1207/1207 帧 0 失配**（A 级） |
 | spawn 落地/摘要 | `apply_stage_effects`（`land_pair`/`land_leader`）+ `scan_spawns`（`$0400` 0→非0 判定式） | C4：共同槽 16/16、engine 型集 ⊆ oracle 型集；帧列不可对拍（见 §8） |
 | FrameView | `Host::frame_view()`：mode/stage/frame/player/live_bullets/player_bullets_live/敌槽型值（坐标 None）/HUD 已证数值域 | 单测：字段只读幂等、position=None 显式、槽 8..=27 |
-| 确定性 | 3000 帧 replay 两次全等 | `host=0x521d397a6c609f34 canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807` |
+| 玩家弹丸生成/运动（task-37） | `fire.rs`：B 长按（`$18` bit6）→ `$39/$3A` 计时器（默认 `$3C`=0 ⇒ **reload=7**，bank02:$94DF 表 `07 05 04 03 02`）→ 六型生成器（在途上限 `$074A`）→ `shot::tick` 运动/寿命/死亡回收；弹网格为 **game-shell 自有**（不写 `StageState.bullets`） | 单测：7f 周期/上限/槽序/出生字段/运动/死亡回收；集成：`bullets_seen>0` 且两次 run 全等 |
+| 框形数据装载（task-37） | `shape.rs`：ROM **bank2 `$8000` 窗** → `shape_stream_addr($97BA/$9812)` 表 → 流 `[count][4B]` → `StageState.shape_data`（装载侧喂，不造数据） | 单测：合成流/截断 fail-closed；集成：装载 59 形 |
+| 命中 + 受限额伤害（task-37） | shell 侧 `shot_hitbox_register`+`fetch_shape_boxes`+`hit_resolves`+`clear_hit_entry`；伤害**仅 `type==$4A`**（HP=14 A 级）`Const2`，其余 **0 伤 + `fail_closed` 事件**（不写 `f630`）；敌弹按 `type_code & 0x80` 过滤 | 单测：命中正例/负例 ≥4、`$4A` 7 发 14→0 不回收、敌弹不参与；**非 H-16 收口**（§8） |
+| FrameView（task-37 扩展） | `player_bullets: [Option<BulletView>;20]`（`$04EE/$055E/$063E` A 地址面）/`hits_this_frame: [Option<EnemyHitEvent>;4]`/`FrameView::default()` | 单测：只读幂等、空槽 None、事件 fail-closed 显式 |
+| 确定性 | 3000 帧 replay 两次全等 | `host=0xdc3496b92f49ef45 canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807` |
 | 玩家列对拍（新增 C6） | `player::tick` vs `.player.jsonl`（死亡窗剔除 f1260..=1830） | **571/571 帧一致**（A 级） |
 
 > `Host::signature()` 语义在 task-9 扩展（新增菜单锁存/门控/装载/spawn 日志/阶段计时覆盖）；
 > task-29 修 B1 后触发键域/层 1 状态更新时机变化 ⇒ 签名值再次更新（§4.2；**非回归**，两次运行确定性不变）。
-> 值链：task-1 `0xcde9dc99514b5f4b` → task-9 `0xf51d5a517e7458b7` → task-29 `0x5d7156266d6ac19d`。
+> task-37 再扩展玩家弹网格/计时器/shape 装载/命中事件覆盖 ⇒ 值再次更新（§4.2/§9；**非回归**）。
+> 值链：task-1 `0xcde9dc99514b5f4b` → task-9 `0xf51d5a517e7458b7` → task-29 `0x5d7156266d6ac19d`
+> → task-37 `0x68547665bf1ab396`（shell-win selftest 时点值）。
 
 ## 4. shell-pc 架构（首实现，现名 `shell/win`）
 
@@ -141,7 +147,7 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 |---|---|---|
 | 窗口 | `WindowRenderer`（`crates/shell-win/src/main.rs`）：winit 0.30 `ApplicationHandler` + softbuffer `Surface`；标题 `gunnac-remake (Stage A)`；初始 512×480（2×） | 本机实跑窗口 `MainWindowTitle`=`gunnac-remake (Stage A)`；标题常量单测 |
 | 帧驱动 | `about_to_wait`：`Instant`→整数 ns→`game_shell::Host::advance`（`FixedStep` 60Hz、追帧上限 4）；`ControlFlow::WaitUntil` 节流 | `--selftest-frames 300`：advanced=300（每采样 1 逻辑帧） |
-| 呈现 | `FrameRenderer` 合成 + `blit_scaled` 整数倍缩放/黑边（softbuffer `0x00RRGGBB`） | `view_rect`/`blit_scaled` 单测（2×/3×/黑边/小窗裁切） |
+| 呈现 | `FrameRenderer` 合成 + `blit_scaled` 整数倍缩放/黑边（softbuffer `0x00RRGGBB`）；**每采样 1 次 softbuffer present**（task-36 E3 收口：`Renderer::present` 只合成+计数、统一由 `refresh_view` 上屏；收口前 2 次=采样临时口径；`presents` 计数语义不变） | `view_rect`/`blit_scaled` 单测（2×/3×/黑边/小窗裁切）；selftest ×2 四签名不变 |
 | 输入 | `KeyboardInput`+`key_name`：winit 物理键码→`Buttons`（Z/X/Enter/RShift/方向）；对向同持交 game-shell `resolve_directions` 消解 | 键位表单测 + 按下/抬起状态单测 |
 | 音频 | `PcAudio`（`Audio` impl）：真实消费 game-shell `ApuWrite` 流（写序保真登记，计数不丢）；PCM=静音占位显式（`silent()=true`） | 单测：写流保序/计数/`end_frame`/零 PCM；自检注入 2 条写流被消费（audio_writes=2） |
 | 资产 | `FsAssets`（`AssetSource` impl）：`std::fs` 读 `rom/gunnac_cn.nes`；**资产根=exe 目录优先**（`exe/rom` → `exe/../rom`；debug 回退 `CARGO_MANIFEST_DIR`），**不依赖进程 cwd**；启动（窗口/自检）始终打印实际资产根。**拒绝绝对路径/Windows 前缀（`C:foo` drive-relative）/`..`/缺失** ⇒ `None`（fail-closed，B1/S1） | 单测：exe 两布局解析/前缀拒绝；smoke：异 cwd 子进程仍定位 ROM；自检 rom_len=262160 |
@@ -165,7 +171,7 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 ```text
 selftest: frames=300 advanced=300 presents=300
 selftest: mode=Combat stage=1 frame=300
-selftest: host_signature=0x5d7156266d6ac19d
+selftest: host_signature=0x68547665bf1ab396
 selftest: canvas_signature=0x963ac9a776a57625
 selftest: display_signature=0xe99af5849b632fbd
 selftest: view_signature=0xf6603346bf818ffd
@@ -191,6 +197,12 @@ selftest: OK
 > 敌槽占位门）进入合成；`canvas_signature` 不变（game-shell 逻辑画布未改）、`host_signature` 不变
 > （游戏逻辑未改）。**非回归**：300 帧连跑两次 stdout 逐行一致；覆盖层为**可见性占位**（非原版像素/
 > 布局/文本，L4 不适用，不声称一致性）。
+>
+> 【2026-10-18 task-37 更新】`host_signature` 由 `0x5d7156266d6ac19d` → **`0x68547665bf1ab396`**：
+> 原因=玩家弹丸/命中接线（签名新增自有弹网格 20 槽六字段/`$39` 计时器/shape 装载数/命中事件日志/
+> 溢出计数）；**非回归**，300 帧连跑两次逐行一致。`canvas_signature`/`display_signature`/
+> `view_signature` 均不变（渲染与 FrameView 视图签名字段语义未改；shell-win 仅 FrameView 字面量
+> 适配 `..Default::default()`，见 [plan-bullets-hit.md](../findings/plan-bullets-hit.md) §8.1）。
 
 **口径**：`host_signature`/`canvas_signature`/`display_signature`/`view_signature` 是**确定性回归锚**，
 **不声称**等价真机 trace 对拍（platform-shell.md §3/§9 同口径）；`display_signature` 含平台侧
@@ -255,6 +267,12 @@ H-01 弹丸/武器槽语义、H-16 命中判定、Boss/EN-9+ 段、商店消费�
 > 【2026-10-18 task-9 更新】「菜单输入门控派发」「关卡数据装载」从**未实现**转为**已接线**（菜单派发
 > 输入驱动 + STG-01 装载，见 §3.1）；但两者仍有未证边界：菜单→商店中间动画时长（主循环只保证序列不
 > 保证帧级）、spawn 帧级对齐/初生记录/坐标写者链、Boss/EN-9+ 后段（decode 视界仅 43 记录主段）。
+>
+> 【2026-10-18 task-37 更新】「玩家弹丸生成/运动/命中」从**未实现**转为**部分接线**（§3.1；game-shell
+> 自有弹网格 + shell 命中管线 + `$4A` 白名单伤害）。**不是 H-16 收口**：精确受击盒（W15/W15′/W18）、
+> 普通敌 HP（B4）、`$4A` 死亡回收、伤害路径选择（`auto_hit_path`）仍未证 ⇒ 0 伤/不回收 fail-closed；
+> 玩家被击、敌弹友伤、`$34` 非 0 分派、`$3C` 连射升级未接。详见
+> [plan-bullets-hit.md](../findings/plan-bullets-hit.md) §6/§8.3。
 
 v1 复核（task-6）补充登记：
 
@@ -273,6 +291,12 @@ v1 复核（task-6）补充登记：
   资产根=可执行文件目录（不得依赖 cwd），Android=APK `assets/` 根。
 - **game-shell 依赖**：task-9 起含 `game-data`（纯解析；ROM 只读窗口 `game_data::rom::prg_bank`），
   零平台依赖门禁同步白名单。
+- **HUD 可见性/模式门未证**（task-36 E5）：原版 HUD 的显示时机/可见性未取证；v2 **所有模式**
+  （含 Boot/Title/Menu/Shop）恒画 HUD 数值域**占位编码**——**不声称**原版显示时机/可见性/布局一致，
+  不改绘制行为。
+- **每采样上屏次数**（task-36 E3/S2）：窗口模式每采样 **1 次** softbuffer present（`Renderer::present`
+  只合成+计数、统一由 `refresh_view()` 上屏）；收口前为 2 次（tick 内上一帧 view + refresh 最新帧）
+  **采样临时口径**。`presents` 计数语义仍=逻辑帧数；`display_signature`/`view_signature` 不变。
 
 ## 9. 验收与复现命令（task-5 v1 + task-9 可玩闭环 A）
 
@@ -287,15 +311,18 @@ cargo test -p game-data
 cargo test -p game-shell
 cargo test -p game-shell --test mock_platform mock_platform_drives_300_frames_deterministically -- --nocapture
 cargo test -p game-shell --test stg01_replay -- --nocapture
-#   2026-10-18 task-29 记录值：mock-300 host=0x3085adda845a078d canvas=0x963ac9a776a57625 advanced_frames=290
-#    （task-9 旧值 0x63b5a6195287a6d8；B1 修改变更触发键域/层1状态，非回归；两次 AssertEq）
-#   STG-01 replay 记录值（task-9/29 均未变，replay 输入无 START 菜单键）：host=0x521d397a6c609f34
-#    canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807
+#   2026-10-18 task-37 记录值：mock-300 host=0x8170870e7c5e4ac6 canvas=0x963ac9a776a57625 advanced_frames=290
+#    （task-29 旧值 0x3085adda845a078d；签名新增弹网格/计时器/shape/命中事件字段，非回归；两次 AssertEq）
+#   STG-01 replay 记录值：host=0xdc3496b92f49ef45 canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807
+#    （task-9/29 旧值 0x521d397a6c609f34；原因同上；C1 1207/1207、C6 571/571、C4 共同槽 16/16 未变）
 #   对拍：C1 滚动 1207/1207 0 失配；C6 玩家列 571/571 一致；C4 共同槽 16/16（帧列不可对拍，见 §8）
 
-# 4) 平台侧回归（shell-win 未改；selftest 两次逐行一致）
+# 4) 平台侧回归（shell-win 未改行为；selftest 两次逐行一致）
 cargo run -p shell-win -- --selftest-frames 300
-#   2026-10-18 task-29 后 host_signature=0x5d7156266d6ac19d（B1 修复语义更新；canvas/display 不变）
+#   2026-10-18 task-37 后 host_signature=0x68547665bf1ab396（弹/命中接线语义更新；canvas/display/view 不变）
+
+# 4b) STG-01 战斗弹丸/命中集成（task-37；真实 ROM，两次 run 全等）
+cargo test -p game-shell --test stg01_combat -- --nocapture
 
 # 5) 全量 + 总闸
 cargo test --workspace

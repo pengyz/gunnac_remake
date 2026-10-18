@@ -67,8 +67,9 @@ impl WindowRenderer {
     /// 用最新 `FrameView` 重合成覆盖层并重新上屏（`advance()` 后调用；不增 present 计数）。
     ///
     /// 覆盖层=模式角标/HUD 占位/敌槽占位（见 `shell_win::draw_frame_view_overlay`）。
-    /// `Host::tick` 内部的 `present()` 只能看到上一帧 view；本方法用本采样点最新 view 重合成，
-    /// 避免呈现层滞后一帧（多帧追帧时按采样点收敛；见 plan-shellwin-v2 §3）。
+    /// `Host::tick` 内部的 `present()` 只能看到上一帧 view 且**不再 blit**（task-36 E3 收口：
+    /// 窗口模式每采样只在此处上屏 1 次，旧口径为 tick 内 + refresh 共 2 次）；本方法用本采样点
+    /// 最新 view 重合成，避免呈现层滞后一帧（多帧追帧时按采样点收敛；见 plan-shellwin-v2 §3/§8.5）。
     fn refresh_view(&mut self, view: FrameView) {
         self.core.set_frame_view(view);
         self.blit();
@@ -103,9 +104,14 @@ impl Renderer for WindowRenderer {
         self.core.canvas_mut()
     }
 
+    /// `Renderer::present` 的平台侧语义（**task-36 E3 收口**）：只做合成+计数，
+    /// **不在此 blit**——`Host::tick` 内的 present 只能看到上一帧 `FrameView`；窗口上屏统一由
+    /// `refresh_view()`（本采样点最新 view）执行，避免同一次采样 **2 次 softbuffer present**
+    /// （旧口径=tick 内 blit 上一帧 + refresh 再 blit 最新帧；现为每采样 1 次）。
+    ///
+    /// 计数语义不变：`present()` 调用次数 = 逻辑帧数（`presents` 断言仍成立；显示签名不变）。
     fn present(&mut self) {
         self.core.present();
-        self.blit();
     }
 
     fn size(&self) -> (u32, u32) {

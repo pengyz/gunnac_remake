@@ -8,25 +8,31 @@
 //! - [`fixed_step`]：60Hz 固定步折算（平台只注入整数纳秒时间）；
 //! - [`input`]：按钮消解（未证组合 L+R/U+D⇒0）、`$18`/`$16` 位图与菜单域按下沿位图；
 //! - [`host`]：宿主状态机（接 `game-core::flow` 已证边集）+ 菜单派发 + STG-01 装载 +
-//!   帧内 tick 序列 + 确定性签名；
+//!   玩家弹丸生成/运动/命中接线 + 帧内 tick 序列 + 确定性签名；
+//! - [`fire`]：玩家主武器（B 长按门控 + `$39/$3A` 计时器 + 六型生成器 + 弹预步 + 命中事件观测）；
+//! - [`shape`]：敌框形流装载（bank2 `$8000` 窗 → `StageState.shape_data`，engine 命中管线输入）；
 //! - [`render`]：渲染合成占位（调用 `Renderer` 256×240 RGBA 画布）+ 只读 `FrameView`；
 //! - [`audio`]：`ApuWriteStream` → `Audio` 流消费（v1 生产者未接）；
 //! - [`snapshot`]：`Storage` 存档缝占位编解码（不自动保存）。
 //!
-//! 未证域（H-01 弹丸/H-16 命中/Boss/EN-9+/商店消费侧/音效合成/调色板/敌坐标写者链…）
-//! 一律不实现；详见 `docs/findings/plan-playable-loop.md` §8 与
-//! `docs/findings/plan-platform-abstraction.md` §6。
+//! 未证域（H-01 弹丸行为/H-16 精确盒残项/伤害值简化/Boss/商店消费侧/音效合成/调色板/
+//! 敌坐标写者链…）一律不实现或显式登记；详见 `docs/findings/plan-bullets-hit.md` §6。
 
 #![forbid(unsafe_code)]
 
 pub mod audio;
+pub mod fire;
 pub mod fixed_step;
 pub mod host;
 pub mod input;
 pub mod render;
+pub mod shape;
 pub mod snapshot;
 
 pub use audio::AudioPipe;
+pub use fire::{
+    BulletView, EnemyHitEvent, MAX_ACTIVE_TYPES, PLAYER_SLOT_ORDER, SHOT_TIMER_RELOAD,
+};
 pub use fixed_step::{FixedStep, FRAME_NS, MAX_CATCHUP_FRAMES};
 pub use host::{
     FrameOutcome, Host, HostPersistData, SpawnEvent, StageFxSummary, INITIAL_BOMB_AMMO,
@@ -42,6 +48,7 @@ pub use input::{
 pub use render::{
     canvas_hash, compose_frame, EnemySlotView, FrameView, HudView, PLACEHOLDER_PLAYER_RGBA,
 };
+pub use shape::{load_shape_data_from_bank2, SHAPE_BANK, SHAPE_COUNT_MAX, SHAPE_WINDOW_BASE};
 pub use snapshot::{
     decode_snapshot, encode_snapshot, HostSnapshot, SNAPSHOT_LEN, SNAPSHOT_MAGIC, SNAPSHOT_VERSION,
 };
