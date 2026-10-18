@@ -6,6 +6,9 @@
 > `docs/spec/ui-flow.md` R-ui-6/7 + `docs/spec/shop-economy.md` R-shop-5..8 + `docs/spec/shop-purchase.md`。
 > 证据分级依 AGENTS.md §3；未证不发明。判定口径 = `docs/spec/l5-plan.md` §2（L5 判定物）。
 > 【坐标注】bankNN:AAAA = 8KB PRG bank:CPU 地址（bank15 固定 $E000）；file = PRG+0x10。
+> 【2026-10-18 口径更新（task-60 / L5 A1）】golden 真锚口径由 2026-10-15 的"12 真锚/32 占位"更正为
+> 现行 **44 = 39 真锚 + 5 占位**（证据=task-39/53 [l5-gap-inventory](../findings/l5-gap-inventory.md) §1.2/§2 + 只读复算），
+> 并新增 **§2.5 已证程度/缺口**（逐关冻结点、Boss/关末/流末缺口、G-L5-* 映射）。5 占位仍未验证、保持 fail-closed。
 
 ## 0. 结论速览（TL;DR）
 
@@ -18,7 +21,7 @@
 | 5 | **结局段粗粒度**：`$95F9` 入口 `bank00:95F9 $26:=$80` 已镜像；staff roll（流 `$9955` 43 记录）→ 结局卡（`$97D3[$4C]`）内部 = **挂起枚举 `EndingFx`**（不发明渲染/文本流写集） | A（入口）/挂起（内部） |
 | 6 | **L5 golden 口径**：段=场景；帧锚分级——trace 锚（STG-01 前缀 f1080/1200/1260/1500）vs **f=0 占位**（未取证段，fail-closed 不发明帧号）；每关 4 检查点（商店段/关始段/战斗段/关末段） | A（口径） |
 | 7 | 缺口清单 G-S5-1..7（§3）：`$26 bit7` 直回标题支（与 A2 §3.4 同支同裁定，不接线）/ `$0300` 置位上游（B 级）/ 第 4 关特判语义（字节忠实、语义 todo_）/ staff roll 细节 / 8 关 oracle 动态 trace 未跑（l5-plan C1-C3）/ 死亡-关末并发窗 / 关始段细粒度时序 | — |
-| 8 | 【2026-10-15 G-S5-6 战役】**关 1 段动态链真机走通**（关末 f2401→飞离 f2794→派发 f3066→INC $180 f3096→商店 f3116→关 2 f3450；trigger=门位注入，自然可达性=负结果）；golden 回填 **12 真锚/32 占位**（anchors 台账 1:1 诚实锁）；关 2+ 输入脚本不可预写=B1/B2 需求清单（findings gs5-6 §5） | A（动态）/负结果（自然通关） |
+| 8 | 【2026-10-15 G-S5-6 战役】**关 1 段动态链真机走通**（关末 f2401→飞离 f2794→派发 f3066→INC $180 f3096→商店 f3116→关 2 f3450；trigger=门位注入，自然可达性=负结果）；golden 回填 ~~**12 真锚/32 占位**~~【2026-10-18 更正：现行 **39 真锚/5 占位**（44=39+5；32 injected 回填，口径见 R-l5-8 更正注 + §2.5）】（anchors 台账 1:1 诚实锁）；关 2+ 输入脚本不可预写=B1/B2 需求清单（findings gs5-6 §5） | A（动态）/负结果（自然通关） |
 
 ---
 
@@ -137,7 +140,8 @@ STG-02..08 内容面 = `stage_skeleton(n)`（t193/t87 三级骨架，ROM root/ta
 ### R-l5-8: S5 golden 口径（帧锚分级与检查点命名）
 `oracle/traces/s5-all-clear.l5.jsonl`：**段=场景**；每关 4 命名检查点
 （`stgN-shop`/`stgN-start`/`stgN-combat`/`stgN-clear`）+ 标题 3 点 + `all-clear-95f9`。
-口径注：**3 场景（s5-title/s5-stg01/s5-chain）/ 44 事件 / 36 命名检查点**。
+口径注：**3 场景（s5-title/s5-stg01/s5-chain）/ 44 事件 / 36 命名检查点**（44 = **39 真锚 + 5 占位**，
+2026-10-18 更正；见下注）。
 帧锚分级：**trace 锚**（STG-01 前缀 f1080/1200/1260/1500，gameplay-stage1 实测）vs
 **f=0 占位**（未取证段，fail-closed 不发明帧号，t193 先例）；占位段自成场景（帧序单调校验不被占位污染）。
 > 【2026-10-15 G-S5-6 动态回填】帧锚分级扩三级：**trace 锚（natural）**（7 条：标题 3 + STG-01 前缀 4）+
@@ -150,6 +154,22 @@ STG-02..08 内容面 = `stage_skeleton(n)`（t193/t87 三级骨架，ROM root/ta
 > 【更正·场景边界关节】回填后边界集 = `Menu→Shop`（s5-title→s5-stg01）与
 > `Combat(stg02)→StageClear(stg02)`（s5-stg01→s5-chain）；原注
 > `Combat(stg01)→StageClear(stg01)` 边界随回填移入场景内（真闸照过）。
+
+> 【2026-10-18 更正（L5 A1：44 = 39 真锚 + 5 占位；证据 = task-39/53 [l5-gap-inventory](../findings/l5-gap-inventory.md) §1.2/§2 + 本卡只读复算，命令见 §4 ⑤）】
+> 上注"7 natural + 5 injected + 32 占位"是 **2026-10-15 G-S5-6 时点值**；现行 golden/锚台账口径：
+> - `s5-all-clear.l5.jsonl`：**44 行 = 39 真锚 + 5 占位**（32 条占位已由 injected 锚回填）；
+> - `stg01-chain.l5.jsonl`：**17 行 = 16 真锚 + 1 占位**；`tas-clear-full.l5.jsonl`：**10 行 = 10 真锚 + 0 占位**；
+> - 锚台账 `s5-all-clear.anchors.jsonl`：**50 条 = 44 条 golden 1:1 + 6 条附加**（附加 6 条全 injected）；
+> - trigger 口径（**两套基数并存，引用必须注明基数**）：**50 锚基 = 7 natural / 38 injected / 5 placeholder**；
+>   **44 golden 行基 = 7 natural / 32 injected / 5 placeholder**（`Counter({'injected':38,'natural':7,'placeholder':5})`）。
+> - 诚实锁现行为：`crates/game-oracle/tests/l5_s5.rs:68`
+>   `assert_eq!((real, ph), (39, 5), "G-S5-6 回填口径：39 真锚 / 5 占位")`——本节口径即机器锁定值。
+> **5 占位严禁写成已验证**：占位 = 1 条未命名 `Transition` 行（`checkpoint=null`，语义=出店段）+
+> `stg08-start / stg08-combat / stg08-clear / all-clear-95f9`（全在 stg08 出店之后；golden/anchors 中
+> **无 `stg08-exit` 字面 checkpoint**）；一律保持 `f=0` fail-closed，回填须先做 G-L5-4 采集（§2.5）。
+> **39 真锚 ≠ 39 自然锚**：真锚中仅 **7 条 natural**（标题 3 + STG-01 前缀 4：boot-black/title-in/menu-in/
+> stg01-shop/stg01-exit/stg01-start/stg01-combat），其余 **32 条 injected**（poke 注入链）——
+> injected/placeholder **不作自然通关证据**，引用"39 真锚"必须同时给 trigger 分级。
 **场景边界关节**（真闸不跨场景，逐个独立取证）：`Menu→Shop`（R-ui-6 capture 锚）与
 `Combat(stg01)→StageClear(stg01)`（A3 §1.1；帧锚边界所致）；链场景 `s5-chain` 内含全部
 关末/通关/结局关节（StageClear→Shop ×7、Combat→StageClear ×7、StageClear→Ending）——**真闸逐对过**。
@@ -158,6 +178,44 @@ STG-02..08 内容面 = `stage_skeleton(n)`（t193/t87 三级骨架，ROM root/ta
 - 证据: `oracle/traces/s5-all-clear.l5.jsonl` + `crates/game-oracle/src/l5.rs` + `crates/game-oracle/tests/l5_s5.rs`
 - 可判定性: 机器可判定
 - 关联: R-l5-1、l5-plan §2
+
+## 2.5 L5 已证程度 / 缺口（2026-10-18 盘点入档，引 l5-gap-inventory §1.3/§2）
+
+> 判定物现状：**状态机层达成、真机动态层未达成**——`s5_chain_run_for(8)` 段级链（8 stage clear / 8 shop visit /
+> 8 shop exit / ending_reached）由 `tests/l5_s5.rs` 断言；但"逐关战斗驱动的自然通关"未达成（关 2..8 动态 trace 未跑）。
+> **本文不主张 L5 达成**（与 [l5-gap-inventory](../findings/l5-gap-inventory.md) §0 一致）。
+
+### 2.5.1 逐关动态覆盖 = 关始 + 早段战斗到"冻结点"
+
+| 关 | 真机动态 trace 窗口 | 冻结点（停滚） | 关末 / Boss / 流末 |
+|---|---|---|---|
+| STG-01 | f1080-2400（shop/start/combat）+ `gs5-stg01-full` 15000f 自然回放 | —（15000f 内未达自然关末：4 死→GAME OVER） | 关末/商店链 A 级但**全 injected**（f2401→f2794→f3066→f3096→f3116→f3450）；中 boss 机制 A、**自然击杀未观测** |
+| STG-02 | 关始 + 早段战斗 | **f5033** | 注入（f4600 双 poke）；boss 击杀/关末/流末未观测 |
+| STG-03 | 同上 | **f6893** | 注入 #2；同上 |
+| STG-04 | 同上 | **f9164** | 注入 #3；同上 |
+| STG-05 | 同上 | **f11093** | 注入 #4；同上 |
+| STG-06 | 同上 | **f13977** | 注入 #5；同上 |
+| STG-07 | 同上（观测窗 f14504-15500） | **f15959**（早冻） | 注入 #6；同上 |
+| STG-08 | **无关内 trace**（注入链在出店处结构冻结/截断，OBS-1） | — | **5 占位 fail-closed**（见 R-l5-8 更正注） |
+| Ending | 无动态（仅入口/分派 A 级） | — | `all-clear-95f9` 占位 |
+
+**小结**：8 关数据面（目录/EN 记录/波次流/行为脚本指针/骨架）已到 A/B 级；**动态面只到"关始+早段战斗+
+冻结点"**——每关 **Boss 击杀、关末自然三联（`$27 bit7`+`$2F` 倒数+`INC $180`）、流末记录（`$CA`）边界
+均未观测**；stg08 关内与 ending 完全无 trace（5 占位，OBS-1 候选区**不立号**）。
+
+### 2.5.2 缺口根（三条）与映射（G-L5-*，详表见 l5-gap-inventory §2）
+
+| 根缺口 | 内容 | 对应编号 | 档 |
+|---|---|---|---|
+| ① 能打到底的输入轨 | 自然/assisted bot 或外部 TAS（bot v2 于 f9045 GAME OVER） | G-L5-1 | B 需采集 |
+| ② 每关 boss 击杀 / 流末-自然关末 trace | watch `$0630/$064B/$048C` + `$CA/$CC/$C8`；判据=`$CA bit0→$26 bit4→$27 bit7→$2F 50→0→$0300≠0→INC $180` 自然观测 | G-L5-2 / G-L5-3 | B 需采集 |
+| ③ stg08 关内 + ending 合法来源 | 自然链 / 注入全链 `s5-full-inject` / 直选关；OBS-1 同批裁定 | G-L5-4 | B 需采集/裁定 |
+| 可复现性（与 L4 F-0 同族） | anchors 50 条 evidence = 33 traces + 12 shots + 5 none，全指向 `.gitignore` 工作区产物 ⇒ 39 真锚判定式当前 checkout **不可复现** | l5-gap-inventory §1.4 | A 文档化 / B 重采 |
+| 门禁 | `gates/cli.py` 现 **12 项无 L5 条目**（grep 0 命中）；[l5-plan](l5-plan.md) §5 承诺"未启用前显式 SKIP"未落地 = G-L5-7 | G-L5-7 | A；**A2 待用户批准，本卡不改 gates** |
+
+**矩阵子格**：逐关动态状态对应 [completeness.md §2.3/§2.3.1](completeness.md) 的 B-STG-01..08（含 TL/EN/BOSS
+子格，按 §8 约束①"证据后准入、不预建"）；本 spec **不新增分母格**，§3 只维持 G-S5-* 结构缺口登记
+（动态缺口编号 G-L5-* 与 G-S5-* 并存，引用带前缀）。
 
 ## 3. 缺口登记（G-S5-*，未证不发明）
 
@@ -170,7 +228,7 @@ STG-02..08 内容面 = `stage_skeleton(n)`（t193/t87 三级骨架，ROM root/ta
 | G-S5-4 | staff roll/结局卡内部（BGM/滚屏流/页序列 `$A925` 记录格式/结局卡 scene 链渲染） | `EndingFx` 挂起枚举（A3 R-E2/R-E3/R-E4 同族） | A（框架）/—（内部） | 渲染/文本线 |
 | G-S5-5 | 死亡窗（`$0400=0x0F`）与关末门（`$26 bit4`）并发时序 | 未取证；主链=无伤跑不触达，负向留 fail-closed（仅 Combat→StageClear 边） | — | oracle 场景组 |
 | G-S5-6 | 8 关全程 oracle 动态 trace（帧号真值） | 未跑（l5-plan C1-C3 DSL 扩展前置：RNG 冻结/快照接力/分段 checkpoint）；golden f=0 占位 | — | oracle 场景组 |
-| G-S5-6′ | 【2026-10-15 G-S5-6 战役收窄】**关 1 段动态链已跑通**（关末/商店/关 2 开始，trigger=injected，12 真锚回填）；**自然可通关性 = 负结果**（Run A 盲开环 15000f 4 死→GAME OVER；关 2+ 输入脚本不可预写） | 关 2..8 动态 trace 未跑（B1 敌群时间线 + B2 条件输入/save-state 接力需求清单见 findings §5） | A（关 1 链动态）/—（关 2..8） | oracle 场景组 |
+| G-S5-6′ | 【2026-10-15 G-S5-6 战役收窄】**关 1 段动态链已跑通**（关末/商店/关 2 开始，trigger=injected，12 真锚回填〔2026-10-15 时点；现行为 **39 真锚/5 占位**，见 R-l5-8 更正注〕）；**自然可通关性 = 负结果**（Run A 盲开环 15000f 4 死→GAME OVER；关 2+ 输入脚本不可预写） | 关 2..8 动态 trace 未跑（B1 敌群时间线 + B2 条件输入/save-state 接力需求清单见 findings §5） | A（关 1 链动态）/—（关 2..8） | oracle 场景组 |
 | G-S5-7 | 关始段细粒度时序（E178-E21C 开 stage 链逐写点/「地区-N」引入时长） | 粗粒度（R-shop-7 双 B→过渡→关始 capture 锚）；细粒度未接线 | B | 开 stage 链 |
 
 ## 4. 复现命令（独立重导）
