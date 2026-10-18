@@ -137,6 +137,23 @@ fn storage_roundtrip() {
     assert!(!s.save(9, b"x"), "越界槽拒");
 }
 
+// ---------------- Clock / Input mock 真断言（复核：原 mock 从未被构造） ----------------
+
+#[test]
+fn clock_and_input_mocks_are_asserted() {
+    let mut clock = MockClock { ms: 0 };
+    for _ in 0..60 {
+        clock.ms += 16;
+    }
+    assert_eq!(clock.now_ms(), 960, "Clock::now_ms 真实断言（60×16ms）");
+    let mut input = MockInput { buttons: Buttons::default() };
+    assert_eq!(input.buttons(), Buttons::default(), "Input::buttons 空态");
+    input.buttons = Buttons { a: true, start: true, ..Buttons::default() };
+    assert!(input.buttons().a, "Input::buttons A");
+    assert!(input.buttons().start, "Input::buttons START");
+    assert!(!input.buttons().b, "Input::buttons B 未按");
+}
+
 // ---------------- 确定性验证（同输入→同态） ----------------
 
 fn run_sequence() -> (Vec<(u32, u16, u8)>, Vec<u8>, Vec<Option<Vec<u8>>>) {

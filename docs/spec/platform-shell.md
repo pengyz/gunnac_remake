@@ -44,7 +44,7 @@ shell-pc（首实现，现名 shell/win；Win/Linux 同源）    shell-android�
 | `GameRng` | 确定性 RNG 契约（`LcgRng` 占位；原版 RNG 待 S4） | ✅ 已立（形状不动） |
 | `Input`/`Buttons` | 8 键手柄位（A/B/START/SELECT/↑↓←→）；连发/宏=平台侧策略 | ✅ 已立（形状不动） |
 | `Renderer` | `canvas_mut`（256×240 RGBA）+ `present` + **`size`/`resize`（v1 新增）** | 🔒 锁定；`size`/`resize` 有占位默认（见下） |
-| `Audio` | ApuWrite 流消费（(frame,reg,value) 三元组）→ 混音输出 | ✅ 已立（形状不动） |
+| `Audio` | ApuWrite 流消费（(frame,reg,value) 三元组）→ 混音输出；**PCM 合成与设备输出=平台实现侧**（trait 仅承载写流消费；合成器未证期静音占位显式） | ✅ 已立（形状不动） |
 | `Storage` | 字节块存取（save/load；存档语义未证=纯字节存取） | ✅ 已立（形状不动） |
 | **`AssetSource`** | `read_all(path)->Option<Vec<u8>>`：资产字节读取（PC=std::fs/Android=APK assets 由平台实现） | 🆕 v1 占位契约 |
 | **`Lifecycle`/`AppEvent`** | `poll_event()->Option<AppEvent>`；`AppEvent{Resume,Suspend,Quit}` | 🆕 v1 占位最小枚举 |
@@ -66,7 +66,7 @@ shell-pc（首实现，现名 shell/win；Win/Linux 同源）    shell-android�
 | 模块 | 设计 |
 |---|---|
 | `fixed_step` | 60Hz 固定步：`FRAME_NS=1e9/60`；平台注入整数纳秒；追帧上限 4；时钟回拨⇒0 帧（fail-closed） |
-| `input` | **对向同持消解**（L+R/U+D⇒两键 0；进入 core 前完成，core 对未证组合 panic=W6）；`$18` 位图（R-move-1 A 级 bit0/1/2/3/6/7）+ `$16` 边沿位图（v1 只产出不消费） |
+| `input` | **对向同持消解**（L+R/U+D⇒两键 0；进入 core 前完成，core 对未证组合 panic=W6）；`$18` 位图（R-move-1 A 级 bit0/1/2/3/6/7）+ `$16` 边沿位图（v1 **仅方向+A/B 子集**，不含 START/SELECT；只产出不消费） |
 | `host` | 宿主状态机（`FlowState`+关号 `stage_index`）只走 game-core flow **已证边集**；关号守卫（E37C/E392）；tick 序列（见下）；`signature()` 确定性状态签名；AssetSource/Storage/Lifecycle 端口 |
 | `render` | 渲染合成：清屏 + 已证坐标面玩家 8×8 占位块（`$04E0/$04FC`）；BG/敌/弹/HUD/文本/结局卡**不画**（未证） |
 | `audio` | `ApuWriteStream`→`Audio` 保序 `write_apu` + 每逻辑帧 `end_frame`；**v1 生产者未接**（音频驱动内部体未证） |
@@ -75,9 +75,11 @@ shell-pc（首实现，现名 shell/win；Win/Linux 同源）    shell-android�
 **帧内 tick 序列（每逻辑帧）**
 
 1. 输入采样 → `resolve_directions` → `held`/`pressed` 位图；
-2. 模式门：`engine::stage_tick` 仅 `Combat|DeathRespawn|StageClear`；`player::tick` 仅 `Combat`
-   （重生窗 x/y/亚像素冻结=A 级；stage-start 可动性未证⇒不跑）；`scroll_delta`：Combat=16（tick=scroll/16，
-   Wt-2 A 级；未接关卡数据时=接线约定），其余 0；
+2. 模式门：`engine::stage_tick`：`Combat`=已证 gameplay 段（R-stage-tick；R-ui-6 是 UI capture 锚）；
+   `DeathRespawn|StageClear`=**接线约定**（v1 行为等级降级：细粒度行为未隔离，G-S5-5 死亡窗/关末门
+   并发未取证；A2 `death_chain_step`/A3 `stage_clear_step` 未接线），且**不含 `StageStart`**
+   （intro 可动性未证）。`player::tick` 仅 `Combat`（重生窗 x/y/亚像素冻结=A 级，R-respawn-2）；
+   `scroll_delta`：Combat=16（tick=scroll/16，Wt-2 A 级；未接关卡数据时=接线约定），其余 0；
 3. 消费 `StageEffects`：`stage_clear_requested`（`$26 bit4` 门）在 `Combat` ⇒ 自动投递已证边
    `Combat→StageClear`；其余效果只登记摘要（不发明消费语义）；
 4. Audio 流消费 → 渲染合成 + `present` → `FrameClock::tick`；
@@ -89,16 +91,22 @@ GameOverPending→GameOverMenu→StageClear→Ending` + 关末 `StageAdvance(→
 边集证据指针见 [game-core flow.rs](../../crates/game-core/src/flow.rs) 注释（R-ui-6/7、A2 F6-F12、
 A3 R-l5-3..6）。
 
+**驱动方（v1）**：除 `Combat→StageClear` 一条自动接线（`$26 bit4` 门）外，**所有 `ModeEvent` 由平台/上层
+显式投递**（宿主不做按键→模式自动转移，避免发明未证键序/时机）。**已证但未接线**的时序（S8）：
+关始 intro 240f（`engine.rs RUN_STAGE_INTRO_FRAMES`，R-ui-6 锚 1260→1500）、A3 关末细段
+`stage_clear_step`（50×8f 倒数+飞离+第 4 关特判）、A2 死亡链 `death_chain_step`、R-respawn 玩家侧复位
+——属后续任务卡；shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
+
 ## 4. shell-pc 架构（首实现，现名 `shell/win`）
 
 | 件 | 设计 |
 |---|---|
 | 窗口 | winit 0.30（跨平台同源）+ softbuffer CPU 帧缓冲（game-desktop 同族）；Win/Linux 同源编译 |
-| 帧驱动 | 平台单调时钟→`game_shell::Host::advance(now_ns)`（60Hz 固定步）→ 渲染 → present |
+| 帧驱动 | 平台单调时钟→`game_shell::Host::advance(now_ns)`（60Hz 固定步）→ 渲染 → present。**时间基准（S1）**：`now_ns` 必须**相对 `Host` 创建时刻**（首帧=0，平台侧用 `Instant::now() - instant_at_host_creation` 折算）；禁止传平台绝对 uptime ns（否则首帧被当成积压、受追帧上限 4 截断而启动偏移）。`advance` 返回**折算帧数**；suspend/quit 帧不推进逻辑，实际推进帧数=前后 `Host::frame()` 之差 |
 | 帧呈现 | 256×240 RGBA → blit 整数倍缩放（保比例黑边——game-desktop blit_scaled 语义） |
 | 输入 | 键盘事件 → `Buttons`（Z/X/Enter/RShift/方向键）；对向同持由 game-shell 统一消解 |
 | 音频 | 平台 `Audio` 实现（cpal 族，PCM=合成器未证期静音占位显式）；消费 ApuWrite 流 |
-| 资产 | `AssetSource`=`std::fs`（`rom/`） |
+| 资产 | `AssetSource`=`std::fs`；**资产根=可执行文件所在目录**（`exe/rom/gunnac_cn.nes`；可回退 `exe/../rom/` 与 `CARGO_MANIFEST_DIR` 开发态），**不得依赖进程 cwd**（S3）；逻辑路径 `ROM_ASSET_PATH` 跨平台一致 |
 | 存储 | `Storage`：Windows=`%APPDATA%/gunnac/`；Linux=`~/.local/share/gunnac/` |
 | 生命周期 | 关窗→`AppEvent::Quit`；最小化/焦点可选发 Suspend/Resume（桌面可不发） |
 | 实现状态 | **v1 已落地**（task-1，2026-10-18）：六 trait PC 实现 + winit/softbuffer 主循环 + 确定性自检；逐件状态见 §4.1 |
@@ -115,7 +123,7 @@ A3 R-l5-3..6）。
 | 呈现 | `FrameRenderer` 合成 + `blit_scaled` 整数倍缩放/黑边（softbuffer `0x00RRGGBB`） | `view_rect`/`blit_scaled` 单测（2×/3×/黑边/小窗裁切） |
 | 输入 | `KeyboardInput`+`key_name`：winit 物理键码→`Buttons`（Z/X/Enter/RShift/方向）；对向同持交 game-shell `resolve_directions` 消解 | 键位表单测 + 按下/抬起状态单测 |
 | 音频 | `PcAudio`（`Audio` impl）：真实消费 game-shell `ApuWrite` 流（写序保真登记，计数不丢）；PCM=静音占位显式（`silent()=true`） | 单测：写流保序/计数/`end_frame`/零 PCM；自检注入 2 条写流被消费（audio_writes=2） |
-| 资产 | `FsAssets`（`AssetSource` impl）：`std::fs` 相对路径读 `rom/gunnac_cn.nes`；绝对路径/`..`/缺失⇒`None`（fail-closed） | 单测 + 自检 rom_len=262160 |
+| 资产 | `FsAssets`（`AssetSource` impl）：`std::fs` 相对路径读 `rom/gunnac_cn.nes`；绝对路径/`..`/缺失⇒`None`（fail-closed）。**v1=相对 cwd 定位**（S3 复核项：task-1 后续加固为 exe 目录基准，见 §4） | 单测 + 自检 rom_len=262160 |
 | 存储 | `FileStorage`（`Storage` impl）：`%APPDATA%/gunnac`（Win）/`~/.local/share/gunnac`（Linux），`slot{n}.sav` | 单测：往返/空槽 fail-closed；**不自动保存**（原版存档语义未证） |
 | 生命周期 | `LifecycleQueue`：关窗→`Quit`；焦点丢失/获得→`Suspend`/`Resume`（最小平台策略）；宿主 suspend 停逻辑帧 | FIFO 单测；game-shell 门控测试 |
 | 渲染内容 | CHR 背景（`ChrBackground`：`game-data::chr` 解码字模区 tile 平铺，灰阶 `GREY4` **C 级占位**）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）；敌/弹/HUD/文本**显式不画** | 单测：短 ROM fail-closed、tile 解码、画布覆盖/清屏色保留；合成 hash 确定性 |
@@ -124,6 +132,8 @@ A3 R-l5-3..6）。
 **迁移**：旧骨架的 `FrameDriver`/`GameHost`（重复宿主逻辑）已删除，改接 `game_shell::FixedStep`/
 `Host`；`AudioSink` 改为 `PcAudio`（平台 `Audio` 实现，不是第二套宿主）。实现方案与未证域声明见
 [plan-shellwin-v1.md](../findings/plan-shellwin-v1.md)。
+**节流口径（P3）**：旧 `FRAME_MS=16` 仅保留为历史占位常量（呈现/文档参考），主循环节流一律
+`game_shell::FixedStep`（ns 固定步）；**不得同时保留两套节流**。
 
 **§4.2 自检记录值（2026-10-18 本机 Windows；连跑两次逐行一致）**
 
@@ -154,7 +164,7 @@ CHR 背景占位合成，非 L4 像素目标。GUI 视觉（缩放/黑边/CHR �
 | 呈现 | softbuffer 像素 blit（整数倍缩放/黑边） | EGL/GLES2 纹理上传（`glow` 族；**softbuffer 不支持 Android** ⇒ 平台侧实现 `Renderer`） |
 | 输入 | 键盘→`Buttons` | 触摸虚拟手柄/外接手柄→`Buttons`（**布局与连发语义未证=占位**）；BACK→`Quit` |
 | 音频 | cpal 族（PCM=静音占位显式）；消费 ApuWrite 流 | **AAudio**（API≥26）或 **oboe**（低版本兼容）；`Audio` 消费 ApuWrite 流→PCM |
-| 资产 | `AssetSource`=`std::fs`（`rom/`） | `AssetSource`=APK `assets/`（`AAssetManager`/JNI）；ROM 打包入 APK |
+| 资产 | `AssetSource`=`std::fs`；资产根=**可执行文件目录**（见 §4，不得依赖 cwd） | `AssetSource`=APK `assets/`（`AAssetManager`/JNI）；**资产根=APK `assets/` 根**，与 PC 共用同一相对路径语义（`ROM_ASSET_PATH`）；ROM 打包入 APK |
 | 存储 | `%APPDATA%/gunnac`（Win）/`~/.local/share/gunnac`（Linux） | 应用内部目录（`Context.getFilesDir()`，JNI）；进程可被杀⇒快照时机待定 |
 | 生命周期 | 关窗→Quit；挂起/恢复可选 | `winit` `Suspended`→`AppEvent::Suspend`、`Resumed`→`Resume`、destroy/back→`Quit`；宿主 suspend 停逻辑帧 |
 | 编译验证 | 本机 `cargo test/build` 直接验证 | NDK + `cargo-apk`/gradle 交叉构建与真机验证（后续任务卡） |
@@ -164,7 +174,9 @@ CHR 背景占位合成，非 L4 像素目标。GUI 视觉（缩放/黑边/CHR �
 1. **winit 0.30 Android**：`android-activity` 依赖 + `#[cfg(target_os="android")] android_main`；
    `EventLoop` / 生命周期事件映射 `AppEvent`（§5 生命周期行）。
 2. **呈现**：EGL/GLES2 上下文 + 256×240 RGBA 纹理上传；平台侧实现
-   `Renderer::canvas_mut/present/size/resize`（softbuffer 不可用）。
+   `Renderer::canvas_mut/present/size/resize`（softbuffer 不可用）。**surface 获取/Resume 重建路径待定
+   （P1）**：候选=①winit Android 扩展取 native window + 自建 EGLSurface 重建；②ndk 原生 surface 管理。
+   与 winit 事件循环的线程/时机约束需在 Android 任务卡先做 spike 定谳。
 3. **音频**：AAudio（≥API 26）或 oboe 设备流；平台 `Audio` 消费 ApuWrite 流；合成器未证期静音占位显式。
 4. **资产**：ROM/数据打包 APK `assets/`；`AssetSource` 用 `AAssetManager` 读整块字节（路径语义与 PC 同相对路径）。
 5. **存储**：内部目录 `Storage` 实现；快照写入时机（生命周期/用户操作）由规格后续锁定（不自动保存）。
@@ -191,6 +203,21 @@ H-01 弹丸/武器槽语义、H-16 命中判定、Boss/EN-9+ 段、商店消费�
 选型细节/EGL 资源策略/存档时机、原版存档语义、`StageStart` 段玩家可动性、死亡窗滚动行为。
 逐条处理口径见 [plan-platform-abstraction.md](../findings/plan-platform-abstraction.md) §6。
 
+v1 复核（task-6）补充登记：
+
+- **死亡窗/关末并发窗的 engine tick 细粒度行为未隔离**（G-S5-5）：`DeathRespawn`/`StageClear` 内
+  跑 `engine::stage_tick` 是**接线约定**，不是已证 gameplay 段（A2 `death_chain_step` / A3
+  `stage_clear_step` 尚未接线）；差分对拍时视作未证域。
+- **除 `Combat→StageClear` 外的模式时序已证但未接线**：关始 intro 240f（R-ui-6）、A3 关末细段、
+  A2 死亡链、R-respawn 玩家侧复位——v1 由平台/上层显式投递 `ModeEvent`，不硬编码时序。
+- **双状态源同步契约待定**：`Host.stage_index` vs `StageState.stage_counter`（`$180`）；
+  `player.bomb_ammo` vs `FlowState.data.bomb_ammo`——接 game-data/死亡链任务卡的前置条款。
+- **快照只做格式 fail-closed**（不做 stage 范围/mode×stage 组合语义校验；不恢复 `prev_buttons/pacer`）。
+- **依赖门禁扫描面**只解析 `[dependencies]`（dev/build/target 段=后续加固）。
+- **菜单域 `$16` START/SELECT 边沿**（bit4/bit5）不在 v1 `pressed_bitmap`（仅方向+A/B 子集）。
+- **平台接入契约**：`Host::advance(now_ns)` 时间基准=相对 Host 创建（首帧=0）；PC `AssetSource`
+  资产根=可执行文件目录（不得依赖 cwd），Android=APK `assets/` 根。
+
 ## 9. 验收与复现命令（task-5 v1）
 
 ```sh
@@ -204,9 +231,13 @@ cargo test -p game-shell --test mock_platform mock_platform_drives_300_frames_de
 #   （连跑两次 AssertEq；签名覆盖宿主状态+画布/音频摘要，后续变更若签名变=需复核是否为预期）
 
 # 3) 全量 + 总闸
-cargo test --workspace
-python gates/cli.py check   # CHECK: PASS（含显式 SKIP 打印）
+cargo test --workspace       # 2026-10-18 task-5 tip：exit 0；326 个 #[test]：325 passed + 1 既有 ignored
+python gates/cli.py check    # CHECK: PASS（PASS=11 FAIL=0 SKIP=1；rust-tests 326/326 OK）
 ```
+
+**平台接入注意**：`Host::advance(now_ns)` 的 `now_ns` 必须**相对 Host 创建时刻**（首帧=0，S1）；
+PC `AssetSource` 资产根=**可执行文件目录**、Android=`APK assets/` 根（S3）；旧 `FRAME_MS=16` 不得与
+`FixedStep` 并存（P3）。
 
 **v1 完成面**：game-platform 缝补全（AssetSource/Lifecycle·AppEvent/Renderer size·resize）+ game-shell
 平台无关宿主（固定步/输入消解/状态机/tick/合成/音频/资产/存档/生命周期端口）+ 契约门禁。

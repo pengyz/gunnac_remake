@@ -11,6 +11,10 @@
 //!
 //! 不含：虚拟时钟帧号（`FrameClock` 无回写 API，未申请 core 只读接口）、引擎 `StageState`
 //! （含 Vec 内部态，格式未锁定）——完整存档=后续步，超出 v1 范围（显式缺口，不发明）。
+//!
+//! **v1 只做格式 fail-closed**（magic/version/长度/flags/mode tag）；**不做语义校验**
+//! （如 `1<=stage<=8`、mode×stage 不可能组合）——语义校验/宿主状态一致性=后续卡加固项
+//! （复核 S7 已登记）；`restore` 不恢复 `prev_buttons`/`pacer`/`FrameClock`（显式缺口）。
 
 use game_core::flow::{Mode, PersistData};
 use game_core::player::PlayerState;

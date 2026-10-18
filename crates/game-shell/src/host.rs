@@ -124,6 +124,9 @@ pub struct Host {
 
 impl Host {
     /// 新建宿主（开机态：`Mode::Boot`、关号 1；玩家初值见 [`INITIAL_PLAYER_X`]）。
+    ///
+    /// **固定步时间基准**：`FixedStep` 以本调用时刻为 0；平台侧调用 [`Host::advance`] 时
+    /// 必须传**相对本创建时刻**的纳秒数（首帧=0），不得传平台绝对 uptime ns（见 `advance` 文档）。
     pub fn new() -> Self {
         let player = PlayerState {
             x: INITIAL_PLAYER_X,
@@ -345,7 +348,14 @@ impl Host {
     // ================= 帧推进 =================
 
     /// 60Hz 固定步包装：把平台单调时钟推进到 `now_ns`，执行折算出的 0..=4 个逻辑帧。
-    /// 返回执行的逻辑帧数。
+    ///
+    /// **时间基准**：`now_ns` 必须**相对 `Host` 创建时刻**（首帧=0；平台侧用
+    /// `Instant::now() - instant_at_host_creation` 折算）。禁止直接传平台绝对 uptime ns——
+    /// 否则首帧会把巨大差值当积压（仅受追帧上限 4 保护，造成启动偏移）。
+    ///
+    /// **返回值**：折算出的逻辑帧数（0..=4）。suspend/quit 期间这些帧由 [`Host::tick`]
+    /// 门控为**不推进逻辑**（返回计数仍含折算帧，不等于实际推进帧数）；实际推进帧数=
+    /// 前后 [`Host::frame`] 之差。
     pub fn advance(
         &mut self,
         now_ns: u64,
@@ -508,7 +518,11 @@ impl Host {
     }
 }
 
-/// ROM 资产逻辑路径（PC=仓库工作目录相对路径；Android=APK assets 内同相对路径）。
+/// ROM 资产**逻辑路径**（相对资产根；跨平台语义一致）。
+///
+/// 资产根由平台实现决定：PC=`std::fs` 实现以**可执行文件所在目录**为基准
+/// （`exe/rom/gunnac_cn.nes`；可回退 `exe/../rom/` 与 `CARGO_MANIFEST_DIR` 开发态定位）；
+/// Android=APK `assets/` 根（`AAssetManager` 内同相对路径）。**不得依赖进程 cwd**。
 pub const ROM_ASSET_PATH: &str = "rom/gunnac_cn.nes";
 
 impl Default for Host {
@@ -517,14 +531,19 @@ impl Default for Host {
     }
 }
 
-/// 引擎 tick 活跃模式（已证 gameplay 段：R-ui-6/7 stage-start/combat、A2 respawn、A3 stage-clear）。
+/// 引擎 tick 活跃模式：`Combat`=已证 gameplay 段（R-stage-tick / ui-flow R-ui-6 场景锚）。
+///
+/// `DeathRespawn`/`StageClear`=**接线约定**（行为等级降级，见复核 E1）：细粒度行为
+/// （死亡窗滚动/主环 poll/关末门并发 G-S5-5）未隔离——A2 细粒度 `death_chain_step` 与
+/// A3 `stage_clear_step` 尚未接线；差分对拍时死亡窗/关末并发窗仍应视为未证域。
+/// 不含 `StageStart`：关始 intro 段玩家可动性未证（R-ui-6 只证画面锚）。
 fn engine_tick_active(mode: Mode) -> bool {
     matches!(mode, Mode::Combat | Mode::DeathRespawn | Mode::StageClear)
 }
 
 /// 玩家移动活跃模式：仅 `Combat`。
 ///
-/// `DeathRespawn` 窗内 x/y/亚像素冻结=A 级（`respawn-window.md` 逐帧向量）；
+/// `DeathRespawn` 窗内 x/y/亚像素冻结=A 级（`respawn-window.md` §3 R-respawn-2 逐帧向量）；
 /// `StageClear` 飞离段由引擎状态向量驱动，输入不参与（未证不发明）。
 fn player_tick_active(mode: Mode) -> bool {
     matches!(mode, Mode::Combat)

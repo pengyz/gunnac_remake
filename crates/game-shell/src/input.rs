@@ -59,9 +59,11 @@ pub fn held_bitmap(buttons: &Buttons) -> u8 {
     held
 }
 
-/// `$16` 边沿位图：本帧按下且上帧未按（方向 + A/B；START/SELECT 不入本图）。
+/// `$16` 边沿位图（**方向 + A/B 子集**）：本帧按下且上帧未按。
 ///
-/// v1 只产出、不消费——射击/投放等边沿行为未接线（见 crate 文档与方案 §6）。
+/// **不含 START/SELECT**（菜单域 `$16` bit4=`START`/bit5=`SELECT`，见
+/// [flow.rs `MENU_BTN_*`]）：菜单/模式派发属后续任务卡，接线时须用独立菜单位图函数，
+/// 不得误用本函数（v1 只产出、不消费——射击/投放等边沿行为同属未接线）。
 pub fn pressed_bitmap(prev: &Buttons, now: &Buttons) -> u8 {
     let mut pressed = 0u8;
     if now.right && !prev.right {

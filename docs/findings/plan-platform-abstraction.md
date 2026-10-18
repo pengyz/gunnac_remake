@@ -100,6 +100,12 @@
 - 引擎门→flow 边的自动接线（已证）：`main_loop_step` 置 `StageEffects::stage_clear_requested`
   （`$26 bit4` 门，A 级对账）且当前 `Mode::Combat` ⇒ 宿主自动 `apply_event(StageClear)`
   （`Combat→StageClear` 为已证边）。其余自动接线（死亡窗、GAME OVER 菜单输入）v1 不做。
+- **驱动方（v1）**：除上述 `Combat→StageClear` 一条自动接线外，所有 `ModeEvent` 由**平台/上层显式投递**
+  （宿主不做"按键→模式"自动转移，避免发明未证键序/时机）。**已证但未接线**的时序（S8）：
+  关始 intro 240f（[engine.rs `RUN_STAGE_INTRO_FRAMES`](../../crates/game-core/src/engine.rs)，
+  R-ui-6 锚 1260→1500）、A3 关末细段 `stage_clear_step`（50×8f 倒数+飞离+第 4 关特判）、
+  A2 死亡链 `death_chain_step`、R-respawn 玩家侧复位——属后续任务卡，shell 侧不得静默硬编码
+  240f/400f/265f 当作已收敛行为。
 
 ### 3.5 tick 序列（帧内次序）
 
@@ -107,19 +113,23 @@
 
 1. 输入采样 → `resolve_directions` → `held`/`pressed` 位图；
 2. 按模式门决定是否跑游戏 tick（**不发明未证段行为**）：
-   - `engine::stage_tick`：仅 `Combat | DeathRespawn | StageClear`（已证 gameplay 段）；
+   - `engine::stage_tick`：`Combat`=已证 gameplay 段（R-stage-tick；R-ui-6 是 UI capture 锚、
+     非 engine tick 证据）；`DeathRespawn | StageClear`=**接线约定**（v1 行为等级降级，复核 E1：
+     细粒度行为未隔离——G-S5-5 死亡窗/关末门并发未取证，A2 `death_chain_step` /
+     A3 `stage_clear_step` 尚未接线）；**不含 `StageStart`**（intro 段可动性未证）。
      `scroll_delta`：`Combat` 用 `16`（engine 内 `Combat` 先例：tick=scroll/16 ⇒ 1 tick/帧，A 级 Wt-2），
      其余 0（滚动活段未证 ⇒ fail-closed；W-SCLEAR 同族）。**关卡数据装载未接**（§6），v1 只推进空 StageState。
-   - `player::tick`：仅 `Combat`。`DeathRespawn`/`StageClear` 不跑玩家移动——**A 级证据**：重生窗
-     x/y/亚像素全程冻结（[respawn-window.md](respawn-window.md) §R-respawn-3 / player-movement R-respawn 族），
-     此时按输入积分会与已证冻结冲突 ⇒ 不跑。
+   - `player::tick`：仅 `Combat`。`DeathRespawn`/`StageClear` 不跑玩家移动——**A 级证据**：
+     重生窗 x/y/亚像素全程冻结（[respawn-window.md](respawn-window.md) §3 **R-respawn-2**；
+     R-respawn-3 仅为 (128,160) 复位锚），此时按输入积分会与已证冻结冲突 ⇒ 不跑。
    - `StageStart` 段是否可动**未隔离**（R-ui-6 只证画面锚）⇒ v1 不跑（fail-closed）。
 3. 消费 `StageEffects`：摘要（spawn/drip/far-call 计数）进确定性签名；`stage_clear_requested` 自动接 flow（§3.4）。
 4. Audio 流消费（§3.7）→ 渲染合成 + `present`（§3.6）→ 虚拟时钟 `FrameClock::tick`。
 5. 输出 `FrameOutcome`（帧号/模式/关号/消解后按钮/是否跑游戏 tick/stage_clear/自动 flow 事件/quit/suspend）。
 
-帧内次序依据：A2 帧序锚「行为→碰撞→主环」（[game-over-continue.md](../spec/game-over-continue.md)；
-`engine::FRAME_ORDER`），宿主只在 core 输出后做呈现/音频，不插入游戏逻辑。
+帧内次序依据：`engine::FRAME_ORDER`（[engine.rs:3-4/23-24](../../crates/game-core/src/engine.rs)；
+注释记 A2 帧序=行为→碰撞→主环。**这是 A2 findings 归纳，spec 未单列该锚**），
+宿主只在 core 输出后做呈现/音频，不插入游戏逻辑。
 
 ### 3.6 渲染合成（调用 `Renderer`；v1 显式占位）
 
@@ -140,8 +150,10 @@
 
 ### 3.8 资产 / 存档 / 生命周期端口
 
-- **资产**：`Host::load_rom(&mut dyn AssetSource, path) -> bool`——只取得字节并存 `Option<Vec<u8>>`；
-  不做 NES 头校验/解析（`game-data` 域，v1 未接）。
+- **资产**：`Host::load_asset(&mut dyn AssetSource, path) -> bool`——只取得字节并存 `Option<Vec<u8>>`；
+  不做 NES 头校验/解析（`game-data` 域，v1 未接）。**资产路径语义**（S3）：`ROM_ASSET_PATH` 是相对
+  **资产根**的逻辑路径；PC 资产根=可执行文件所在目录（可回退 `exe/../rom/` 与 `CARGO_MANIFEST_DIR`
+  开发态定位），Android=APK `assets/` 根；**不得依赖进程 cwd**。
 - **存档（占位缝）**：`HostSnapshot`（flow mode/关号/all_clear/player/PersistData）+ `encode_snapshot`/
   `decode_snapshot`（magic `GNSH`/version 1/定长；损坏 fail-closed `None`）；`save_snapshot`/`load_snapshot`
   走 `Storage`。**不自动保存/不接原版存档语义**（原版无电池存档证据）；引擎 `StageState` 不落快照（见 §6）。
@@ -171,7 +183,7 @@ mock 300 帧脚本设计（确定性，不含时间/线程/哈希序）：
   `Boot→Black→Title→Menu→Shop→Transition→StageStart→Combat`，然后每关
   `StageClear→(StageAdvance→Shop→Transition→StageStart→Combat)`，关 8 `StageClear→AllClear→Ending`；
   共 44 事件，全部在已证边集内；断言终态 `Mode::Ending`/`stage_index==8`/`all_clear`；
-- 期间调用 `load_rom`/`save_snapshot` 覆盖 AssetSource/Storage 真实消费；另设独立用例验证
+- 期间调用 `load_asset`/`save_snapshot` 覆盖 AssetSource/Storage 真实消费；另设独立用例验证
   Suspend/Resume/Quit 与 Audio 流消费（注入写事件→保序+end_frame）。
 
 ## 5. 平台矩阵与 Android 落地方案
@@ -203,25 +215,32 @@ Android 落地清单（后续任务卡逐项验收）：
 | 域 | 状态 | v1 处理 |
 |---|---|---|
 | H-01 弹丸/武器槽语义（槽号↔武器名、弹幕行为） | 未证 | 不画、不推进、不建行为；TODO |
-| H-16 命中判定（受击/伤害链） | 未证 | 不接；不引入碰撞行为 |
+| H-16 命中判定（受击/伤害链） | 未证 | 不新增碰撞/命中逻辑；沿用 core 既有 `stage_tick` 管线（空 StageState 下 inert，不据此写命中结论） |
 | Boss / EN-9+ 段（[stage.rs `boss_segment_unproven`](../../crates/game-core/src/stage.rs)） | 未证 | fail-closed，不 spawn |
 | 商店消费侧 / 经济闭环 | 未证 | flow 只到 `Shop` 状态，不实现买卖 |
 | 音效/音乐触发与 PCM 合成（AUD-2/3 内部体） | 未证 | 音频流消费契约接线，**生产者空**；平台侧静音占位 |
 | 原版调色板映射 / BG nametable / 文本流 / 结局卡渲染 | 未证/后续战役 | 不画；只做占位合成 |
 | 玩家主武器射击（H-14 连射域）与 A 边沿投放接线 | 部分已证但 t5 不做 | `$16` 边沿位图产出不消费；后续步接 |
 | 菜单输入门控/派发（`MenuInputGate` 相位锁） | 机制已证、接线未定谳 | `ModeEvent` 显式投递，不自动从按键转移 |
+| 除 `Combat→StageClear` 外的模式时序（关始 240f intro〔R-ui-6〕/ A3 关末细段 `stage_clear_step` / A2 死亡链 / R-respawn 玩家侧复位） | **已证未接线**（复核 S8） | v1 由平台/上层显式投递 `ModeEvent`；不得硬编码 240f/400f/265f 当已收敛行为；后续任务卡接线 |
+| DeathRespawn/StageClear 内的 engine tick 细粒度行为（死亡窗滚动/主环 poll/关末门并发 G-S5-5） | **未隔离**（复核 E1） | 仅接线约定；差分对拍视未证域，不作已证断言 |
+| 双状态源契约（`Host.stage_index` vs `StageState.stage_counter`〔`$180`〕；`player.bomb_ammo` vs `FlowState.data.bomb_ammo`） | 未定（复核 S2） | **接 game-data/死亡链任务卡前置条款**：须先定单一真相源与同步时机（`$180`、R-respawn-4 窗末回满 4），禁止下游自行发明 |
+| 菜单域 `$16` START/SELECT 边沿（bit4/bit5） | v1 缺（复核 S5） | `pressed_bitmap` 仅方向+A/B 子集；菜单接线须独立菜单位图函数 |
 | 关卡数据装载（`StageState` 的脚本/调度/shape/初始槽） | `game-data`/装载侧未接 | v1 空 `StageState`；`stage_state_mut()` 只作已证数据装载与门禁测试口 |
 | 触摸虚拟手柄布局/连发/宏 | 未证 | Android 清单标注占位，不发明映射 |
 | Android AAudio/oboe 选型细节、EGL 资源策略、存档时机 | 平台实现侧未证 | 方案清单只列"必做项"，不声称已实现 |
 | 原版存档语义（电池存档证据） | 未证 | `Storage` 只作占位字节存取缝，不自动保存 |
-| `StageStart` 段玩家可动性、死亡窗滚动行为 | 未隔离 | 对应模式不跑/0 滚动（§3.5），登记缺口 |
+| `StageStart` 段玩家可动性 | 未隔离 | 该模式不跑 `player::tick` / 0 滚动（§3.5），登记缺口 |
+| 快照语义校验（stage 范围/mode×stage 组合）；`restore` 不恢复 `prev_buttons/pacer/FrameClock` | v1 仅格式 fail-closed（复核 S7） | 后续卡加固；不声称快照可任意恢复宿主全态 |
+| 依赖门禁扫描面（`[dev-dependencies]`/`[build-dependencies]`/`[target.*.dependencies]`） | 仅解析 `[dependencies]`（复核 S6） | 后续加固（当前 manifest 干净） |
 
 ## 7. 风险与开放问题
 
 1. **`Renderer` 默认方法**：为不破坏 task-5 写范围外的 `game-desktop::Canvas` 实现而用默认值；
    若裁定"必须强制实现"，需用户/Lead 批准改 `game-desktop`（本任务不改）。
-2. **ratchet 提示**：新增测试使 `rust_test_count` 高于基线（只升不降=WARN，非 FAIL）；
-   基线上调属 `data/status/`（本任务写范围外）⇒ 报 Lead 处置。
+2. **ratchet**：新增测试使 `rust_test_count` 高于基线（只升不降）；`ff5aa7c` 已由 Lead 处置
+   280→326（gates OK）。本任务复核修正 commit 追加 1 个 mock 断言测试后基线需再上调一次
+   （`data/status/` 写范围外 ⇒ 报 Lead 处置）。
 3. **`Cargo.lock`**：新增 workspace 成员必产生 lockfile 变更（生成物，非手工逻辑）。
 4. **命名**：`shell-win`→`shell-pc` 由用户裁定；`game-shell` 名（平台无关宿主）本任务按卡内定名。
 5. **引擎数据装载缺口**：v1 `StageState` 为空 ⇒ `stage_clear_requested` 不会自然发生；自动接线只由
@@ -250,6 +269,7 @@ Android 落地清单（后续任务卡逐项验收）：
 | `c43f08d` | `feat(platform)`：trait 缝补全（AssetSource/Lifecycle·AppEvent/Renderer size·resize/画布常量）+ 契约测试 |
 | `98ad36c` | `feat(platform)`：新增 game-shell crate（固定步/输入消解/宿主状态机/tick 序列/渲染合成/音频/资产·存档·生命周期；含 contract/mock_platform 测试） |
 | `docs(spec)`（本回填同 commit） | platform-shell.md v2 分层图/平台矩阵/Android 落地清单/状态回填 |
+| `docs(platform)`（复核修正 commit） | 按 task-6 `needs_revision` 修正：E1/S8/S1/S3 + 便宜项（docs/注释/测试断言，零功能逻辑改动） |
 
 > 偏差说明：实施把「crate 骨架」「tick/渲染/音频」「契约测试」合为 1 个 feat commit（同逻辑变更、
 > 测试与实现同步落地）；其余按 §8 计划执行。
@@ -261,13 +281,26 @@ Android 落地清单（后续任务卡逐项验收）：
 - mock 300 帧两次运行全等；签名（2026-10-18 记录值）：
   `host=0xefe39a9ba5e7c5b0 canvas=0x963ac9a776a57625 advanced_frames=290 storage_len=24`
   （suspend 窗口 10 帧不推进⇒290；事件 44 条全在已证边集；终态 `Ending`/关号 8/all_clear）。
-- `cargo test --workspace` + `python gates/cli.py check`：见交付汇报（CHECK: PASS）。
-- `rust_test_count` 因新增测试高于基线（只升不降=WARN 非 FAIL）；基线上调属 `data/status/`（本任务红线外），
-  已报 Lead 处置。
+- `cargo test --workspace`：exit 0；**326 个 `#[test]`：325 passed + 1 既有 ignored**（game-core
+  `engine_tick` 既有用例，非本任务跳过）。
+- `python gates/cli.py check`：**CHECK: PASS**（PASS=11 FAIL=0 SKIP=1 TOLERATED=0；`rust-tests`
+  326/326 OK；`docs-links` 306 md / 206 本地链接全有效）。
+- 基线处置：`ff5aa7c` 已由 Lead 把 `rust_test_count` 280→326（gates `rust-tests` OK）；本任务
+  复核修正 commit 追加 1 个 mock 断言测试，基线需再上调（`data/status/` 写范围外，报 Lead）。
 
 **遗留缺口（与 §6 一致，未实现/未声称）**：关卡数据装载（`StageState` 仍为空，`stage_clear_requested`
 只能由门禁测试以显式已证写点触发）、音频生产侧（AUD-2/3）、玩家射击/投放接线、菜单输入派发、
-死亡窗/GAME OVER 菜单自动接线、Android 实现（仅清单）、`shell-win` 主循环接线（task-1）。
+死亡窗/GAME OVER 菜单自动接线、Android 实现（仅清单）、`shell-win` 主循环接线（task-1）；
+**除 `Combat→StageClear` 外 ModeEvent 由平台/上层显式投递**（S8：关始 240f intro、A3 关末细段、
+A2 死亡链、R-respawn 玩家侧复位=已证未接线）；**双状态源同步契约待定**（S2，接 game-data/死亡链
+任务卡前置条款）；快照语义校验待加固（S7）；依赖扫描面加固（S6）。
+
+**复核收敛（2026-10-18，task-6 `needs_revision` 修正）**：按
+[adversarial-review-platform-v1.md](adversarial-review-platform-v1.md) 做 docs-only 修正——
+E1（DeathRespawn/StageClear 行为等级降级为接线约定）、S8+E4（显式投递/已证未接线登记/数字口径）、
+S1（`advance` 时间基准=相对 Host 创建）、S3（AssetSource 资产根定义）、E2/E3/S4/S5/S7/S9/S10、
+S2/S6/P1/P2/P3 登记；另修既有陈旧 `trait_shapes.rs` 字节数注释与 `trait_contract.rs`
+MockClock/MockInput 未构造断言。**实现逻辑零改动**（仅注释/文档/测试断言）。
 
 **风险**：`Renderer::size/resize` 采用默认方法是为不打断写范围外的 `game-desktop::Canvas`；
 若后续裁定"必须强制实现"，需改 `game-desktop`（需用户/Lead 批准，非本任务写范围）。
