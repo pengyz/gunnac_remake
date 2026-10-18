@@ -119,3 +119,49 @@ Mesen 锁已交还 l4-analyst；未跑 gates check/status/visual
 ```
 
 **verdict: pass（含 F134-1 中风险需 l4 重采时核；F134-4 title 断言落错场景）**。
+
+## 追加（2026-10-18，F134-1 根因=autosave 状态污染）
+
+> Lead 已定位根因并处置；本节为只读复核（未跑 Mesen，l4 task-133 正占锁）。
+
+### 根因
+- Mesen2 `Preferences.EnableAutoSaveState=True`（`AutoSaveStateDelay=5`）⇒ GUI/headless 退出时自动写
+  `%USERPROFILE%\Documents\Mesen2\gunnac_cn_11.mss`，下次启动**可能自动恢复上次状态**；
+- headless 分支原本**未传 `/DoNotSaveSettings`**（F134-2）⇒ settings/状态回写。
+- 两者叠加解释我上节观察到的 **GUI c4d6×2 → headless 62c9 → GUI ffecf11c**（第 3 次 GUI 继承遗留状态）。
+
+### 处置（Lead 已做，复核值）
+- `%USERPROFILE%\Documents\Mesen2\settings.json` 现读回：
+  ```
+  "EnableAutoSaveState": false
+  "AutoSaveStateDelay": 5
+  "EnableRewind": false
+  "EmulationSpeed": 1000        （批次提速用，批次后恢复 100，本次未改）
+  "AllowIoOsAccess": true
+  ```
+- 遗留 `Documents\Mesen2\*.mss`：**无**（已删除）；
+- 备份 `settings.json.bak-autosave` 存在（198618B，20:02:23）。
+- `tools/scenario_run.py` L599-602 headless 分支已改为：
+  ```python
+  [str(MESEN), "--testRunner", f"--timeout={mesen_timeout_s}", str(lua_path), str(ROM),
+   "/DoNotSaveSettings"]
+  ```
+  ⇒ F134-2 的 headless `/DoNotSaveSettings` **位置正确**（在 lua/ROM 之后，与其他分支一致）✅。
+
+### Lead 4 连测（引用，非本复核运行）
+```
+GUI title #1        = c4d6a83f
+GUI title #2        = c4d6a83f
+headless title      = 62c9ea09（无输入对照）
+headless 后再 GUI   = c4d6a83f（恢复一致）
+```
+⇒ **F134-1 不再复现**；根因（autosave 状态污染 + headless settings 回写）与 4 连测序列自洽。
+本复核未独立跑第 5 次（l4 task-133 正占 Mesen 锁）；若需要，l4 批次完成后可再点验
+"headless 后 GUI title 仍 c4d6a83f"。
+
+### 残余建议
+- `AutoSaveStateDelay` 仍为 5 但 `EnableAutoSaveState=false`，无实际写档；保留值无害。
+- 批次结束恢复 `EmulationSpeed=100` 后，建议用 **GUI title 两次 sha** 复核提速设置本身不改变 trace
+  （Lead 4 连测已覆盖 speed=1000 下 c4d6；speed=100 下历史 c4d6 亦可作对照）。
+- task-133 重采仍应按本报告 F134-1/F134-4：**连续 GUI + 每场景两跑 sha + 输入有效性断言**（title 无
+  controller watch，用 gameplay 的 controller/action/坐标四链），并在报告中标注旧 headless 结论 superseded。
