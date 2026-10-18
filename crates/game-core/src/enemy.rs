@@ -1123,3 +1123,39 @@ pub const BANK5_HANDLERS: [(u16, HandlerForm); 12] = [
 pub fn bank5_handler_form(addr: u16) -> Option<HandlerForm> {
     BANK5_HANDLERS.iter().find(|(a, _)| *a == addr).map(|(_, f)| *f)
 }
+
+// ===== handler 批 5（bank4/6 八形机械套——深扫 57dbd35 同族）=====
+
+/// bank4 handler 形态表（59 段分类：直查 40/无 11/子生成 8——代表体）。
+pub const BANK4_HANDLERS: [(u16, HandlerForm); 8] = [
+    (0xA042, HandlerForm::DualIndex),
+    (0xA059, HandlerForm::DualIndex),
+    (0xA06B, HandlerForm::DualIndex),
+    (0xA089, HandlerForm::DualIndex),
+    (0xA10E, HandlerForm::SubObjectGen),
+    (0xA245, HandlerForm::SubObjectGen),
+    (0xA63A, HandlerForm::SubObjectGen),
+    (0xA6D4, HandlerForm::SubObjectGen),
+];
+
+/// bank6 handler 形态表（72 段分类：直查 35/无 28/子生成 9——代表体）。
+pub const BANK6_HANDLERS: [(u16, HandlerForm); 8] = [
+    (0xA042, HandlerForm::DualIndex),
+    (0xA059, HandlerForm::DualIndex),
+    (0xA06B, HandlerForm::DualIndex),
+    (0xA089, HandlerForm::DualIndex),
+    (0xA10E, HandlerForm::SubObjectGen),
+    (0xA245, HandlerForm::SubObjectGen),
+    (0xA63A, HandlerForm::SubObjectGen),
+    (0xA6D4, HandlerForm::SubObjectGen),
+];
+
+/// 批 5 机械套：bank4/6 handler 形态分发。
+pub fn bank46_handler_form(bank: u8, addr: u16) -> Option<HandlerForm> {
+    let table: &[(u16, HandlerForm)] = match bank {
+        4 => &BANK4_HANDLERS,
+        6 => &BANK6_HANDLERS,
+        _ => return None,
+    };
+    table.iter().find(|(a, _)| *a == addr).map(|(_, f)| *f)
+}

@@ -821,3 +821,13 @@ fn bank5_handler_forms() {
     assert_eq!(bank5_handler_form(0xA042), Some(HandlerForm::DualIndex), "直查形");
     assert_eq!(bank5_handler_form(0x9999), None, "未登记=unknown fail-closed");
 }
+
+/// 批 5：bank4/6 八形机械套。
+#[test]
+fn bank46_handler_forms() {
+    use game_core::enemy::{bank46_handler_form, HandlerForm};
+    assert_eq!(bank46_handler_form(4, 0xA10E), Some(HandlerForm::SubObjectGen), "bank4 子生成");
+    assert_eq!(bank46_handler_form(6, 0xA042), Some(HandlerForm::DualIndex), "bank6 直查");
+    assert_eq!(bank46_handler_form(5, 0xA042), None, "非 bank4/6=unknown");
+    assert_eq!(bank46_handler_form(4, 0x9999), None, "未登记 fail-closed");
+}
