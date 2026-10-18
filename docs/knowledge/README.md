@@ -67,3 +67,4 @@
 | [gotcha-windows-crlf-sha-gate.md](gotcha-windows-crlf-sha-gate.md) | gotcha | Windows CRLF（检出转换 + Python 文本写入）会让 sha256 门禁误报"基线被手工改动"——LF 双修 + 先查字节再疑篡改 |
 | [decision-l4-zero-tolerance-ruling.md](decision-l4-zero-tolerance-ruling.md) | decision | L4 判据回到 0 容差（白名单外像素一致）——"带声明签署"仅过程里程碑，不构成 L4 达成（2026-10-18 用户裁定） |
 | [gotcha-mesen2-headless-windows-io.md](gotcha-mesen2-headless-windows-io.md) | gotcha | Mesen2 headless 采集用 Windows 版 testRunner（无 Xvfb）+ `Debug.ScriptWindow.AllowIoOsAccess`；WSL2 Linux 版 testRunner 实测 `std::bad_cast`/exit 134（本机实测，非通用结论） |
+| [gotcha-visual-gate-rewrites-tracked-screens.md](gotcha-visual-gate-rewrites-tracked-screens.md) | gotcha | `gates check`/`status` 都会跑 visual 门：**读**磁盘当前 `oracle/screens/actual` 重算并写 tracked `diff/*`、`visual-report.md`、`whitelist-application.md`；**`actual` 由 `render-frame` 采集/渲染步写入**——采集窗口跑门禁会把中间态固化进 tracked 报告；采集窗口禁用，跑后 `git checkout -- oracle/screens/`；冻结需干净 trace 集一次性重生成 |
