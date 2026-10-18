@@ -40,3 +40,38 @@ Stage A 约束注（"接口形状是缝的占位…接口不得提前发明行�
 **微注×2（不阻断）**：①`next_below` 默认实现=% bound（模偏置语义是轻量行为承诺——
 算法待 S4 锁注已在，impl 可覆写，建议默认体加"偏置可覆写"注）②`write_apu` reg:u16 vs
 game-core ApuWrite.reg:u8（$00-$17）——宽化对称宜注一词（寄存器域声明）。
+
+---
+
+## 段 B：③OS 差异 cfg 面设计 + Verdict
+
+### B.1 ③ cfg 面设计（差异实现非分叉）——**设计面成立** ✅
+
+| 设计件 | spec 面 | 裁定 |
+|---|---|---|
+| cfg 点极小化 | **跨平台库优先**（winit 窗口/softbuffer 帧缓冲/cpal 音频族）——真 OS 特有点才 cfg | ✓ 设计原则正确（差异面最小化） |
+| cfg 差异点声明 | 存储路径（Windows=%APPDATA%/gunnac/ vs Linux=~/​.local/share/gunnac/）+音频后端（若有） | ✓ 具体点显式列名 |
+| **非分叉原则** | "cfg(windows)/cfg(unix) 差异实现点=…**差异实现非分叉**" | ✓✓ 同 crate 内 cfg 分支≠fork 代码库——设计语义正确 |
+| 同源开发 | 用户裁定："无须交叉工具，Linux/Windows 同源开发验证" | ✓ 与 §4 工程纪律一致 |
+| 帧驱动/呈现 | 60Hz Instant 节流→stage_tick 族→合成→present；blit 整数倍缩放（game-desktop blit_scaled 同语义） | ✓ 与已证面同构 |
+| 游戏宿主 | title→设置→八关→结局（game-core flow/stage 已证 F1-F13 边集接线） | ✓ 状态机=已证面接线不发明 |
+
+**设计裁定**：cfg 面设计=**差异实现（同 crate 内 cfg 分支+跨平台库）非分叉** ✓——
+与分层合同（段A）自洽闭合；trait 缝（段A ②）+cfg 面（本段）+零依赖实审计（段A ①）三面互锁。
+
+### B.2 #104 Verdict：**pass** ✅（微注×2 随档）
+
+| 靶 | 裁定 |
+|---|---|
+| ① 分层合同 | ✅ Cargo 实审计全净（core/platform/data/oracle 零外部依赖+forbid unsafe） |
+| ② trait 锁定形状 | ✅ 七 trait 最小面逐面不发明（组合/缩放/混音/格式全显式留实现侧） |
+| ③ OS 差异 cfg 面 | ✅ 差异实现非分叉+cfg 点极小化+同源开发纪律自洽 |
+
+**三靶全中，零必修**——架构面先行件过审；微注×2（next_below 模偏置可覆写注/
+write_apu reg:u16→u8 域声明）随档不阻断。**架构合同三面互锁**（零依赖×最小 trait×非分叉）
+=平台抽象层立项的成立性核毕。
+
+### B.3 纪律自查
+Cargo.toml 逐 crate 实读+trait 75 行全读+spec 全文核；未改被审产物；
+**provenance 注**：段A 内容被并发提交 9d661b6 反向卷入（暂存污染第三例——内容完好，
+本注为 provenance 权威）；守窗轮询×2+锁瞬态处置（核活进程→确认消→重提）。
