@@ -7,7 +7,7 @@
 //! - `AssetSource`/`Storage`/`Audio`/`Lifecycle`/`Input` 的 PC 实现真实行为与 fail-closed
 //!   （含 Windows drive-relative 前缀拒绝 B1、exe 目录资产根解析 S1）；
 //! - CHR 背景占位合成（灰阶投影；非原版调色板）；
-//! - `FrameView` 覆盖层（模式占位角标/HUD 数值域占位编码/敌槽 Some 路径；子弹不画）；
+//! - `FrameView` 覆盖层（模式占位角标/HUD 数值域占位编码/敌槽 Some 路径/玩家子弹已证坐标面占位块）；
 //! - 按键透传→`Host::tick` 内菜单派发→模式推进（shell 不实现派发）；
 //! - `--selftest-frames` 确定性（两次运行报告逐字段一致，含独立 view 摘要）+ 异 cwd 资产定位。
 
@@ -15,12 +15,13 @@ use game_core::flow::Mode;
 use game_platform::{
     AppEvent, AssetSource, Audio, Buttons, Input, Lifecycle, Renderer, Storage, CANVAS_LEN, CANVAS_W,
 };
-use game_shell::{EnemySlotView, FrameView, Host};
+use game_shell::{BulletView, EnemySlotView, FrameView, Host};
 use shell_win::{
     asset_root, blit_scaled, compose_canvas, frame_view_digest, map_key, run_selftest, storage_dir,
     view_rect, ChrBackground, FileStorage, FrameRenderer, FsAssets, KeyboardInput, LifecycleQueue,
     PcAudio, CLEAR_RGBA, ENEMY_PLACEHOLDER_COLORS, GREY4, HUD_MONEY_SLOT_PITCH, HUD_MONEY_SLOT_X,
-    HUD_MONEY_SLOT_Y, HUD_PLACEHOLDER_RGBA, MODE_MARKER_COLORS, WINDOW_TITLE,
+    HUD_MONEY_SLOT_Y, HUD_PLACEHOLDER_RGBA, MODE_MARKER_COLORS, PLAYER_BULLET_PLACEHOLDER_RGBA,
+    PLAYER_BULLET_PLACEHOLDER_SIZE, WINDOW_TITLE,
 };
 
 /// 测试用 CHR ROM 最小长度（`CHR_FILE_BASE + 128*CHR_BANK_SIZE` = 0x40010；
@@ -385,30 +386,107 @@ fn frame_view_overlay_renders_mode_hud_enemy_placeholders_only() {
     );
     assert_eq!(pixel(c, 10, 60), CLEAR_RGBA, "position=None 不画（不得当 (0,0)）");
 
-    // 玩家子弹无坐标面 ⇒ 不画：只改计数不改变像素；但 view 摘要仍登记计数。
-    let mut view_no_bullets = view;
-    view_no_bullets.player_bullets_live = 0;
+    // 活弹计数不直接绘制（绘制源=`player_bullets` 已证坐标面，见下个测试）；但 view 摘要登记计数。
+    let mut view_no_count = view;
+    view_no_count.player_bullets_live = 0;
     let mut renderer0 = FrameRenderer::new();
-    renderer0.set_frame_view(view_no_bullets);
+    renderer0.set_frame_view(view_no_count);
     assert_eq!(
         renderer0.composed_canvas(),
         renderer.composed_canvas(),
-        "子弹不画（无坐标面；H-01 未证）"
+        "活弹计数本身不绘制（仅 Some 坐标面绘制）"
     );
     assert_ne!(
         frame_view_digest(&view),
-        frame_view_digest(&view_no_bullets),
+        frame_view_digest(&view_no_count),
         "view 摘要仍登记 player_bullets_live"
     );
 }
 
-/// 菜单/模式派发脚本：解锁帧后 START 两次（Title→Menu→Shop）、B 两次（Shop→ShopInfo→出店）。
+// ===================== FrameView 玩家子弹渲染（task-44） =====================
+
+/// 玩家子弹视图（`slot` 按 `$80` 起、`type_code` 0..5 不命名；坐标=`$04EE/$055E`）。
+fn bullet(slot: u8, x: u8, y: u8, type_code: u8) -> BulletView {
+    BulletView { slot, x, y, type_code }
+}
+
+#[test]
+fn player_bullets_draw_at_proven_coordinates_and_count_change_changes_pixels() {
+    // 0 弹：目标位置为背景；1 弹：目标位置出现占位块；像素/画布 hash/view 摘要均变化。
+    let empty = FrameView { mode: Mode::Combat, ..FrameView::default() };
+    let mut one = empty;
+    one.player_bullets[0] = Some(bullet(0x80, 40, 50, 0));
+    one.player_bullets_live = 1;
+
+    let mut r_empty = FrameRenderer::new();
+    r_empty.set_frame_view(empty);
+    let mut r_one = FrameRenderer::new();
+    r_one.set_frame_view(one);
+    assert_eq!(pixel(r_empty.composed_canvas(), 40, 50), CLEAR_RGBA, "0 弹⇒背景");
+    assert_eq!(
+        pixel(r_one.composed_canvas(), 40, 50),
+        PLAYER_BULLET_PLACEHOLDER_RGBA,
+        "Some 弹⇒按已证坐标面画占位块"
+    );
+    for d in 0..PLAYER_BULLET_PLACEHOLDER_SIZE as usize {
+        assert_eq!(
+            pixel(r_one.composed_canvas(), 40 + d, 50 + d),
+            PLAYER_BULLET_PLACEHOLDER_RGBA,
+            "占位块为 4×4（占位尺寸，非原版弹型）"
+        );
+    }
+    assert_ne!(
+        r_empty.composed_canvas(),
+        r_one.composed_canvas(),
+        "子弹数量变化⇒画布变化"
+    );
+    assert_ne!(
+        frame_view_digest(&empty),
+        frame_view_digest(&one),
+        "view 摘要纳入子弹字段"
+    );
+
+    // 多弹：各自坐标独立绘制；None 槽不画。
+    let mut multi = empty;
+    multi.player_bullets[0] = Some(bullet(0x80, 20, 30, 1));
+    multi.player_bullets[5] = Some(bullet(0x85, 200, 100, 5));
+    let mut r_multi = FrameRenderer::new();
+    r_multi.set_frame_view(multi);
+    assert_eq!(
+        pixel(r_multi.composed_canvas(), 20, 30),
+        PLAYER_BULLET_PLACEHOLDER_RGBA,
+        "弹1 坐标"
+    );
+    assert_eq!(
+        pixel(r_multi.composed_canvas(), 200, 100),
+        PLAYER_BULLET_PLACEHOLDER_RGBA,
+        "弹2 坐标"
+    );
+    assert_eq!(pixel(r_multi.composed_canvas(), 100, 60), CLEAR_RGBA, "无弹处=背景");
+
+    // 边缘裁剪（右下角）：不 panic 不越界。
+    let mut edge = empty;
+    edge.player_bullets[0] = Some(bullet(0x80, 255, 239, 0));
+    let mut r_edge = FrameRenderer::new();
+    r_edge.set_frame_view(edge);
+    assert_eq!(
+        pixel(r_edge.composed_canvas(), 255, 239),
+        PLAYER_BULLET_PLACEHOLDER_RGBA,
+        "边缘弹裁剪后右下角像素"
+    );
+}
+
+/// 菜单/模式派发脚本：解锁帧后 START 两次（Title→Menu→Shop）、B 两次（Shop→ShopInfo→出店）；
+/// Combat 后（f≥1300）按住 B 触发已证连射（task-37）以验证 shell 侧子弹渲染。
 fn menu_script(frame: u64) -> Buttons {
     let mut b = Buttons::default();
     if matches!(frame, 555..=557 | 575..=577) {
         b.start = true;
     }
     if matches!(frame, 600..=602 | 625..=627) {
+        b.b = true;
+    }
+    if (1300..1400).contains(&frame) {
         b.b = true;
     }
     b
@@ -433,7 +511,7 @@ fn menu_dispatch_progresses_modes_with_platform_input_only() {
     let mut last_tag = game_shell::snapshot::mode_tag(host.mode());
     let mut observed = vec![last_tag];
     let mut gameplay_ticks = 0u32;
-    for f in 0..1100u64 {
+    for f in 0..1400u64 {
         input.set_buttons(menu_script(f));
         let out = host.tick(&input, &mut renderer, &mut audio);
         if out.gameplay_tick {
@@ -455,16 +533,56 @@ fn menu_dispatch_progresses_modes_with_platform_input_only() {
     assert!(host.stage_loaded(), "转场帧 STG-01 已装载（A 级 f1193 锚）");
     assert_eq!(format!("{:?}", host.mode()), "Combat");
 
-    // 终态 FrameView：已证字段可用；敌坐标未证⇒v1 恒 None（不画）。
+    // 终态 FrameView：已证字段可用；敌坐标未证⇒v1 恒 None（不画）；Combat 后按住 B ⇒ 玩家弹出现。
     let view = host.frame_view();
     assert_eq!(view.mode, Mode::Combat);
     assert_eq!(view.stage, 1);
     assert_eq!(view.hud.stage, 1, "HUD 关号=已证 $180");
     assert!(view.enemy_slots.iter().all(|s| s.position.is_none()), "敌坐标写者链未证⇒恒 None");
+    assert!(
+        view.player_bullets.iter().flatten().count() > 0,
+        "按住 B 后 FrameView 暴露玩家弹（task-37 已证坐标面）"
+    );
     renderer.set_frame_view(view);
     assert_eq!(
         pixel(renderer.composed_canvas(), 0, 0),
         MODE_MARKER_COLORS[8],
         "Combat 模式角标（占位）"
+    );
+
+    // 子弹数量变化 ⇒ 画布对应像素变化：取一颗在画布内的弹，验证其坐标处=占位色，
+    // 且把该弹置 None 后同位置不再是占位色（真·像素来源=子弹坐标面）。
+    let in_bounds = |b: &BulletView| {
+        let (x, y) = (usize::from(b.x), usize::from(b.y));
+        x + PLAYER_BULLET_PLACEHOLDER_SIZE as usize <= CANVAS_W
+            && y + PLAYER_BULLET_PLACEHOLDER_SIZE as usize <= 240
+    };
+    let bullet = view
+        .player_bullets
+        .iter()
+        .flatten()
+        .copied()
+        .find(in_bounds)
+        .expect("至少一颗在画布内的玩家弹");
+    let (bx, by) = (usize::from(bullet.x), usize::from(bullet.y));
+    assert_eq!(
+        pixel(renderer.composed_canvas(), bx, by),
+        PLAYER_BULLET_PLACEHOLDER_RGBA,
+        "子弹坐标处=子弹占位色（已证坐标面）"
+    );
+    let mut view_no_bullets = view;
+    view_no_bullets.player_bullets = [None; 20];
+    view_no_bullets.player_bullets_live = 0;
+    let mut renderer_no_bullets = FrameRenderer::new();
+    renderer_no_bullets.set_frame_view(view_no_bullets);
+    assert_ne!(
+        pixel(renderer_no_bullets.composed_canvas(), bx, by),
+        PLAYER_BULLET_PLACEHOLDER_RGBA,
+        "去掉子弹⇒该像素不再为子弹占位色"
+    );
+    assert_ne!(
+        renderer_no_bullets.composed_canvas(),
+        renderer.composed_canvas(),
+        "子弹数量变化⇒画布变化"
     );
 }

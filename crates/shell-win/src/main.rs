@@ -5,12 +5,14 @@
 //! （软缓冲合成 + 整数倍缩放/黑边上屏）。宿主返回的状态/画布/`FrameView`/音频写流全部真实消费。
 //!
 //! v2 呈现（task-10）：`Host::frame_view()` 只读视图 → 平台侧覆盖层（模式占位角标 / HUD 数值域占位编码 /
-//! 敌槽 position+type 均 Some 时的占位块）；菜单/模式派发在 `Host::tick` 内，本层只透传按键。
+//! 敌槽 position+type 均 Some 时的占位块）；**v2+（task-44）**：玩家子弹按已证坐标面
+//! （`$04EE/$055E`）画 4×4 占位块；菜单/模式派发在 `Host::tick` 内，本层只透传按键。
 //!
 //! `--selftest-frames N`：无窗口确定性自检（见 `shell_win::run_selftest`），打印签名后正常退出。
 //!
-//! 未证域（AGENTS.md §3 / platform-shell.md §8）：敌坐标写者链/图样、玩家子弹坐标（H-01）、
-//! HUD 字形/布局、Boss/EN-9+、音效合成等一律不画/不发明（`TODO(shell-v2)`）；音频 PCM=静音占位显式。
+//! 未证域（AGENTS.md §3 / platform-shell.md §8）：敌坐标写者链/图样、**玩家子弹图样/弹型/弹道**
+//! （坐标面已证，视觉未证⇒占位块）、HUD 字形/布局、Boss/EN-9+、音效合成等一律占位/不画/不发明
+//! （`TODO(shell-v2)`）；音频 PCM=静音占位显式。
 
 use std::num::NonZeroU32;
 use std::sync::Arc;

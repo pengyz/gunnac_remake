@@ -15,11 +15,12 @@
 //! - 主循环（`src/main.rs`）只经 `game_shell::Host` 驱动：输入采样→`Host::advance`（60Hz 固定步）
 //!   →呈现；宿主返回的宿主状态/画布/音频写流全部真实消费；
 //! - `--selftest-frames N` 无窗口确定性自检（见 [`run_selftest`]）；
-//! - 可见性骨架：CHR 背景（平台侧占位）+ 玩家 8×8（game-shell 已证坐标面）；未证域显式不画。
+//! - 可见性骨架：CHR 背景（平台侧占位）+ 玩家 8×8（game-shell 已证坐标面）+ `FrameView` 覆盖层
+//!   （模式占位角标 / HUD 数值域占位编码 / 敌槽 Some 门 / 玩家子弹已证坐标面占位块）。
 //!
 //! **未证不发明**（AGENTS.md §3）：CHR 背景的调色板=灰阶占位（C 级未证，非原版调色板）；
-//! 敌精灵/子弹/HUD/文本/结局卡不画（game-shell v1 未暴露/未证）；音效/音乐合成器未证 ⇒ 静音
-//! 占位显式。`TODO(shell-v1)` 逐条登记。
+//! 敌精灵图样/坐标写者链、玩家子弹图样/弹型/弹道、HUD 字形/布局/文本、结局卡未证 ⇒ 占位或不画；
+//! 音效/音乐合成器未证 ⇒ 静音占位显式。`TODO(shell-v2)` 逐条登记。
 
 #![forbid(unsafe_code)]
 
@@ -636,6 +637,12 @@ pub const HUD_STAGE_SLOT_Y: i32 = 216;
 /// HUD 占位色（**非原版调色板**）。
 pub const HUD_PLACEHOLDER_RGBA: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
 
+/// 玩家子弹占位块边长（像素；**非原版弹型/尺寸**——图样/尺寸未证，`TODO(shell-v2)`）。
+pub const PLAYER_BULLET_PLACEHOLDER_SIZE: i32 = 4;
+
+/// 玩家子弹占位色（**非原版弹型/调色板**；取唯一色便于 GUI PrintWindow 像素抽样）。
+pub const PLAYER_BULLET_PLACEHOLDER_RGBA: [u8; 4] = [0x00, 0xE0, 0x40, 0xFF];
+
 /// 像素块填充（像素坐标；越界裁剪不回绕）。
 fn fill_block(dst: &mut [u8], x: i32, y: i32, w: i32, h: i32, color: [u8; 4]) {
     for dy in 0..h {
@@ -718,6 +725,26 @@ pub fn frame_view_digest(view: &FrameView) -> u64 {
         let pos = slot.position.unwrap_or((0xFF, 0xFF));
         hash_bytes(&mut h, &[pos.0, pos.1]);
     }
+    // task-44：玩家子弹（task-37 暴露的已证坐标面）逐槽入摘要；None/Some 用显式 tag 区分。
+    for bullet in &view.player_bullets {
+        match bullet {
+            None => hash_bytes(&mut h, &[0]),
+            Some(b) => hash_bytes(&mut h, &[1, b.slot, b.x, b.y, b.type_code]),
+        }
+    }
+    // task-44：本帧敌命中事件（task-37）同样入摘要（事件面可观测；None/Some 显式 tag）。
+    for hit in &view.hits_this_frame {
+        match hit {
+            None => hash_bytes(&mut h, &[0]),
+            Some(e) => {
+                hash_bytes(
+                    &mut h,
+                    &[1, e.enemy_slot, e.bullet_slot, e.damage, u8::from(e.fail_closed)],
+                );
+                hash_u64(&mut h, e.frame);
+            }
+        }
+    }
     hash_bytes(&mut h, &[view.hud.bomb_ammo, view.hud.stage]);
     for (digit, show) in view.hud.money_digits {
         hash_bytes(&mut h, &[digit, u8::from(show)]);
@@ -732,7 +759,9 @@ pub fn frame_view_digest(view: &FrameView) -> u64 {
 ///   `stage` 4 位位行（固定占位槽，**非原版字形/布局/文本**）；
 /// - **敌槽**：仅 `position: Some(_)` 且 `type_code: Some(_)` 画 8×8 占位块（v1 运行态 position
 ///   恒 `None` ⇒ 不画；**禁止用 type_code 反推坐标**；图样未证=`TODO(shell-v2)`）；
-/// - **玩家子弹**：**不画**（FrameView 无坐标面；H-01 未证）——只在 [`frame_view_digest`] 登记计数。
+/// - **玩家子弹**（task-44）：`player_bullets` 中 `Some(BulletView)` 按已证坐标面
+///   （`$04EE` x / `$055E` y；存活=弹网格空槽判）画 **4×4 占位块**；图样/尺寸/颜色未证
+///   ⇒ 占位并标 `TODO(shell-v2)`，**不发明弹型视觉/弹道**；槽/坐标/型值同时入 [`frame_view_digest`]。
 pub fn draw_frame_view_overlay(target: &mut [u8], view: &FrameView) {
     let tag = usize::from(game_shell::snapshot::mode_tag(view.mode));
     let mode_color = MODE_MARKER_COLORS[tag.min(MODE_MARKER_COLORS.len() - 1)];
@@ -753,7 +782,18 @@ pub fn draw_frame_view_overlay(target: &mut [u8], view: &FrameView) {
             fill_block(target, i32::from(pos.0), i32::from(pos.1), 8, 8, color);
         }
     }
-    // TODO(shell-v2)：玩家子弹坐标/弹道未证（H-01）⇒ 不画；活弹计数只入 view 摘要。
+    // 玩家子弹（task-44）：只画已证坐标面（`$04EE`/`$055E`，存活由 game-shell 空槽判定）；
+    // 图样/尺寸/颜色未证 ⇒ 4×4 纯色占位块 + TODO(shell-v2)（不发明弹型视觉/弹道）。
+    for bullet in view.player_bullets.iter().flatten() {
+        fill_block(
+            target,
+            i32::from(bullet.x),
+            i32::from(bullet.y),
+            PLAYER_BULLET_PLACEHOLDER_SIZE,
+            PLAYER_BULLET_PLACEHOLDER_SIZE,
+            PLAYER_BULLET_PLACEHOLDER_RGBA,
+        );
+    }
 }
 
 /// 在 v1 合成（CHR 背景+game-shell 画布）之上叠加 `FrameView` 覆盖层。
@@ -1110,10 +1150,11 @@ mod view_tests {
         FrameRenderer, FrameView, CLEAR_RGBA, ENEMY_PLACEHOLDER_COLORS, GREY4, HUD_BOMB_SLOT_X,
         HUD_BOMB_SLOT_Y, HUD_MONEY_SLOT_PITCH, HUD_MONEY_SLOT_X, HUD_MONEY_SLOT_Y,
         HUD_PLACEHOLDER_RGBA, HUD_STAGE_SLOT_X, HUD_STAGE_SLOT_Y, MODE_MARKER_COLORS,
+        PLAYER_BULLET_PLACEHOLDER_RGBA, PLAYER_BULLET_PLACEHOLDER_SIZE,
     };
     use game_core::flow::Mode;
     use game_platform::{Renderer, CANVAS_LEN, CANVAS_W};
-    use game_shell::EnemySlotView;
+    use game_shell::{BulletView, EnemyHitEvent, EnemySlotView};
 
     /// 基线 FrameView（Combat + 其余默认：空敌槽/零 HUD；task-37 起用 `..Default::default()`）。
     fn view_fixture() -> FrameView {
@@ -1257,5 +1298,60 @@ mod view_tests {
         assert_ne!(before, after, "覆盖层改变合成结果");
         assert_eq!(renderer.presents(), 1, "set_frame_view 不增加 present 计数");
         assert_eq!(px(renderer.composed_canvas(), 0, 0), MODE_MARKER_COLORS[4]);
+    }
+
+    #[test]
+    fn player_bullet_overlay_draws_placeholder_at_proven_coordinates_and_clips() {
+        let mut view = view_fixture();
+        view.player_bullets[0] = Some(BulletView { slot: 0x80, x: 20, y: 30, type_code: 2 });
+        let mut canvas = black_canvas();
+        draw_frame_view_overlay(&mut canvas, &view);
+        for dy in 0..PLAYER_BULLET_PLACEHOLDER_SIZE as usize {
+            for dx in 0..PLAYER_BULLET_PLACEHOLDER_SIZE as usize {
+                assert_eq!(
+                    px(&canvas, 20 + dx, 30 + dy),
+                    PLAYER_BULLET_PLACEHOLDER_RGBA,
+                    "已证坐标面（$04EE/$055E）⇒4×4 占位块（尺寸/颜色未证）"
+                );
+            }
+        }
+        let outside = 20 + PLAYER_BULLET_PLACEHOLDER_SIZE as usize;
+        assert_eq!(px(&canvas, outside, 30), CLEAR_RGBA, "占位块外为背景（无弹型视觉发明）");
+
+        // 边缘裁剪：右下角不 panic/不越界。
+        let mut view = view_fixture();
+        view.player_bullets[0] = Some(BulletView { slot: 0x80, x: 255, y: 239, type_code: 0 });
+        let mut canvas = black_canvas();
+        draw_frame_view_overlay(&mut canvas, &view);
+        assert_eq!(px(&canvas, 255, 239), PLAYER_BULLET_PLACEHOLDER_RGBA);
+    }
+
+    #[test]
+    fn view_digest_covers_bullets_and_hits_fields() {
+        let base = view_fixture();
+        assert_eq!(frame_view_digest(&base), frame_view_digest(&base), "同视图⇒同摘要");
+
+        let mut with_bullet = base;
+        with_bullet.player_bullets[0] =
+            Some(BulletView { slot: 0x80, x: 20, y: 30, type_code: 2 });
+        assert_ne!(
+            frame_view_digest(&base),
+            frame_view_digest(&with_bullet),
+            "摘要纳入玩家子弹字段"
+        );
+        let mut moved = with_bullet;
+        moved.player_bullets[0] =
+            Some(BulletView { slot: 0x80, x: 21, y: 30, type_code: 2 });
+        assert_ne!(frame_view_digest(&with_bullet), frame_view_digest(&moved), "坐标敏感");
+
+        let mut with_hit = base;
+        with_hit.hits_this_frame[0] = Some(EnemyHitEvent {
+            frame: 7,
+            enemy_slot: 9,
+            bullet_slot: 0x80,
+            damage: 2,
+            fail_closed: false,
+        });
+        assert_ne!(frame_view_digest(&base), frame_view_digest(&with_hit), "摘要纳入命中事件面");
     }
 }
