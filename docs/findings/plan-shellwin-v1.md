@@ -190,12 +190,18 @@ platform-shell.md §4 状态与实现相符（不声称未实现能力）；独�
 | `16fb5b2` | `chore(status)`：`rust_test_count` 326→**338**——**由 Lead 依 master-plan §5 进度类基线授权执行（非实施方自行提交）**；内容经独立复核确认无下调（`git grep -c '#[test]'`=338=新基线） |
 | 本卡（task-18）follow-up | `fix/feat(platform)` + `docs`：shell-win v1 复核 findings 收口（B1/S1/E1-E5/S2；见 §9.6；commit 见 `git log`） |
 
+> 【2026-10-18 归属注（task-25 F2）】上表 task-18 收口 commit `ddb1558` 的**自身 message 未点名**其
+> 并发误卷内容——该 commit 同时带入了 task-9 的 `docs/spec/platform-shell.md` §3 主体等改动；
+> **归属以三处留痕为准**：①[gotcha-git-add-commit-atomicity.md](../knowledge/gotcha-git-add-commit-atomicity.md)
+> （L47-55）；②[plan-playable-loop.md](plan-playable-loop.md) §10（L214-226）；③`b94ede8` commit message
+> （"platform-shell §3 主体随 ddb1558 入库…"）。历史不 rewrite；此后 commit message 应直接点明捕获的他人内容。
+
 **§9.2 门禁与实测输出（本机 Windows，2026-10-18）**
 
 | 验收项 | 实际命令 | 结果 |
 |---|---|---|
 | 编译 | `cargo build -p shell-win` | 成功（0 error；仅既有 game-core `scroll_frames` dead_code 警告） |
-| 单元/集成测试 | `cargo test -p shell-win` | lib 3 + smoke 17 = **20 passed / 0 failed** |
+| 单元/集成测试 | `cargo test -p shell-win` | lib 3 + smoke 17 = **20 passed / 0 failed**（**task-1 时点 20；task-18 后 24 = lib 5 + smoke 19，见 §9.6**） |
 | 全量 | `cargo test --workspace` | 全绿（rust-tests 门禁实测 **338 = `#[test]` 静态计数**；该树运行态 337 passed + 1 ignored、0 failed；基线 326，后由 Lead 授权上调 338） |
 | 总闸 | `python gates/cli.py check` | **CHECK: PASS**（PASS=11 FAIL=0 SKIP=1[addr-bridge] TOLERATED=0；rust_test_count ratchet WARN 见 §9.4） |
 | 自检（1） | `cargo run -p shell-win -- --selftest-frames 300` | 退出码 0，输出见下 |
@@ -227,7 +233,8 @@ selftest: OK
 - `crates/shell-win/src/main.rs`：winit 0.30 `ApplicationHandler` + softbuffer `WindowRenderer`；
   `Host::advance` 固定步主循环；`--selftest-frames N`
 - `crates/shell-win/tests/smoke.rs`：**17 项**契约测试；crate 级 **20 项 = lib 3 + smoke 17**
-  （键位/路径/缩放黑边/CHR 合成/六 trait/自检确定性；E1 口径）
+  （键位/路径/缩放黑边/CHR 合成/六 trait/自检确定性；E1 口径）——**以上为 task-1 时点数字；
+  task-18 后 24 项 = lib 5 + smoke 19，见 §9.6**
 - `docs/spec/platform-shell.md` §4.1/§4.2：状态回填 + 自检记录值
 
 **§9.4 遗留项 / TODO（未证域，未实现/未声称）**
@@ -279,8 +286,13 @@ findings）。本卡只做小修，不改可玩性功能（task-9/10 负责）�
 |---|---|---|
 | 单 crate | `cargo test -p shell-win` | lib **5** + smoke **19** = **24 passed / 0 failed**（task-1 基线 20 + 本卡新增 4） |
 | 自检确定性 | `cargo run -p shell-win -- --selftest-frames 300` ×2 | 两次 stdout 逐行一致、exit 0；stderr 打印实际资产根；`rom_len=Some(262160)` |
-| 全量 | `cargo test --workspace` | 见交付汇报（并发 task-9 工作树口径） |
-| 总闸 | `python gates/cli.py check` | 见交付汇报（`CHECK: PASS`；rust_test_count ratchet WARN 由 Lead 处置） |
+| 全量 | `cargo test --workspace` | **全绿**（exit 0；task-27 收口时点 HEAD `167d8a9` 实测） |
+| 总闸 | `python gates/cli.py check` | **CHECK: PASS**（PASS=11 FAIL=0 SKIP=1[addr-bridge] TOLERATED=0；task-27 收口时点 HEAD `167d8a9` 实测；rust_test_count ratchet WARN 由 Lead 处置） |
+
+> 【2026-10-18 自足指针补注（task-25 F5）】上表已回填实测值，不再依赖"交付汇报"：本机同 HEAD
+> `167d8a9` 复跑 `cargo test -p shell-win` = lib 5 + smoke 19 = **24 passed / 0 failed**、
+> `cargo test --workspace` exit 0 **全绿**、`gates/cli.py check` **PASS=11 FAIL=0 SKIP=1 TOLERATED=0**；
+> task-25 复核在 HEAD `0cf42f0` 独立复跑同值（见 [adversarial-review-shell-fixes.md](adversarial-review-shell-fixes.md) §4）。
 
 > 口径说明：§9.2 的 `host_signature` 等记录值是 **task-1 交付树（`a93704b`）时点值**；后续
 > game-shell（task-9）扩展签名覆盖字段会导致该值变化——属预期演进，以各卡交付记录为准；
