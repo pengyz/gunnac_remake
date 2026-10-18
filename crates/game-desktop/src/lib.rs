@@ -99,13 +99,9 @@ impl Default for Canvas {
 /// game-platform::Renderer 缝实现（占位语义：x,y=像素坐标，tile=8×8 块绘制）。
 /// 注：trait 占位形状的坐标语义待 S4/L4 锁定（AGENTS.md §2）；此实现仅骨架自洽。
 impl game_platform::Renderer for Canvas {
-    fn clear(&mut self) {
-        self.clear([0, 0, 0, 255]);
-    }
-    fn draw_tile(&mut self, tile: u8, x: u8, y: u8, palette: u8) {
-        let _ = palette; // 占位：palette 参数语义未证（待 L4 对拍）
-        let blank = [[tile & 3; 8]; 8];
-        self.draw_tile8(&blank, x as i32, y as i32, &GREY4);
+    /// 256×240 RGBA Canvas（platform-shell.md §2 锁定形状）。
+    fn canvas_mut(&mut self) -> &mut [u8] {
+        &mut self.pixels
     }
     fn present(&mut self) {}
 }

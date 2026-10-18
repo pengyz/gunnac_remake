@@ -49,18 +49,23 @@ pub trait Input {
     fn buttons(&self) -> Buttons;
 }
 
-/// 渲染缝（占位形状）：Stage A 只需要“把已解析的 tile/文本记录画到 PPU 视图”的最小面。
-/// 具体语义由 S5 实现 + L4 差分锁定；此处不发明行为。
+/// 渲染缝（**本阶段锁定**——platform-shell.md §2）：256×240 逻辑帧 RGBA Canvas 呈现
+/// （game-desktop Canvas 同语义）+整数倍缩放保比例（黑边）+present。已证语义最小面
+/// （Canvas 像素）——绘制细节=实现侧（shell 自有），trait 不承载未证行为。
 pub trait Renderer {
-    fn clear(&mut self);
-    fn draw_tile(&mut self, tile: u8, x: u8, y: u8, palette: u8);
+    /// 256×240 RGBA Canvas（像素级呈现——L4 同语义）。
+    fn canvas_mut(&mut self) -> &mut [u8];
+    /// 整数倍缩放保比例呈现（黑边——shell 实现侧缩放）。
     fn present(&mut self);
 }
 
-/// 音频缝（占位形状）：Stage B 音频重制前只留 id 面。
+/// 音频缝（**本阶段锁定**——platform-shell.md §2）：ApuWrite 流消费（(frame,reg,value)
+/// 三元组——L-Audio 写流 hash 面同源）→混音输出；无合成器期=流透传/静音占位显式。
 pub trait Audio {
-    fn play_sfx(&mut self, id: u16);
-    fn set_music(&mut self, id: u16);
+    /// ApuWrite 流消费（帧序三元组——L-Audio 同源）。
+    fn write_apu(&mut self, frame: u32, reg: u16, value: u8);
+    /// 帧推进（60Hz——shell 侧时钟驱动）。
+    fn end_frame(&mut self, frame: u32);
 }
 
 /// 存档缝（占位形状）：A 阶段预留（D2 扩展缝）。
