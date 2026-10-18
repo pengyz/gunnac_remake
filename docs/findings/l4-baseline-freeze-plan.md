@@ -175,6 +175,10 @@ git log -1 --format='%H %ad %s' --date=iso                >> analysis/p0-0-env.t
 
 > 依据：22 对旧 `.render.log` 的 probe 签名分组（§3.1）+ 现行场景帧数/probe 配置（§11 工具事实）。
 > "重启后旧产物自动归档"：`scenario_run.py` 会把同名旧产物移到 `analysis/traces/.archive/<name>-<stamp>/`（run 隔离）。
+> **长场景超时（2026-10-18 task-91 / P0-0 采集新根因）**：I3/I4/I5/I5b/I6/I6b 预计 >100s——Mesen testRunner
+> 自带 `TestRunnerTimeout` 默认 **100s**；`scenario_run.py` headless 会**自动**给 Mesen 传 `--timeout`
+> （见 §2.2 超时注）。**手工**调用 `Mesen.exe --testRunner` 时必须自带 `--timeout=<≥场景预算秒>`，
+> 且采集后必须核 `done!=null && trace_lines==frames`（防 ~100s 截断产物混入基线）。
 
 | 序 | 场景/overlay | 为什么需要 | 帧数 | probe_mem（注册数=头行数） | 预计耗时 | 产物（analysis/traces/ 下） |
 |---|---|---|---|---|---|---|
@@ -240,6 +244,15 @@ cargo run -q -p game-oracle --bin phase-batch -- tas-stg08b2-direct
 > 其余 `python ...` / `cargo ...` 命令原样可用；多行 heredoc 脚本块（§3.3 等）建议在 Git Bash 执行或
 > 存为 `.py` 后 `python <file>`（不要直接在 PowerShell 里贴 heredoc）。
 
+> **headless 超时注（2026-10-18 task-91）**：上面命令里的 `--timeout <秒>` 是**驱动级**超时
+> （`scenario_run.run_scenario(timeout_s=…)`）；`scenario_run.py` 的 headless 分支会**自动**再给
+> `Mesen.exe` 传 **Mesen 级** `--timeout=max(120, timeout_s+120)`（`--testRunner` 参数区内），
+> **无需手填 Mesen 级**。但若绕过驱动**手工** `Mesen.exe --testRunner <lua> <rom>`：**必须自带
+> `--timeout=<≥场景预算秒>`**——Mesen testRunner 自带 `TestRunnerTimeout` 默认 **100s**（上游源码
+> `CommandLineHelper.cs:31`），长场景（stg08 34000f / tas-stg08b2 40000f）会在 ~100s 被 Mesen 自身强停
+> （trace 截断、`done` 缺失、`wall≈100-120s`）。**该失败不一定表现为 `timed_out=true`**（Mesen 自停、
+> 驱动在进程退出后 20s 宽限即收工）⇒ **采集后必须校验 `done!=null && trace_lines==frames`**（见下判据）。
+
 **每条采集的期望输出**（`scenario_run.py` 打印 + 文件判据）：
 ```
 == scenario run: <name> ==
@@ -249,7 +262,9 @@ cargo run -q -p game-oracle --bin phase-batch -- tas-stg08b2-direct
   trace: analysis/traces/<name>.frames.jsonl
   run清单: analysis/traces/<name>.run.json
 ```
-**判据（逐场景）**：`run.json` 中 `timed_out=false`、`done!=null`、`trace_lines==frames`；
+**判据（逐场景；防截断，2026-10-18 task-91 强化）**：`run.json` 中 `timed_out=false`、**`done!=null`**、
+**`trace_lines==frames`**（**三项缺一不可**：testRunner 内置 100s 超时会造成 `timed_out=false` 但 `done`
+缺失/`trace_lines<frames` ⇒ 截断产物不得进入基线；见上方超时注）；
 `.probe.jsonl` **头行数按 §2.4 表断言**（title 无文件；gameplay 15；stg03/stg08 **8**；`tas-stg08b2-direct` **10**；
 **`stg06-timeline` 0 → 不产 `.probe.jsonl`**；`l4-stg06-pass2` 8），并记录到 `analysis/repro/probe_counts.tsv`
 （用于 §3.3 校验）。【F49-2 更正】**

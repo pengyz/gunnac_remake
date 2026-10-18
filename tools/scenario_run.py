@@ -545,10 +545,13 @@ def run_scenario(name_or_path: str, timeout_s: float = 1800.0, keep_gen: bool = 
     # headless（Mesen2 .exe + --testRunner <lua> <rom>）：不需要显示/Xvfb；脚本 emu.stop 后
     # testRunner 自行退出。GUI 模式（Linux）：自管 Xvfb + DISPLAY 注入（原逻辑保留）。
     xvfb = None
+    # Mesen2 testRunner 自带超时（源码 TestRunnerTimeout 默认 100s）——长场景（stg08 34000f 等）
+    # 必须在命令行显式给 `--timeout=<秒>`，否则会在 ~100s 处被强停（trace 截断、DONE 不落）。
+    mesen_timeout_s = max(120, int(timeout_s) + 120)
     try:
         if HEADLESS:
             proc = subprocess.Popen(
-                [str(MESEN), "--testRunner", str(lua_path), str(ROM)],
+                [str(MESEN), "--testRunner", f"--timeout={mesen_timeout_s}", str(lua_path), str(ROM)],
                 cwd=ROOT, stdout=mesen_log, stderr=subprocess.STDOUT, text=True,
             )
         else:

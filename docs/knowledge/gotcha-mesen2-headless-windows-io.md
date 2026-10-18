@@ -7,7 +7,7 @@ status: confirmed
 
 ## 现象
 
-两段式坑（环境层 + 配置层），都会让采集**看起来在跑、实际没产物**：
+多段式坑（环境层 + 配置层 + 超时层），都会让采集**看起来在跑、实际没产物/产物被截断**：
 
 1. **本机 WSL2 Ubuntu 22.04 里跑 Linux 版 Mesen2 2.1.1 的 testRunner 调用：崩**——
    `terminate called after throwing an instance of 'std::bad_cast'`，**exit 134**（SIGABRT / core dumped）。
@@ -28,6 +28,11 @@ status: confirmed
    但需要 Lua `io`/`os` 完成的落盘（trace / shots / DONE）不生效——Lua 的 IO 权限默认关闭。
 3. **改错位置不生效**：把 `%USERPROFILE%\Documents\Mesen2\settings.json` **顶层**的
    `ScriptWindowConfig.AllowIoOsAccess` 改 `true`，headless 下 io/os 仍不可用。
+4. **长场景被 testRunner 内置超时截断（~100s）**：`stg08-timeline`（34000f）/`tas-stg08b2-direct`（40000f）
+   等长场景若未显式给 `--timeout=<秒>`，会在 **~100s** 处被 Mesen **自身**强停——症状：`trace_lines` 明显
+   少于 `frames`、`done` 文件缺失、`wall≈100-120s`；**注意 `run.json.timed_out` 可能仍为 `false`**
+   （是 Mesen 自停而非驱动超时，驱动只在进程退出后给 20s 宽限再收工）——只看 `timed_out` 会漏判，
+   必须同时核 `done!=null && trace_lines==frames`。
 
 ## 为什么
 
@@ -38,6 +43,11 @@ status: confirmed
   脚本用 `emu.stop(code)` 结束，testRunner 随后自行退出（驱动以 DONE 文件 + 退出状态判完成）。
 - IO 开关的**生效键在 `Debug` 段**：`Debug.ScriptWindow.AllowIoOsAccess: true`。
   settings.json 里可能同时存在顶层 `ScriptWindowConfig` 段（本机实测两段并存），**只改顶层不改变 headless 行为**。
+- **长场景预算 > testRunner 默认看门狗**：Mesen testRunner 自带 `TestRunnerTimeout`（默认 **100s**；
+  上游源码 `CommandLineHelper.cs:31`，Mesen2 源码不在本仓库，未独立复核）⇒ 长场景必须在命令行显式
+  `--timeout=<秒>`（Mesen 级参数）。`tools/scenario_run.py` 的 headless 分支**已自动**追加
+  `--timeout=max(120, timeout_s+120)`（`timeout_s`=驱动级 `--timeout` 参数）——**手工**调用
+  `Mesen.exe --testRunner` 才需自带；只给驱动级 `--timeout` 而绕过驱动时对 Mesen 无效。
 - `AutoStartScriptOnLoad` 是 GUI 脚本窗口的装载行为；**未观察到** `--testRunner` 路径依赖它
   （**未做 A/B**，本条不据此下断言——本机 settings 该键当前=True，成功跑不能区分"依赖/不依赖"）。
 
@@ -50,6 +60,9 @@ status: confirmed
   不要先怀疑 ROM/场景 DSL/驱动。
 - WSL/Linux 下遇到 `std::bad_cast` 立即停：不要重试 Linux 版，改走 Windows 宿主 headless
   （POSIX 采集路径的另一分支另行评估）。
+- 采集**长场景**（stg08 34000f / tas-stg08b2 40000f 等，预计 >100s）时：优先用驱动（自动传 Mesen 级
+  `--timeout`）；**手工** `Mesen.exe --testRunner` 必须自带 `--timeout=<≥场景预算秒>`，且采集后核
+  `done!=null && trace_lines==frames`（防 ~100s 截断产物混入基线）。
 - 改 settings.json 前**先备份**：它是用户级文件，会影响本机全部 Mesen 脚本。
 
 ## 证据指针
@@ -61,10 +74,19 @@ status: confirmed
 - **驱动集成（代码事实）**：`tools/scenario_run.py`（用内容锚，行号会漂移）：
   `elif os.name == "nt": MESEN = ROOT / "tools" / "mesen2" / "Mesen.exe"`（POSIX 仍取无扩展名 `Mesen`）；
   `HEADLESS = os.environ.get("GUNNAC_HEADLESS", "1" if MESEN.suffix.lower() == ".exe" else "0") == "1"`；
-  headless 分支命令 `[str(MESEN), "--testRunner", str(lua_path), str(ROM)]`（无 Xvfb）；
+  headless 分支命令（含 2026-10-18 长场景超时修复）：
+  `[str(MESEN), "--testRunner", f"--timeout={mesen_timeout_s}", str(lua_path), str(ROM)]`，
+  其中 `mesen_timeout_s = max(120, int(timeout_s) + 120)`（无 Xvfb）；
   非 headless 分支保留自管 Xvfb + 位置参数装载；`GUNNAC_MESEN` 可覆盖可执行路径。
-  入库状态：headless 支持**已入库 commit `5a675b8`**
-  （`feat(tools): scenario_run.py 支持 Mesen2 headless（Windows testRunner）采集`；task-80 独立复核 pass）。
+  入库状态：headless 支持**已入库 commit `5a675b8`**（`feat(tools): scenario_run.py 支持 Mesen2
+  headless（Windows testRunner）采集`；task-80 复核 pass）；**Mesen 级 `--timeout` 自动追加=2026-10-18
+  工作区修复（task-91，复核后入库）——引用前验证 `git log -1 -- tools/scenario_run.py` 与源码含
+  `mesen_timeout_s`**。
+- **长场景 ~100s 截断（testRunner 内置超时）**：`TestRunnerTimeout` 默认 **100s** 的依据=上游源码
+  `CommandLineHelper.cs:31`（Mesen2 源码不在本仓库，未独立复核；本机 `Mesen.exe` 二进制内含
+  `TestRunnerTimeout` 字符串可作配置项存在的旁证）；驱动自动传 `--timeout` 的代码见上一条；
+  症状识别见「现象」④；**采集后验收判据=`run.json.done != null && trace_lines == frames`**
+  （**不能只看 `timed_out`**：Mesen 自停时驱动判 `timed_out=false` 但 `done` 缺失）。
 - **环境实测（2026-10-18，Windows 本机；Lead 环境打通）**：
   `python tools/scenario_run.py run title-menu --timeout 600` → 输出行
   `frames: 1080  trace_lines: 1080  captures: 37  shots: 37  wall: ~4s` + `DONE: {...}`；
@@ -89,6 +111,7 @@ status: confirmed
   headless testRunner 是另一条路径，别把两者命令行混用。
 - **任务链 / 落档**：环境验证卡 **task-80**（`scenario_run.py` headless 独立复核）、**task-81**（P0-0 手册 §1
   环境更正）、**task-82**（本条）、**task-83**（本条知识条目对抗复核 **pass**，A/B 实测见
-  `docs/findings/adversarial-review-knowledge-mesen2-headless.md` §2/§3）；权威书面落档 = P0-0 执行手册
+  `docs/findings/adversarial-review-knowledge-mesen2-headless.md` §2/§3）、**task-91**（长场景 testRunner
+  100s 超时文档同步：现象④/为什么/证据指针）；权威书面落档 = P0-0 执行手册
   `docs/findings/l4-baseline-freeze-plan.md` §1「环境接收」（task-81 dated 更正后为 Windows headless 口径；
   **引用前验证 §1 已更新**）。
