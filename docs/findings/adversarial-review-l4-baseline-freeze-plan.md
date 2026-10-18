@@ -721,6 +721,131 @@ docs-links：PASS 334 md/422 links；全量 check PASS=11 FAIL=0 SKIP=1 TOLERATE
 **pass**：F49-1..F49-6 全部实质闭环，证据/候选/判据/影响面与 docs-links 均核实通过；
 F55-1（§3.3 pass2 时序）/F55-2/F55-3 为非阻塞执行提示，建议提交前顺手补，不阻塞 P0-0 启动。
 
+---
+
+# 复审（2026-10-18，task-85）—— P0-0 手册环境章节（Windows headless 主路径）
+
+> 复核方：`shell-verifier`（task-85，verifier）；被审：task-81 / `l4-analyst`
+> 被审版：`docs/findings/l4-baseline-freeze-plan.md` **1855 行**，SHA256 前 16=`d166b40dcb44307e`（与 task-85 通告一致；未提交，`git diff` = +185/−83）
+> 范围：§1 E1-E11 + §1.2 冒烟/两跑确定性 + §1.3 版本记录 + §1.4/Linux-WSL 备选 + §16 更正节（只核环境章节与实测一致性；其余章节内容不在本卡范围）。
+> 运行环境：Windows 10.0.26100（Win11 x64）、Python 3.12.1、cargo 1.96.0-nightly；串行锁下与 task-83/84 错开跑（复核期间确有并发任务运行同一工具，见 F-6）。
+> **VERDICT：needs_revision** —— E1-E10/实测数字/版本记录/Linux-WSL 备选表述**逐项核实通过**；但 **E11 有一处事实错误**（"P0-0 只构建 game-desktop/game-oracle（不构建 winit/softbuffer）"不成立：`game-desktop` 直接依赖 `winit`/`softbuffer`，构建该包必然编译它们）。另 2 条 Low/Info 建议。E11 改一处措辞即可转 **pass**。
+
+## 复审 §A：E1-E11 逐项核
+
+| # | 手册断言 | 我的独立核 | 结果 |
+|---|---|---|---|
+| E1 | Windows 10/11 x64 | `[Environment]::OSVersion.VersionString` = `Microsoft Windows NT 10.0.26100.0`；`Is64BitOperatingSystem=True` | ✅ |
+| E2 | `tools/mesen2/Mesen.exe`（Win 2.1.1 x64，gitignored 可再生） | 文件 70,470,144 B；SHA256=`d2eb03c2590c648bf329f127ebcfefd70130e7690a9e2ccdba8616faea1fe96b`（与 §1.3/§16.1 一致）；FileVersion **2.1.1**、ProductVersion `2.1.1+137ae7ce…`；`git check-ignore` 命中 `.gitignore:19 tools/mesen2/`、`:20 tools/mesen2.zip` | ✅ |
+| E3 | `%USERPROFILE%\Documents\Mesen2\settings.json` → `Debug.ScriptWindow.AllowIoOsAccess=true`；顶层 `ScriptWindowConfig.AllowIoOsAccess` 实测不生效；改后重启 | 路径存在（166,391 B，mtime 2026-10-18 16:18:18）；JSON 可解析；**当前** `Debug.ScriptWindow.AllowIoOsAccess=True`、顶层 `ScriptWindowConfig.AllowIoOsAccess` 也存在（True）。**旁证 E3 有效性**：复核期间首个快照读到 `Debug=False / top=True`（并发任务 A/B 负例中），对应窗口的 `title-menu` 运行产物（`analysis/traces/.archive/title-menu-20261018-162952/title-menu.run.json`）恰为 **frames=1080 / trace_lines=0 / done=null / shots=0 / wall=120.8s**（典型"io 被拒、无采集件"症状）；随后恢复 Debug=True 后我两跑即正常 ⇒ 与手册表述一致。**注意：该 A/B 由并发任务执行，我未翻改用户级 settings（避免与 task-83 互相干扰）；手册"顶层不生效"缺证据指针（见 F-2）** | ✅（结构/值/症状一致；证据指针待补） |
+| E3b | 无需 Xvfb/显示器（headless `--testRunner`；`scenario_run.py` 在 Windows 自动选 .exe） | `python tools/scenario_run.py list` exit 0（打印场景清单、无窗口）；我两跑 headless 均无 Xvfb 进程、无 GUI；进程命令行实测 `Mesen.exe --testRunner analysis\_gen\title-menu.lua rom\gunnac_cn.nes` | ✅ |
+| E4 | `python` ≥3.10（本机 3.12.1；`python3` Store 别名不可用） | `python -V`=3.12.1 ✓；`python3 --version` → "Python was not found; run without arguments to install from the Microsoft Store"（确认别名不可用） | ✅ |
+| E5 | 能构建 workspace（render-frame/phase-batch） | `cargo build -q -p game-desktop -p game-oracle` → **exit 0**（本机已有缓存；无缺失 DLL 报错） | ✅ |
+| E6 | HEAD ≥`0cf42f0`；工作树干净 | HEAD=`51da8e5`；`git merge-base --is-ancestor 0cf42f0 HEAD` exit 0 ✓。工作树当前有 task-81 等 WIP 改动（正常，提交后应干净）——**时点说明**，非缺陷 | ✅ |
+| E7 | `rom/gunnac_cn.nes` sha 与基线一致 | `python gates/cli.py rom` → `[PASS] rom-integrity` 4 锚点 sha 一致，rom=`4d76901c1b2455f2…` | ✅ |
+| E8 | 磁盘 ≥20GB 空闲 | D: Free = **53,994,188,800 B ≈ 50.3 GiB** ≥20 ✓ | ✅ |
+| E9 | 内存 ≥16GB | `Get-CimInstance Win32_ComputerSystem`.TotalPhysicalMemory/1GB = **15.9 GiB**（=17.1 GB 十进制；Windows 标称 16GB）。按二进制 GiB 比较与"≥16GB"差 0.1 GiB/按十进制达标——**单位口径建议写明**（F-4，非阻塞） | ⚠️ 口径 |
+| E10 | 同一时刻只跑一个 Mesen（`analysis/.scenario.lock`；Windows=msvcrt 1-byte / POSIX=flock） | 代码核对：Windows 分支 `import msvcrt; seek(0); locking(LK_NBLCK,1)`，POSIX 分支 fcntl.flock；实际行为：我第二次 `run` 在并发任务持锁时被拒，输出 `另一场景运行中（串行纪律）：analysis/.scenario.lock 被占用`（exit 2）⇒ 锁真实生效 | ✅ |
+| E11 | Windows 主路径无 X11/Xvfb 依赖；**P0-0 只构建 game-desktop/game-oracle（不构建 winit/softbuffer）**；`cargo build --workspace` 非必需 | **前半句成立**（Windows 无 Xvfb/X11；实测无 Xvfb 进程、headless 跑通），**但"不构建 winit/softbuffer"不成立**：`crates/game-desktop/Cargo.toml` 直接依赖 `winit="0.30"`、`softbuffer="0.4"`；`cargo tree -p game-desktop -i winit` / `-i softbuffer` 均显示 `game-desktop v0.1.0` 直接依赖 ⇒ `cargo build -p game-desktop` **必然编译 winit/softbuffer**（无论哪个 bin；依赖是包级）。Windows 后端不需要 X11 库，但 POSIX 备选构建 game-desktop 时才需 X11（手册 §1.4/附录 S3 方向正确，但 E11 行与之自相矛盾） | ❌ **事实错误（必改）** |
+
+## 复审 §B：冒烟与两跑确定性（自跑）
+
+**我自己的两跑**（串行锁下；`python tools/scenario_run.py run title-menu --timeout 600`）：
+- runA：`frames: 1080 trace_lines: 1080 captures: 37 shots: 37 wall: 5.5s` + `DONE: {"frames":1080,"trace_lines":1080,"captures":37,"shots":37,"bot_stop":false}`；run.json `timed_out=false`；exit 0。
+- runB：同为 **1080/1080/37/37**（wall 4.0s），trace sha 与 runA **完全相同**。
+- **trace sha256 = `62c9ea09580654ce691662c4d35ef98d0e722bdeaa88ccd893172a5d9389a331`**（589,653 B）= 手册 §1.2/§16.2 记录值 ✓。
+- **shots**：runA 37 张；runB 37 张 + 1 张**外部注入**的 `title-menu_f99999_fake.png`（4 B，16:30:44 由并发任务写入，见 F-6）；排除该注入后 **37/37 逐字节相同**；runA 37 张 vs 归档 `title-menu-20261018-161941` 的 37 张 **37/37 逐字节相同**。
+- 归档旁证：`analysis/traces/.archive/` 中 **12 个** `title-menu.frames.jsonl` 全部 sha=`62c9ea09…`（跨多次运行天然确定性）。
+- 手册"wall 3.5s"：我实测 4.0–5.5s（含启动/加载波动）；`run.json.wall_s` 本就随机器状态变化，文档已给判据不看 wall，属正常波动（Info）。
+- **门禁**：`python gates/cli.py status` → **PASS=11 / FAIL=0 / SKIP=1（addr-bridge）/ TOLERATED=0、STATUS: OK**；`docs-links` PASS（347 md/438 links）、`knowledge-format` PASS（24 条）；`python gates/cli.py rom` → `[PASS] rom-integrity` ✓ —— 与 §1.2/§16.2 数字一致。
+
+## 复审 §C：版本记录 / Linux-WSL 备选
+
+- **版本记录**（§1.3/§16.1）：Mesen.exe sha `d2eb03c2…` ✅、70,470,144 B ✅、FileVersion 2.1.1 ✅；Python 3.12.1 ✅；cargo 1.96.0-nightly (cbb9bb8bd 2026-03-13) ✅ —— 四项全部与实测一致。
+- **Linux/WSL 表述**：`std::bad_cast` 均限定为"**WSL2 内 Linux 版 Mesen2 2.1.1 实测**（任何 invocation，exit 134）"，并明确"不采用/仅备选/换可用构建才谈 Linux 路径"（§1 注 :80、§1.4 :150、§16.1 :1821）——**未写成通用结论** ✓。
+- **POSIX 路径保留**：§1.4 :148-149 保留自管 Xvfb + `DISPLAY` + flock + `pgrep` 孤儿清扫 + `/DoNotSaveSettings`；附录 C :1651 亦标注"`xvfb-run` 仅 POSIX 历史文案"——未删除备选 ✓。
+- **§16 落点**：`## 16` 存在（:1808-1855），16.3 影响面（§1/§0.5/§2/§8.2/§9.2/§10.1/§11/附录 S3/附录 C）与 `git diff` 实际改动逐条对得上 ✓（diff 另含全文 `python3`→`python` 命令替换，属同一环境口径，Info）。
+
+## 复审 §D：findings（四分类）
+
+### 实现/工具（B）——无（本卡只审手册；`tools/scenario_run.py` 的 Windows 分支/锁已在代码层核对并实跑）
+
+### 证据/文档错误（E）
+
+- **F-1（必改，Med）E11 事实错误**：见 §A E11。建议改为："Windows 主路径构建 `game-desktop`/`game-oracle` 时会编译 `game-desktop` 的 **winit/softbuffer 依赖**（Windows 后端无 X11/Xvfb 需求；POSIX 备选构建才需 X11 库）；P0-0 不需要构建 `shell-win` 等 workspace 其它包"；若真要"不构建 winit/softbuffer"，需把 `render-frame` 拆独立 crate（后续卡，不在本卡）。
+- **F-2（Low）E3 "顶层不生效"缺证据指针**：§1.1 E3 与 §16.1 均标"实测不生效"，但未给 A/B 记录/源码指针。建议交叉引用 `docs/knowledge/gotcha-mesen2-headless-windows-io.md`（task-82，含 Mesen 源码 `LuaApi.cpp:984`/`DebugConfig.cs:104` 与 A/B 判据）或 §16.2 增一行 A/B 记录（Debug=false ⇒ frames 1080/trace 0/done null）。
+- **F-3（Low）`analysis/p0-0-env.txt` 未生成**：§1.3 给出生成命令、§8.2 验收清单要求"记录进 `analysis/p0-0-env.txt`"，当前工作区 `Test-Path=False`（环境已宣称 P0-0-0 通过）。建议执行 P0-0-0 时生成该记录（gitignored 工作区件）并在 §8.2 勾选；否则"环境接收已完成"只有文档数字、无本机留档。
+
+### 规格缺口（S）
+
+- **F-4（Info）E9 内存单位口径**：15.9 GiB（=17.1 GB 十进制）vs "≥16GB"；建议写"≥16GB（Windows 标称；GiB 实测约 15.9）"或统一十进制。
+- **F-5（Info）E11 与 §1.4/附录 S3 的自洽**：修 F-1 后同步检查 §1.4 末行"POSIX 备选才需 X11 库"与 E11 行不冲突（当前矛盾点在 E11 的前半句）。
+
+### 平台差异（P）
+
+- **F-6（环境/并发，非缺陷）**：复核期间 task-83/84 并发运行同一工具：①我的第二次 `run` 被串行锁拒绝（证明 E10 有效）；②并发任务在 16:30:44 向 `shots/` 注入 `title-menu_f99999_fake.png`，导致我 runB 的 `outputs.shots` 计数=38（DONE/手册判据仍 37）。串行锁只保护"场景驱动"，不阻止外部手工/实验文件写入——验收跑应与其它 agent/GUI 手工实验错开，且 artifacts 以 manifest/DONE 判据而非裸 glob（手册 §7.5 F2 已有同类纪律，可复用）。我的定稿结论以 runA + 归档 37/37 为准。
+
+## 复审 §E：命令与输出摘要（自跑）
+
+| # | 命令 | 摘要 |
+|---|---|---|
+| 1 | `(Get-FileHash tools/mesen2/Mesen.exe)` / VersionInfo | sha `d2eb03c2…`、70,470,144 B、FileVersion 2.1.1 |
+| 2 | `python -V` / `cargo -V` / OS | 3.12.1 / 1.96.0-nightly (cbb9bb8bd 2026-03-13) / Windows NT 10.0.26100.0 x64 |
+| 3 | settings.json 解析 | `Debug.ScriptWindow.AllowIoOsAccess=True`；顶层 `ScriptWindowConfig.AllowIoOsAccess` 亦存在（True）；路径/大小/时间已记录 |
+| 4 | `python tools/scenario_run.py run title-menu --timeout 600` ×2（串行锁下） | runA 1080/1080/37/37 wall 5.5s、runB 同、trace sha `62c9ea09…` 两跑相同；shots 37/37 逐字节同（排除 F-6 注入件）；`python tools/scenario_run.py list` exit 0 |
+| 5 | 归档比对 | `.archive/` 12 条 `title-menu.frames.jsonl` sha 全同 `62c9ea09…`；runA vs `title-menu-20261018-161941` shots **37/37** 同 |
+| 6 | `python gates/cli.py status` / `rom` | PASS=11 FAIL=0 SKIP=1 STATUS OK；docs-links PASS（347/438）、knowledge-format PASS（24）；rom-integrity PASS（4 锚点） |
+| 7 | `cargo build -q -p game-desktop -p game-oracle` | exit 0；`cargo tree -p game-desktop -i winit/softbuffer` 显示 **game-desktop 直接依赖**（E11 反证） |
+| 8 | `git merge-base --is-ancestor 0cf42f0 HEAD` / `git check-ignore` | exit 0；`tools/mesen2/`、`tools/mesen2.zip` 均 ignored |
+| 9 | E7 磁盘/内存 | D: free 53.99GB；RAM 15.9 GiB（E9 单位口径见 F-4） |
+| 10 | 并发锁实测 | 并发任务运行时我的 run 被 `analysis/.scenario.lock` 拒绝（exit 2，"另一场景运行中"）；记录 F-6 |
+
+## 复审结论
+
+**needs_revision（F-1 必改；F-2/F-3 建议同批；F-4/F-5/F-6 为 Info）**：
+- **E1-E10 全部核实通过**：Windows x64/Mesen.exe sha+版本/headless `--testRunner`/E3 IO 症状旁证/E4 python/串行锁/E7 rom/E8 磁盘/门禁数字/两跑 trace sha+37/37 shots 逐字节全对；版本记录四项一致；Linux-WSL `bad_cast` 限定与 POSIX/Xvfb 备选保留均如实。
+- **唯一阻塞项=E11 的"不构建 winit/softbuffer"事实错误**（`game-desktop` 直接依赖 `winit 0.30`/`softbuffer 0.4`，构建必编译；Windows 后端无 X11 需求这半句成立）。改为"会编译 game-desktop 的 winit/softbuffer 依赖；Windows 后端无需 X11/Xvfb；POSIX 备选构建才需 X11 库"后即可 **pass**，无需重跑环境（我两跑+归档+门禁日志在 `target/review-l4env/` 可复算）。
+- 附加建议：F-2 补 E3 证据指针、F-3 生成 `analysis/p0-0-env.txt`；F-4 统一内存单位；并发验收与 GUI 手工实验错开（F-6）。
+
+> 本复审只追加本节到本文件；未改被审文件/资产，未 `git add`/`commit`。复核方≠实施方（AGENTS.md §5）。
+
+---
+
+# 点验（2026-10-18，task-88）—— F-1..F-4 修正点验
+
+> 被审版：`docs/findings/l4-baseline-freeze-plan.md` **1866 行**，SHA256 前 16=`fbf10a1a07bd4981`（task-87 改后；未提交）。
+> 范围：只核 task-85 的 **F-1（必核）+ F-2/F-3/F-4 抽查**；其余环境项/两跑/门禁 task-85 已验证，不再重跑。
+> **VERDICT：pass** —— F-1 事实更正**正确且四处同步一致**、`cargo tree` 依据可复现；F-2 证据指针可解析；F-3/F-4 落点到位；docs-links PASS。仅 1 条 Info（唯一保留的"不构建 winit/softbuffer"短语为条件句反例，非事实断言）。
+
+## 点验 §A：F-1（E11 依赖事实）——✅
+
+| 检查 | 结果 |
+|---|---|
+| §1.1 E11 行（L99） | 已改为："**Windows 主路径无 X11/Xvfb 依赖**（Mesen2 x64 自带 runtime）。**但构建 game-desktop/game-oracle 时会编译 game-desktop 的 winit/softbuffer 依赖**（Cargo.toml 直接依赖 `winit="0.30"`/`softbuffer="0.4"`，包级依赖与 bin 无关 ⇒ `cargo build -p game-desktop` 必编译）；Windows 后端无需 X11，**POSIX 备选构建才需 X11 库**；P0-0 不需要构建 shell-win 等其它包；若真要'不构建'需拆 render-frame 独立 crate（后续卡）"——与要求的四要素**逐项命中** |
+| 依据（自己跑） | `cargo tree -p game-desktop -i winit` → `winit v0.30.13 └── game-desktop v0.1.0`；`-i softbuffer` → `softbuffer v0.4.8 └── game-desktop v0.1.0`（**直接依赖**，可复现）——E11 的"必编译"结论成立 |
+| §1.4（L150/L157） | L150 仍写 headless `--testRunner` 无需显示/Xvfb；L157 "（winit/softbuffer 的 X11 后端；Windows 主路径不需要，见 E11）"——与 E11 一致 |
+| 附录 S3（L1760） | 已改："Windows 主路径无 Xvfb/X11；P0-0 构建 game-desktop/game-oracle（**会编译 game-desktop 的 winit/softbuffer 依赖**；task-87 F-1）；POSIX 备选构建才需 X11 库" ✓ |
+| §16.3（L1846-1847） | "§1 … E11=无 X11/Xvfb 依赖〔**构建 game-desktop 仍会编译 winit/softbuffer 依赖；POSIX 备选构建才需 X11 库**，见 §1.1 E11〕" ✓ |
+| §16 尾补记（L1855-1857） | 已登记 task-87 的 F-1..F-4 修正记录 ✓ |
+| 残留检查 | 全文件仅 1 处"不构建 winit/softbuffer"字面（L99 内 "**若要真正'不构建 winit/softbuffer'需把 render-frame 拆独立 crate**"）——是**条件句/反例**，非"P0-0 不构建"的事实断言 ⇒ 可接受（Info-1：若要求 grep=0，可改为"若要避免该依赖…"） |
+
+## 点验 §B：F-2/F-3/F-4 抽查——✅
+
+- **F-2（E3 证据指针）**：§1.1 E3（L90）与 §16.1（L1827）均新增 `[gotcha-mesen2-headless-windows-io](../knowledge/gotcha-mesen2-headless-windows-io.md)` 指针；目标文件存在（`docs/knowledge/gotcha-mesen2-headless-windows-io.md`，74 行）；`docs-links` **PASS（348 md/440 links）** ⇒ 链接可解析 ✓。
+- **F-3（env 记录时点）**：§1.3（L142）新增"`analysis/p0-0-env.txt` 说明（task-85 F-3）：该文件是 **P0-0-0 执行时生成**的 gitignored 工作区记录…"；§8.2（L1497）同步"（记录进 `analysis/p0-0-env.txt`——**该文件由 P0-0-0 执行时生成**、gitignored，内容清单见 §1.3）"⇒ 明确"执行前不存在≠环境未接收" ✓。
+- **F-4（E9 内存口径）**：§1.1 E9（L97）已改"**≥16GB（Windows 标称；实测 15.9 GiB ≈ 17.1 GB 十进制）**"、"记录 **GiB/GB 双口径**；十进制 ≥16GB 达标" ✓。
+
+## 点验 §C：其它
+
+- **docs-links**：`gates status` → docs-links **PASS**（348 md/440）、knowledge-format PASS（24）、SUMMARY PASS=11/FAIL=0/SKIP=1、STATUS OK ✓。
+- **写范围**：task-87 只改 `docs/findings/l4-baseline-freeze-plan.md`（工作树 M）；本点验只追加本文件 ✓。
+- **时点**：手册现行 1866 行 / sha16 `fbf10a1a…`；提交以该实体为准。
+
+**剩余问题：无阻塞**（Info-1：L99 条件句短语可改措辞以便 grep=0；不影响语义与提交）。
+**点验结论：pass** —— F-1 四处同步修正且依据可复现，F-2/F-3/F-4 落点完整；手册+知识条目+工具复核报告可提交。
+
+> 本点验只追加本节到本文件；未改被审文件/资产，未 `git add`/`commit`。复核方≠实施方（AGENTS.md §5）。
+
 
 
 

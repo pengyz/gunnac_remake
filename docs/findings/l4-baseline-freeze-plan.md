@@ -1,6 +1,6 @@
 # L4 P0-0 基线冻结执行手册（task-16）——可复现 22 对基线的采集/渲染/资产裁定/冻结
 
-> 日期：2026-10-18｜角色：decomp-analyst（取证/方案）｜状态：**方案就绪，待用户给出 Linux+Mesen2 入口后执行**
+> 日期：2026-10-18｜角色：decomp-analyst（取证/方案）｜状态：**方案就绪；环境已就绪（2026-10-18 Windows headless 已打通，见 §1/§16）⇒ 可启动 P0-0-0→P0-0-1**
 > 上游方案：[l4-zero-tolerance-attack-plan.md](l4-zero-tolerance-attack-plan.md)（commit `0cf42f0`，§5.0 六步清单）
 > 复审报告：[adversarial-review-l4-attack-plan.md](adversarial-review-l4-attack-plan.md)（task-24 复审 pass；§7 R1-R8）
 > 环境事实核验时点：HEAD `167d8a9`（**分析时点**；执行前重核，尤其 `--out-dir` 是否已实现，S6）。
@@ -9,6 +9,9 @@
 > **F1-F8（阻塞/重要）+ F9-F17/S1-S6（随文）**；逐条落点见文末 **§13 修正映射**。
 > **后续点改（同日）**：task-46 R1-R5（§7.7 Step0/mapping 回写等）→ task-48 组 D 来源更正（§3.6）→
 > task-50 四联帧预算更正（§3.7）→ task-54 F49-1..6（overlay 名单/stg06 probe=0/组 D 判据可执行化/C5 骨架）。
+> **环境更正（2026-10-18，task-81）**：主路径改为 **Windows 宿主 + Mesen2 2.1.1 Win x64 headless**
+> （`Mesen.exe --testRunner`；Lua IO 需 `Debug.ScriptWindow.AllowIoOsAccess=true`）；WSL2/Linux 版 Mesen2
+> `std::bad_cast` 不可用仅备选。§1/§2 命令/§8.2 验收同步；实测记录见 §1.2/§16。
 > **【F49-6 版本口径】** 本稿经 `task-30/32/34/46/48/50/54` 连续点改；**行数/sha 以提交时文件实体为准**
 > （不硬编码中间版本号，避免自指不一致；核对命令：`wc -l docs/findings/l4-baseline-freeze-plan.md` +
 > `git hash-object docs/findings/l4-baseline-freeze-plan.md`）。
@@ -63,6 +66,9 @@
 > **【F55-1 执行顺序】** §3.3 ① 的 **POST 段（`l4-stg06-pass2`）依赖 §7a（§7.2/§3.7）生成的 pass2
 > probe 文件**——§3 阶段先跑 ① 的 PRE 段，POST 段到 §7a 后补跑（脚本对缺失打印 `SKIP` 不崩）；或把整段 ①
 > 移到 §7a 后统一跑一次（两种等价，取其一）。
+> **【2026-10-18 环境就绪】** Windows 宿主 + Mesen2 2.1.1 Win x64 headless 已打通（§1；冒烟 title-menu
+> 1080/1080/37 + 两跑 trace sha 同 + 37/37 shots 逐字节同）⇒ **P0-0-0 通过，可启动 P0-0-1（§2 采集）**；
+> WSL2/Linux 版 Mesen2 `std::bad_cast` 仅备选。
 > §5 的 manifest 需要 §7a 的最终 expected sha，故实际执行顺序 §7a 先于 §5（步骤编号保留原方案 §5.0 的
 > 0-6 映射，不重排）。
 
@@ -70,53 +76,87 @@
 
 ## 1. 步骤 0：环境接收（P0-0-0）
 
+> **【2026-10-18 环境更正·Windows headless 已打通】** 主路径 = **Windows 宿主 + Mesen2 2.1.1 Win x64
+> headless**（`tools/mesen2/Mesen.exe --testRunner`）；WSL2 内 Linux 版 Mesen2 实测 `std::bad_cast`
+> （exit 134）**不可用**，仅保留为备选（§1.4 注）。**环境已就绪，可启动 P0-0-0 → P0-0-1（§2 采集）**。
+> 本节 E1-E11 为 Windows 主路径判据；原 Linux/Xvfb 判据留档于 §1.4/§16。
+
 ### 1.1 环境要件与校验（逐项打勾）
 
-| # | 要件 | 要求 | 校验命令 | 期望 |
+| # | 要件 | 要求（Windows 主路径） | 校验命令（PowerShell/`python`） | 期望 |
 |---|---|---|---|---|
-| E1 | OS | Linux x86_64（glibc；仓库开发环境） | `uname -sm` | `Linux x86_64` |
-| E2 | Mesen2 | **2.1.1 Linux x64**，解压到 `tools/mesen2/`，主程序 `tools/mesen2/Mesen` 可执行 | `test -x tools/mesen2/Mesen && echo OK` | `OK` |
-| E3 | Xvfb | 自管显示（`scenario_run.py` 直接拉 `Xvfb :N -screen 0 1280x1024x24 -nolisten tcp`，**不用 xvfb-run**） | `command -v Xvfb && echo OK` | `OK`；`/tmp/.X11-unix` 可写 |
-| E4 | Python | **`python3` ≥3.10**（仓库工具与手册脚本均用 `Path.write_text(..., newline=)`——3.10 才支持；F7） | `python3 -c "import sys; assert sys.version_info >= (3,10), sys.version; print(sys.version)"` | 打印 ≥3.10 |
+| E1 | OS | **Windows 10/11 x64**（本机实测 Windows；WSL2 仅作备选外壳，Mesen2 用 Windows 版） | `[Environment]::OSVersion.VersionString` | 记录 OS Build |
+| E2 | Mesen2 | **2.1.1 Win x64**：`tools/mesen2/Mesen.exe`（gitignored 可再生件；sha 记录见 §1.3） | `Test-Path tools/mesen2/Mesen.exe; (Get-FileHash tools/mesen2/Mesen.exe -Algorithm SHA256).Hash` | `True` + sha 记录 |
+| E3 | **Lua IO 配置（前置，必做）** | `%USERPROFILE%\Documents\Mesen2\settings.json` 中 **`Debug.ScriptWindow.AllowIoOsAccess = true`**（有效键；同级 `ScriptWindowConfig.AllowIoOsAccess` 实测不生效——机理/判据见 [gotcha-mesen2-headless-windows-io](../knowledge/gotcha-mesen2-headless-windows-io.md)）；改后**重启 Mesen**；否则脚本 `io.open/os` 被拒 → 无 trace/shots | `python -c "import json,os,pathlib;d=json.loads((pathlib.Path(os.path.expanduser('~'))/'Documents'/'Mesen2'/'settings.json').read_text(encoding='utf-8-sig'));print(d['Debug']['ScriptWindow']['AllowIoOsAccess'])"` | `True` |
+| E3b | 显示 | **无需** Xvfb/显示器（headless `--testRunner`；`scenario_run.py` 在 Windows 自动选 `.exe` 且 headless） | `python tools/scenario_run.py list` | 打印场景清单（无 GUI 弹窗） |
+| E4 | Python | **`python` ≥3.10（本机 3.12.1）**（`Path.write_text(newline=)` 需 ≥3.10；F7；本机 `python3` 为 Store 别名不可用） | `python -V` | ≥3.10（记录版本） |
 | E5 | Rust | 能构建 workspace（render-frame / phase-batch） | `cargo build -q -p game-desktop -p game-oracle` | exit 0（首次编译数分钟） |
-| E6 | 仓库 | HEAD ≥`0cf42f0`（含方案+R1/R2）；工作树干净 | `git log -1 --format=%h; git status --short` | 记录 HEAD；无与本任务冲突的改动 |
-| E7 | ROM | `rom/gunnac_cn.nes` 与基线 sha 一致 | `python3 gates/cli.py rom` | `[PASS]` |
-| E8 | 磁盘 | ≥20GB 空闲（probe/trace/phase 文本 + 两跑副本；C 级估算） | `df -h .` | Avail ≥20G |
-| E9 | 内存 | ≥16GB（render_frame 读大 text 写集；C 级估算） | `free -g` | ≥16 |
-| E10 | 串行纪律 | 同一时刻只跑一个 Mesen（`analysis/.scenario.lock` + 孤儿清扫内置） | — | 不并行、不 `run-all`（见 §2.2 注） |
-| E11 | 系统依赖（S3） | Mesen2 运行需 Xvfb + 基础 X 库；P0-0 **只构建 `game-desktop`/`game-oracle`**（不构建 winit/softbuffer）。若要 `cargo build --workspace`（非 P0-0 必需）另需 X11/音频开发库 | `ldd tools/mesen2/Mesen` 检查 missing；`cargo build -p game-desktop -p game-oracle` | 无 missing shared object；构建 exit 0 |
+| E6 | 仓库 | HEAD ≥`0cf42f0`；工作树干净 | `git log -1 --format=%h; git status --short` | 记录 HEAD；无与本任务冲突改动 |
+| E7 | ROM | `rom/gunnac_cn.nes` 与基线 sha 一致 | `python gates/cli.py rom` | `[PASS]`（4 锚点 sha） |
+| E8 | 磁盘 | ≥20GB 空闲（probe/trace/phase + 两跑副本；C 级估算） | `Get-PSDrive D`（POSIX：`df -h .`） | 可用 ≥20G |
+| E9 | 内存 | **≥16GB（Windows 标称；实测 15.9 GiB ≈ 17.1 GB 十进制）**（render_frame 读大 text 写集；C 级估算） | `Get-CimInstance Win32_ComputerSystem`（`TotalPhysicalMemory/1GB`） | 记录 **GiB/GB 双口径**；十进制 ≥16GB 达标 |
+| E10 | 串行纪律 | 同一时刻只跑一个 Mesen（`analysis/.scenario.lock` 串行锁；Windows=msvcrt 1-byte / POSIX=flock） | — | 不并行、不 `run-all`（见 §2.2 注） |
+| E11 | 系统依赖（S3 改写；2026-10-18 task-87 F-1 更正） | **Windows 主路径无 X11/Xvfb 依赖**（Mesen2 Win x64 自带 runtime）。**但构建 `game-desktop`/`game-oracle` 时会编译 `game-desktop` 的 winit/softbuffer 依赖**（`crates/game-desktop/Cargo.toml` 直接依赖 `winit="0.30"`/`softbuffer="0.4"`，**包级依赖与 bin 选择无关** ⇒ `cargo build -p game-desktop` 必编译）；Windows 后端无需 X11，**POSIX 备选构建才需 X11 库**；P0-0 不需要构建 `shell-win` 等 workspace 其它包；若要真正"不构建 winit/softbuffer"需把 `render-frame` 拆独立 crate（后续卡，不在 P0-0） | `cargo build -p game-desktop -p game-oracle`；`cargo tree -p game-desktop -i winit`（应显示 `winit → game-desktop` 直接依赖） | exit 0；winit/softbuffer 已编译、无缺失 DLL |
 
-### 1.2 冒烟测试（环境"可执行"判据）
+### 1.2 冒烟测试（环境"可执行"判据；2026-10-18 实测通过）
 
-```bash
+```powershell
 cd <repo-root>
-python3 gates/cli.py status                               # 只读预检：看清 SKIP/恒红项（AGENTS §5 动手前）
-python3 gates/cli.py rom                                  # [PASS] 4 锚点 sha
-python3 tools/scenario_run.py list | head -5              # 场景可解析
-python3 tools/scenario_run.py run title-menu --timeout 900
+python gates/cli.py status         # 只读预检：SKIP/TOLERATED 显式打印（AGENTS §5）
+python gates/cli.py rom            # [PASS] 4 锚点 sha
+python tools/scenario_run.py list  # 场景可解析（无 GUI 弹窗）
+python tools/scenario_run.py run title-menu --timeout 600
 ```
-**期望**：输出含 `== scenario run: title-menu ==`、`frames: 1080 trace_lines: 1080 ...`、`DONE: {...}`；
-产物存在：`analysis/traces/title-menu.{frames.jsonl,captures.jsonl,run.json}`、`shots/title-menu_f*.png`。
-**判据**：`analysis/traces/title-menu.run.json` 中 `"done" != null && "timed_out": false && "trace_lines" == 1080`。
-**失败回退**：E2/E3 缺失 → 环境未就绪，P0-0 **BLOCKED**（不进入 §2）；冒烟 run 未 DONE → 查
-`analysis/traces/title-menu.mesen.log` + `python3 tools/scenario_run.py run title-menu --timeout 1800` 重试 1 次，
-仍失败 ⇒ BLOCKED 并上报 run.json/mesen.log。
+
+**本次实测输出**（2026-10-18 Windows；`analysis/traces/title-menu.run.json`）：
+```
+== scenario run: title-menu ==
+  DSL: oracle/scenarios/title-menu.txt sha256=258067a319351ef9…
+  frames: 1080 trace_lines: 1080 captures: 37 shots: 37 wall: 3.5s
+  DONE: {"frames": 1080, "trace_lines": 1080, "captures": 37, "shots": 37, "bot_stop": false}
+  trace: analysis\traces\title-menu.frames.jsonl
+  run清单: analysis/traces/title-menu.run.json
+```
+**两跑确定性（实跑）**：trace `sha256=62c9ea09580654ce691662c4d35ef98d0e722bdeaa88ccd893172a5d9389a331` 两跑相同；
+`shots/title-menu_f*.png` **37/37 逐字节相同**；`gates status` = **PASS=11 FAIL=0 SKIP=1（addr-bridge）/TOLERATED=0，
+STATUS: OK**；`gates rom` = `[PASS] rom-integrity`（4 锚点 sha，rom=`4d76901c1b2455f2…`）。
+**判据**：`run.json` 中 `timed_out=false`、`done!=null`、`frames==trace_lines==1080`、`done.shots==37`；
+两跑 trace sha 相同 + shots 逐字节相同。
+**失败回退**：查 `analysis/traces/title-menu.mesen.log`/`title-menu.lua.log`；确认 **E3** 配置生效并重启
+Mesen 后重试 1 次；仍失败 ⇒ BLOCKED 并上报 run.json/日志。E3 未配置的典型症状：Lua `io.open` 被拒 /
+无 trace 产物（headless 仍能启动，但写不出采集件）。
 
 ### 1.3 版本/来源记录（写进 manifest 头）
 
-```bash
-{ uname -a; python3 -V; cargo -V; sha256sum tools/mesen2/Mesen 2>/dev/null || echo MESEN_NO_CHECKSUM; } > analysis/p0-0-env.txt
-git log -1 --format='%H %ad %s' --date=iso >> analysis/p0-0-env.txt
+```powershell
+"OS: $([Environment]::OSVersion.VersionString)"            >  analysis/p0-0-env.txt
+"python: $(python -V 2>&1)"                               >> analysis/p0-0-env.txt
+"cargo: $(cargo -V)"                                      >> analysis/p0-0-env.txt
+"Mesen.exe sha256: $((Get-FileHash tools/mesen2/Mesen.exe -Algorithm SHA256).Hash)" >> analysis/p0-0-env.txt
+git log -1 --format='%H %ad %s' --date=iso                >> analysis/p0-0-env.txt
 ```
-Mesen2 2.1.1 的获取方式/来源 URL 由用户环境提供者登记进同一文件（仓库 `tools/mesen2/` 为 gitignore 可再生件）。
+**本次实测**：Python **3.12.1**；cargo **1.96.0-nightly (cbb9bb8bd 2026-03-13)**；
+`tools/mesen2/Mesen.exe` sha256=`d2eb03c2590c648bf329f127ebcfefd70130e7690a9e2ccdba8616faea1fe96b`
+（70,470,144 B）。Mesen2 Win x64 来源/获取方式由用户环境提供者登记（`tools/mesen2/` 为 gitignore 可再生件）。
 
-### 1.4 显示方案（Xvfb 自管；`scenario_run.py` 内部处理）
+> **`analysis/p0-0-env.txt` 说明（task-85 F-3）**：该文件是 **P0-0-0 执行时生成**的 gitignored 工作区记录，
+> **内容清单** = OS / CPU / RAM / 磁盘 / `Mesen.exe` sha256 / Python / cargo / `gates rom` 输出 / 当前 HEAD；
+> **当前尚未生成属执行时产物**（执行前不存在 ≠ 环境未接收）。上列"本次实测"值来自同机同命令，
+> 只作手册依据、不替代执行留档。
 
-`scenario_run.py` 在启动 Mesen 前：①`pick_display()` 选空 `:99+` → ②直接 Popen `Xvfb` → ③等
-`/tmp/.X11-unix/X<N>` 就绪 → ④`env["DISPLAY"]=:<N>` 注入 → ⑤进程组清理（finally）。操作者**无需**手工起 X；
-只需保证 `/tmp/.X11-unix` 可写、无遗留孤儿 `Mesen`（脚本启动前会 `pgrep -f tools/mesen2/Mesen` 清场并打印）。
-> 注：`scenario_run.py` 文件头 docstring 仍写 `xvfb-run -a ...`（历史文案，t24 已弃包装层）——**以代码为准**，
-> 不要手工套 `xvfb-run`（实测会引入提前退出/冻结）。
+### 1.4 驱动/显示方案（Windows headless 主路径；POSIX 备选）
+
+- **Windows（主路径）**：`scenario_run.py` 检测到 `tools/mesen2/Mesen.exe` ⇒ `HEADLESS=1`，以
+  `Mesen.exe --testRunner <analysis/_gen/<name>.lua> rom/gunnac_cn.nes` 运行——**不需要显示/Xvfb**（脚本
+  `emu.stop` 后 testRunner 自行退出；无 GUI 窗口）；串行锁用 `msvcrt` 1-byte，无 Xvfb/孤儿 `pgrep` 分支。
+- 环境覆盖：`GUNNAC_MESEN=<path>` 指定可执行；`GUNNAC_HEADLESS=0/1` 强制 GUI/headless。
+- **POSIX（备选，非主路径）**：原自管 Xvfb 路径保留（`Xvfb :N -screen 0 1280x1024x24 -nolisten tcp` +
+  `DISPLAY` 注入 + flock + `pgrep -f tools/mesen2/Mesen` 孤儿清扫；GUI 模式传 `rom <lua> /DoNotSaveSettings`）。
+  **WSL2 内 Linux 版 Mesen2 2.1.1 实测不可用**（任何 invocation `std::bad_cast`，exit 134）⇒ 不采用；
+  若要 Linux 路径需另换可用 Mesen2 构建（记录来源/版本）；**POSIX 构建 `game-desktop` 另需系统 X11 开发库**
+  （winit/softbuffer 的 X11 后端；Windows 主路径不需要，见 E11）。
+- 操作者**无需**手工起显示/驱动：只用 `python tools/scenario_run.py run <name>`（Windows Python 3.12）。
+- **命令解释器**：本文命令统一写 `python`（Windows 主路径）；若走 POSIX 备选，把 `python` 换成 `python3`。
 
 ### 1.5 资源预算（C 级估算，执行后以 `run.json.wall_s` 回填）
 
@@ -125,6 +165,7 @@ Mesen2 2.1.1 的获取方式/来源 URL 由用户环境提供者登记进同一�
 | 单场景耗时 | 带 probe/capture 时约 **30-60 fps** → `帧数/40` 秒量级；如 stg03-timeline(24000f) ≈ 10-20min、stg08-timeline(34000f) ≈ 15-30min、`tas-stg08b2-direct`(40000f) ≈ 15min、`stg06-timeline`(30000f) ≈ 10-20min（2026-10-18 更正：原 v5-overlay 36500f 计划作废，见 §3.7） | 历史 `gs5-stg01-full` 15000f/260.9s≈57.5fps（轻量面）；带回调更慢（B/C） |
 | 磁盘 | probe 3M 事件上限 × ~80B ≈ 240MB/场景；frames.jsonl ~0.6KB/帧（zp 512 hex）；phase text 可达 GB 级 | 历史 stg03-text 1.27GB（方案 §3.1 引用）；**执行时用 `du -sh analysis` 实测回填** |
 | 内存 | render-frame 全量读 text 写集（Vec）→ 大场景 GB 级 | `render_frame.rs` 读入+排序实现（A 级代码事实） |
+| **实测（title-menu，Windows headless）** | **1080 帧 / 1080 trace / 37 shots / wall 3.5s**（轻量无 probe 场景） | 2026-10-18 `analysis/traces/title-menu.run.json` |
 
 ---
 
@@ -175,14 +216,14 @@ cd <repo-root>
 mkdir -p analysis/repro
 
 # I1-I4：按序逐条执行（每条等它打印 DONE 再跑下一条；默认 timeout=1800s，长场景显式加大）
-python3 tools/scenario_run.py run title-menu        --timeout 1200
-python3 tools/scenario_run.py run gameplay-stage1   --timeout 1800
-python3 tools/scenario_run.py run stg03-timeline    --timeout 5400
-python3 tools/scenario_run.py run stg08-timeline    --timeout 7200
+python tools/scenario_run.py run title-menu        --timeout 1200
+python tools/scenario_run.py run gameplay-stage1   --timeout 1800
+python tools/scenario_run.py run stg03-timeline    --timeout 5400
+python tools/scenario_run.py run stg08-timeline    --timeout 7200
 
 # I5/I6（2026-10-18 更正：四联真值来源改直入/自关窗轨；v5 36500f 截断已废弃）
-python3 tools/scenario_run.py run tas-stg08b2-direct --timeout 5400   # stage8 直入；源含 10 probe
-python3 tools/scenario_run.py run stg06-timeline     --timeout 5400   # STG-06 自关窗；源 0 probe（F49-2）
+python tools/scenario_run.py run tas-stg08b2-direct --timeout 5400   # stage8 直入；源含 10 probe
+python tools/scenario_run.py run stg06-timeline     --timeout 5400   # STG-06 自关窗；源 0 probe（F49-2）
 # I5b/I6b 为 §7.2 两遍 capture 的第二遍，在选帧后按 §3.2 make 生成 overlay 再跑（§7.2 内给命令）；
 #   I6b = l4-stg06-pass2：源 0 probe → make 补 8 probe + 选定帧 capture（F49-2）
 
@@ -194,6 +235,11 @@ cargo run -q -p game-oracle --bin phase-batch -- tas-stg08b2-direct
 # stg06-timeline：源 0 probe ⇒ **不跑 phase-batch**（F49-2；它只作 expected capture 源，非 render 场景）
 # l4-stg08b2-pass2 / l4-stg06-pass2 的 phase-batch 在 §7.2 选帧/重跑之后执行（M4：不在此处提前跑）
 ```
+> **Windows 宿主执行提示（2026-10-18 环境更正）**：以上 `bash` 块在 **Git Bash**（或 POSIX 备选）可直接跑；
+> Windows PowerShell 下：`mkdir -p analysis/repro` 换成 `New-Item -ItemType Directory -Force analysis/repro`，
+> 其余 `python ...` / `cargo ...` 命令原样可用；多行 heredoc 脚本块（§3.3 等）建议在 Git Bash 执行或
+> 存为 `.py` 后 `python <file>`（不要直接在 PowerShell 里贴 heredoc）。
+
 **每条采集的期望输出**（`scenario_run.py` 打印 + 文件判据）：
 ```
 == scenario run: <name> ==
@@ -227,12 +273,12 @@ cp analysis/traces/{gameplay-stage1,stg03-timeline,stg08-timeline,tas-stg08b2-di
 cp analysis/phase/{gameplay-stage1,stg03-timeline,stg08-timeline,tas-stg08b2-direct}-text.jsonl analysis/repro/run1/
 
 # run2：同命令逐条重跑（旧分析产物会被自动归档；phase-batch 重生成）
-python3 tools/scenario_run.py run title-menu        --timeout 1200
-python3 tools/scenario_run.py run gameplay-stage1   --timeout 1800
-python3 tools/scenario_run.py run stg03-timeline    --timeout 5400
-python3 tools/scenario_run.py run stg08-timeline    --timeout 7200
-python3 tools/scenario_run.py run tas-stg08b2-direct --timeout 5400
-python3 tools/scenario_run.py run stg06-timeline     --timeout 5400
+python tools/scenario_run.py run title-menu        --timeout 1200
+python tools/scenario_run.py run gameplay-stage1   --timeout 1800
+python tools/scenario_run.py run stg03-timeline    --timeout 5400
+python tools/scenario_run.py run stg08-timeline    --timeout 7200
+python tools/scenario_run.py run tas-stg08b2-direct --timeout 5400
+python tools/scenario_run.py run stg06-timeline     --timeout 5400
 cargo run -q -p game-oracle --bin phase-batch -- gameplay-stage1
 cargo run -q -p game-oracle --bin phase-batch -- stg03-timeline
 cargo run -q -p game-oracle --bin phase-batch -- stg08-timeline
@@ -243,7 +289,7 @@ cp analysis/traces/{gameplay-stage1,stg03-timeline,stg08-timeline,tas-stg08b2-di
 cp analysis/phase/{gameplay-stage1,stg03-timeline,stg08-timeline,tas-stg08b2-direct}-text.jsonl analysis/repro/run2/
 
 # 比对
-python3 - <<'PY'
+python - <<'PY'
 import hashlib, pathlib
 r1=pathlib.Path("analysis/repro/run1"); r2=pathlib.Path("analysis/repro/run2")
 bad=[]
@@ -280,7 +326,7 @@ P0-0 **BLOCKED**（不得用"取某一次"绕过；上报差异文件与三方 s
 
 ```bash
 # 每文件：总行数 − 该场景头行数 = probe 事件数；头行内容可 grep 断言
-python3 - <<'PY'
+python - <<'PY'
 import pathlib
 EXP={"title-menu":0,"gameplay-stage1":15,"stg03-timeline":8,"stg08-timeline":8,
      "tas-stg08b2-direct":10,"stg06-timeline":0}   # F49-2：stg06 源 0 probe（不产 .probe.jsonl）
@@ -482,7 +528,7 @@ if __name__ == "__main__":
 > （§3.2 本节只给生成规则；`l4-stg08b2-pass2.txt`/`l4-stg06-pass2.txt` 到 §3.7 才落盘）。
 > 若在 §3.2 立即跑会 `FileNotFoundError`——属预期（不是生成失败），按 §3.7 后补跑。
 ```bash
-python3 - <<'PY'
+python - <<'PY'
 import collections, pathlib
 for p,exp in [("oracle/scenarios/l4-stg08b2-pass2.txt",10),("oracle/scenarios/l4-stg06-pass2.txt",8)]:
     regs=[l.split()[1:3] for l in pathlib.Path(p).read_text(encoding="utf-8").splitlines()
@@ -502,7 +548,7 @@ PY
 
 ```bash
 # ① probe 事件数（映射信号）：wc-l − 该场景头行数（§2.4 表）== 旧 .render.log 的 probe= 值
-python3 - <<'PY'
+python - <<'PY'
 import pathlib
 # 【F55-1 更正】分两段：PRE 在 §3 即可跑；POST（pass2）在 §7.2/§3.7 生成后补跑——缺失显式 SKIP 而非崩。
 PRE={"gameplay-stage1":15,"stg03-timeline":8,"stg08-timeline":8,
@@ -522,7 +568,7 @@ for n,h in POST.items():
 PY
 # ② 输入确定性：§2.3 DETERMINISM: PASS
 # ③ capture blob == 旧 expected（A 级主判据；路径=§3.0 源 capture / pass2 overlay capture）
-python3 - <<'PY'
+python - <<'PY'
 import hashlib, pathlib
 E=pathlib.Path("oracle/screens/expected"); S=pathlib.Path("shots")
 checks=[("gameplay-stage1_f01260_stage-start", "gameplay-stage1_f01260_stage-start.png"),
@@ -605,7 +651,7 @@ probe_match \t det \t blob_eq \t status \t duplicate_of \t reuse`
 | 3 | 同 | 29478 | Combat | stg02-combat |
 | 4 | 同 | **51332** | StageClear | stg02-clear |
 
-（来源 `tas-clear-full-v5(assist=invincible)`；复现：`python3 -c "import json;[print(json.loads(l)) for l in open('oracle/traces/tas-clear-full.l5.jsonl')]"`）
+（来源 `tas-clear-full-v5(assist=invincible)`；复现：`python -c "import json;[print(json.loads(l)) for l in open('oracle/traces/tas-clear-full.l5.jsonl')]"`）
 ⇒ 在 v5 帧域里 **f28500 仍在关 1 关末段、f30000-36000 = 关 2 战斗段**（stg02-clear 要到 f51332），不可能是
 ending/fade 画面。**组 D 来源待重裁**；P0-0 若按原假设执行会取错帧/错判来源。
 
@@ -692,7 +738,7 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
      **C3** → `analysis/traces/tas-stg08-direct.frames.jsonl`（若该 run 未跑则先按 §2.2 采集）。
    - **Ending 判定**：`$26 bit7=0x80`（`$95F9` 入口 `LDA #$80/STA $26` 后置位；见 l5-all-clear R-l5-5）：
      ```bash
-     python3 - <<'PY'
+     python - <<'PY'
      import json
      F=30000                                                     # 目标帧（28500/30000/...）
      PATH="analysis/traces/tas-stg08b2-direct.frames.jsonl"      # C1 示例（C2: tas-stg07-relay）
@@ -705,7 +751,7 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
      ```
    - **fade（近黑过渡）判定**：`flags26 bit7=0` 时不能靠 mode 字段 ⇒ 用 **capture 截图平均亮度**（`tools/diff_visual.decode_png` 可复用）：
      ```bash
-     python3 - <<'PY'
+     python - <<'PY'
      import sys; sys.path.insert(0,"tools")
      from diff_visual import decode_png
      _,_,px = decode_png("shots/tas-stg08b2-direct_f28500_probe.png")   # C1 示例（C2 用 tas-stg07-relay_…）
@@ -747,7 +793,7 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
 > `stg01-clear f28364` → `stg02-shop f29078` → `stg02-combat f29478` → `stg02-clear f51332` →
 > `stg03-clear f72823` → `stg04-shop f73539` → `stg04-combat f73939`
 > ⇒ **v5 到 f73939 才到 stage4**；36500f 时仍在关 2 ⇒ `stage_no==6/8` 选帧**必然失败**（原 I5/I5b 作废）。
-> 复现：`python3 -c "import json;[print(json.loads(l)['f'],json.loads(l)['checkpoint']) for l in open('oracle/traces/tas-clear-full.l5.jsonl')]"`
+> 复现：`python -c "import json;[print(json.loads(l)['f'],json.loads(l)['checkpoint']) for l in open('oracle/traces/tas-clear-full.l5.jsonl')]"`
 
 **更正后来源表（四联真值）**：
 
@@ -783,7 +829,7 @@ print(sel)
 ```
 **pass2 生成/重跑（两跑，§7.2 第二遍）**：
 ```bash
-python3 - <<'PY'
+python - <<'PY'
 import json, pathlib, sys
 sel=json.loads(pathlib.Path("analysis/repro/l4-selected-frames.json").read_text(encoding="utf-8"))
 sys.path.insert(0,"tools"); from l4_make_overlay import make
@@ -792,8 +838,8 @@ make("oracle/scenarios/tas-stg08b2-direct.txt","oracle/scenarios/l4-stg08b2-pass
 make("oracle/scenarios/stg06-timeline.txt","oracle/scenarios/l4-stg06-pass2.txt", 30000,
      [sel[n]["frame"] for n in sel if sel[n]["scene"]=="l4-stg06-pass2"])
 PY
-python3 tools/scenario_run.py run oracle/scenarios/l4-stg08b2-pass2.txt --timeout 5400
-python3 tools/scenario_run.py run oracle/scenarios/l4-stg06-pass2.txt     --timeout 5400
+python tools/scenario_run.py run oracle/scenarios/l4-stg08b2-pass2.txt --timeout 5400
+python tools/scenario_run.py run oracle/scenarios/l4-stg06-pass2.txt     --timeout 5400
 cargo run -q -p game-oracle --bin phase-batch -- l4-stg08b2-pass2
 cargo run -q -p game-oracle --bin phase-batch -- l4-stg06-pass2
 ```
@@ -903,7 +949,7 @@ ls "$SB/oracle/screens/actual/"     # → l4_clear-inject.png/.idx.json/.render.
        "sha256":{"expected":"…","actual":"…"},"frames":[34500,36000],"reason":"ending 静态页同图（重采后仍相同）","adjudicated_by":"…"}
     ]
   },
-  "strict": {"cmd":"python3 tools/diff_visual.py --strict","exit":1,"line":"STRICT: FAIL diff=<n>","ran_after_asset_swap": true}
+  "strict": {"cmd":"python tools/diff_visual.py --strict","exit":1,"line":"STRICT: FAIL diff=<n>","ran_after_asset_swap": true}
 }
 ```
 `status` 枚举：`ok` / `blocked:no-source` / `blocked:probe-cap` / `blocked:nondeterministic` /
@@ -1041,7 +1087,7 @@ def run_strict():
                        cwd=ROOT, capture_output=True, text=True)
     line = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("STRICT:")]
     if not line: raise SystemExit("strict: 未捕获 STRICT 行")
-    return {"cmd": "python3 tools/diff_visual.py --strict", "exit": r.returncode,
+    return {"cmd": "python tools/diff_visual.py --strict", "exit": r.returncode,
             "line": line[-1], "ran_after_asset_swap": True}
 
 def main():
@@ -1206,7 +1252,7 @@ documented duplicate（静态同图），必须已在 manifest `dedupe.documente
 > ——所以任何"glob actual 目录"的脚本都会误判（F2）。判据一律**只用 manifest 的 22 个 name**。
 
 ```bash
-python3 - <<'PY'
+python - <<'PY'
 import hashlib, json, pathlib, collections
 M=json.loads(pathlib.Path("oracle/screens/l4-manifest.json").read_text(encoding="utf-8"))
 names=[p["name"] for p in M["pairs"]]
@@ -1272,7 +1318,7 @@ manifest `dedupe.documented_duplicates` 找到同 name 集**（expected 重复�
 > **F49-1/F49-2 更正**：`l4_stg06-late` 源已改 `l4-stg06-pass2`（stg06 源 0 probe → pass2 补 8）；
 > `l4_fade-clear` 源待 §3.6 重裁（`<winner>` 为 C1-C5 命中 run），**不得再填 `l4-baseline-v5*`**。
 ```bash
-python3 - <<'PY'
+python - <<'PY'
 import json, pathlib
 mp=pathlib.Path("analysis/repro/mapping.tsv")
 dec=json.loads(pathlib.Path("analysis/repro/mapping-decisions.json").read_text(encoding="utf-8"))
@@ -1304,7 +1350,7 @@ STAMP=$(date +%Y%m%d)
 mkdir -p analysis/expected-new oracle/screens/expected/.archive/$STAMP
 
 # ── A) 四类资产 staging（源图来自 §7.1-§7.4；缺失按 mapping status 跳过）──────────
-python3 - <<'PY'
+python - <<'PY'
 import json, pathlib, shutil
 NEW=pathlib.Path("analysis/expected-new"); NEW.mkdir(parents=True, exist_ok=True)
 mp=pathlib.Path("analysis/repro/mapping.tsv")
@@ -1335,7 +1381,7 @@ print("staged:", sorted(p.name for p in NEW.glob("*.png")))
 PY
 
 # ── B) 校验 + 安装（归档旧件 → 落新件；staging 缺项按 status/duplicate_of 跳过）────
-python3 - <<'PY'
+python - <<'PY'
 import datetime, hashlib, pathlib, shutil
 NEW=pathlib.Path("analysis/expected-new"); OLD=pathlib.Path("oracle/screens/expected")
 STAMP=datetime.date.today().strftime("%Y%m%d")
@@ -1359,7 +1405,7 @@ print("installed:", changed)
 print("skipped(映射确认不动/dup):", [r["name"] for r in rows if not (NEW/f"{r['name']}.png").is_file()])
 PY
 # ── C) 安装后自检（只读；必须通过，才允许进入 §5）──────────────────────────
-python3 - <<'PY'
+python - <<'PY'
 import hashlib, pathlib
 OLD=pathlib.Path("oracle/screens/expected")
 miss=[n for n in ["l4_stg02-start","l4_stg06-late","l4_stg08-start","l4_stg08-combat","l4_stg08-late"]
@@ -1384,7 +1430,7 @@ PY
 STAMP=$(date +%Y%m%d)
 mkdir -p oracle/screens/actual/.archive/$STAMP oracle/screens/expected/.archive/$STAMP
 # 1) 旧 actual 归档：只归档 22 对（按 manifest 名单），实验图不动
-python3 - <<PY
+python - <<PY
 import json, pathlib, shutil
 M=json.loads(pathlib.Path("oracle/screens/l4-manifest.json").read_text(encoding="utf-8"))
 dst=pathlib.Path("oracle/screens/actual/.archive/$STAMP")
@@ -1397,7 +1443,7 @@ PY
 git ls-files oracle/screens/actual/*.png | head -3     # 确认旧文件在 git 中（历史可回溯）
 
 # 2) canonical run1 → actual/（仅 22 对；实验图保持原样）
-python3 - <<PY
+python - <<PY
 import json, pathlib, shutil
 M=json.loads(pathlib.Path("oracle/screens/l4-manifest.json").read_text(encoding="utf-8"))
 src=pathlib.Path("oracle/screens/actual_canonical_run1"); dst=pathlib.Path("oracle/screens/actual")
@@ -1408,7 +1454,7 @@ print("installed", len(M["pairs"]))
 PY
 
 # 3) expected 安装：**B1 —— §7a 已在 §5 之前完成安装（§7.7）**；此处只核验，不再复制/归档！
-python3 - <<'PY'
+python - <<'PY'
 import json, hashlib, pathlib
 M=json.loads(pathlib.Path("oracle/screens/l4-manifest.json").read_text(encoding="utf-8"))
 E=pathlib.Path("oracle/screens/expected"); bad=[]
@@ -1422,11 +1468,11 @@ print("expected 核验 OK:", len(M["pairs"]), "对与 manifest expected_sha256 �
 PY
 
 # 4) 重新生成 diff/report（注意 §8.3 R8 交互）；--strict 在 actual 已换新后跑（B3）
-python3 tools/diff_visual.py          > analysis/repro/visual-default.log 2>&1; echo "default exit=$?"
-python3 tools/diff_visual.py --strict > analysis/repro/visual-strict.log 2>&1; echo "strict exit=$?"
+python tools/diff_visual.py          > analysis/repro/visual-default.log 2>&1; echo "default exit=$?"
+python tools/diff_visual.py --strict > analysis/repro/visual-strict.log 2>&1; echo "strict exit=$?"
 
 # 5) strict 记录回填 manifest.strict（B3：资产替换后执行，命令完整）
-python3 - <<'PY'
+python - <<'PY'
 import json, pathlib
 mp=pathlib.Path("oracle/screens/l4-manifest.json")
 M=json.loads(mp.read_text(encoding="utf-8"))
@@ -1434,7 +1480,7 @@ log=pathlib.Path("analysis/repro/visual-strict.log").read_text(encoding="utf-8",
 line=[l for l in log if l.startswith("STRICT:")]
 assert line, "strict 日志无 STRICT 行（检查 diff_visual.py --strict 是否运行）"
 exit_code=1 if line[-1].startswith("STRICT: FAIL") else 0
-M["strict"]={"cmd":"python3 tools/diff_visual.py --strict","exit":exit_code,
+M["strict"]={"cmd":"python tools/diff_visual.py --strict","exit":exit_code,
              "line":line[-1],"ran_after_asset_swap":True}
 mp.write_text(json.dumps(M, ensure_ascii=False, indent=2)+"\n", encoding="utf-8", newline="\n")
 print("strict 回填:", M["strict"])
@@ -1446,6 +1492,10 @@ PY
 
 ### 8.2 基线验收清单（全过才算 P0-0 完成）
 
+- [ ] **环境接收（§1）已完成并记录**：Windows headless 冒烟 title-menu = 1080 frames/1080 trace/37 shots、
+      两跑 trace sha 相同、37/37 shots 逐字节相同；`gates status` PASS=11/FAIL=0/SKIP=1 且 `gates rom` PASS
+      （记录进 `analysis/p0-0-env.txt`——**该文件由 P0-0-0 执行时生成**、gitignored，内容清单见 §1.3；
+      **执行前不存在 ≠ 环境未接收**；E3 Lua IO 配置已生效）；
 - [ ] manifest 22 行齐全：`scene/frame/capture_tag/trigger/input_sha256/render_env/render_argv/expected_sha256/actual_sha256/status/reuse/duplicate_of`；
 - [ ] `two_run_deterministic=true`（22/22）；输入层 `DETERMINISM: PASS`；
 - [ ] §7 资产裁定全部落盘（5 类：stg02 1、四联 4、ending 5、fade 1、documented duplicate 判据）；
@@ -1501,7 +1551,11 @@ PY
 | fixtures 入库清单/体积估算（§2.5） | 本文档 |
 | 只读复算 C1-C11（现有基线现状） | 方案 §7；不改基线 |
 
-### 9.2 不可做（必须 Linux+Mesen2）
+### 9.2 不可做（需 Mesen2 实机采集；Windows headless 主路径）
+
+> 【2026-10-18 环境更正】以下不再「不可做」——Windows headless 环境已就绪（§1）：`scenario_run.py` 采集、
+> `phase-batch`、`render-frame`、oracle 截图/RAM/probe、两跑确定性、`diff_visual` 重生成、资产重采均可执行；
+> 仍受 E10 串行纪律约束（同一时刻一个 Mesen）。
 
 `scenario_run.py` 采集、`phase-batch`、`render-frame`（无 `analysis/` 输入）、oracle 截图/RAM/probe、
 两跑确定性、`diff_visual` 重生成（会写 oracle/screens）、资产重采。
@@ -1518,7 +1572,9 @@ PY
 
 ## 10. 需用户/Lead 裁定事项
 
-1. **Linux+Mesen2 入口**：提供方式（机器/容器/镜像 URL）、Mesen2 2.1.1 来源、可写入工作目录、最长保留时间；
+1. ~~**Linux+Mesen2 入口**：提供方式（机器/容器/镜像 URL）、Mesen2 2.1.1 来源、可写入工作目录、最长保留时间；~~
+   **【2026-10-18 已解决】** 环境改走 **Windows 宿主 + Mesen2 2.1.1 Win x64 headless**（§1；用户已提供
+   `tools/mesen2/Mesen.exe` + settings 配置）；WSL2 Linux 版 Mesen2 `std::bad_cast` 不可用，仅备选。
 2. **fixtures 入库政策**（§2.5）：是否允许 `oracle/l4-fixtures/**` 入库、体积上限（建议 ≤200MB）、脱敏/来源说明；
 3. **样本集重构**：stg02/四联/ending 的 expected 替换与标签重定义（会改变 L4 样本面，方案 §6.2-5）；
 4. **assist/injected 采集允许性**：**组 D 重裁候选来源**（§3.6 C1-C5：`tas-stg08b2-direct` 等选关/assist run）
@@ -1532,8 +1588,8 @@ PY
 
 | 事实 | 来源（只读核验） |
 |---|---|
-| Mesen2 2.1.1 Linux x64 置于 `tools/mesen2/Mesen`（gitignore 可再生） | `tools/scenario_run.py`（MESEN 常量）；`docs/methodology.md`；`docs/ai-decompile-pipeline.md` |
-| 采集串行锁/孤儿清场/旧产物自动归档/自管 Xvfb（t24 弃 xvfb-run 包装） | `tools/scenario_run.py`（lock/flock、`pgrep -f tools/mesen2/Mesen`、`archive_existing`、`Xvfb`+`DISPLAY`；docstring 仍写 xvfb-run=历史文案） |
+| **Mesen2 2.1.1 Win x64** `tools/mesen2/Mesen.exe`（gitignore 可再生；**Windows headless 主路径**）；Linux 版 `Mesen` 仅备选（bad_cast 不可用） | `tools/scenario_run.py`（MESEN/HEADLESS 判定）/`docs/methodology.md`/`docs/ai-decompile-pipeline.md` |
+| 串行锁/清场：Windows=msvcrt 1-byte 字节锁（无孤儿分支）；POSIX 备选=flock + `pgrep` 孤儿清扫 + 自管 Xvfb（t24 弃 xvfb-run 包装层） | `tools/scenario_run.py`（lock、`pgrep`、`archive_existing`、`Xvfb`+`DISPLAY`；docstring 的 xvfb-run=历史文案） |
 | 输出：`analysis/traces/<name>.{frames,captures,run}.jsonl/json`、`shots/<name>_f%05d_<tag>.png`、`.probe.jsonl`、`.done` | `tools/scenario_run.py`；`tools/scenario_capture.lua` |
 | probe 事件上限 = **3,000,001 事件**（`probeN>3,000,000` 后静默丢弃；F10）；probe_mem 为观察性回调（不改行为） | `tools/scenario_capture.lua`（probeN 上限；addMemoryCallback） |
 | Q4 输入注入 +1 帧延迟约定（frame 对齐口径） | `oracle/scenarios/README.md` §帧计数 |
@@ -1599,7 +1655,8 @@ TEXTFALLBACK, TRIHOP, WHITE13`（39 个）+ `REPO_ROOT`（唯一允许显式设�
 ## 附录 C：已知坑清单（操作者必读）
 
 1. **不要 `run-all`**（40 场景数小时）；只跑 §2.1 的 I1-I5。
-2. `scenario_run.py` docstring 的 `xvfb-run` 是历史文案；实际是自管 Xvfb（不要手工套 xvfb-run）。
+2. 【2026-10-18 环境更正】Windows headless 主路径**无 Xvfb**（`Mesen.exe --testRunner`）；`scenario_run.py`
+   docstring 的 `xvfb-run` 仅属 POSIX 历史文案——**不要手工套 Xvfb/包装层**（Linux 备选时才涉及）。
 3. probe 事件上限 = **3,000,001 事件**（`probeN>3,000,000` 后静默丢弃；不是"3,000,000 含头行"）→ 必须
    `wc -l − 该场景头行数` 核对（§2.4）。
 4. `phase-batch` 与 `render-frame` 的 cwd 必须是仓库根（相对路径输入）；`render-frame` 另受 `REPO_ROOT` 影响。
@@ -1610,7 +1667,9 @@ TEXTFALLBACK, TRIHOP, WHITE13`（39 个）+ `REPO_ROOT`（唯一允许显式设�
    `pgrep -f tools/mesen2/Mesen` 检查。
 8. `diff_visual.py` 会重写 `oracle/screens/` 下报告/差异图/申请单——P0-0 执行时属有意更新，提交前与 R8 协调。
 9. 旧 expected 的"真值"地位不因本次重采失效：重采须 blob 校验或显式 dated 替换（§7）。
-10. 本机 Windows 无 `analysis/` 时 `render-frame` 会 panic（`expect("trace")`）——这正是 P0-0 必须先在 Linux 完成的原因。
+10. 【2026-10-18 环境更正】Windows 主路径已打通（§1）：`analysis/` 路径/`render-frame` 均按 Windows 宿主验证；
+    不再要求「最终在 Linux 执行机完成」。若仍遇 `expect("trace")` panic ⇒ 先查 `analysis/traces/*.frames.jsonl`
+    是否由本机 scenario_run 生成（§2.2），属输入缺失而非平台问题。
 
 ## 附录 D：降级 A 预研可先行项（2026-10-18 Lead 口径确认 2；只读，**零验收数字**）
 
@@ -1622,14 +1681,14 @@ TEXTFALLBACK, TRIHOP, WHITE13`（39 个）+ `REPO_ROOT`（唯一允许显式设�
 | # | 项 | 结果（只读） | 复现 |
 |---|---|---|---|
 | D1 | 22 对旧签名预填表 | 与方案 §2.6 逐行比对 **0 mismatch**（附录 A） | 见 §附录 A |
-| D2 | **组 D 帧同余算术**（复核方点名项）：`tas-clear-full-v5` 的 `capture_every 1500 probe` 与 ending/fade 帧 | 28500/30000/31500/33000/34500/36000 = 1500×**19/20/21/22/23/24**，全部整除且 ≤36500 ⇒ **同余成立（A）**；但"v5 即来源"此前是 B——**【2026-10-18 更正】** 已由 `tas-clear-full.l5.jsonl` **证伪**（v5 f28500-36000=关 2 战斗段），本行只保留"同余算术"，来源改见 §3.6（C1 `tas-stg08b2-direct` 等） | `python3 -c "[print(f, f%1500==0, f//1500) for f in (28500,30000,31500,33000,34500,36000)]"` |
+| D2 | **组 D 帧同余算术**（复核方点名项）：`tas-clear-full-v5` 的 `capture_every 1500 probe` 与 ending/fade 帧 | 28500/30000/31500/33000/34500/36000 = 1500×**19/20/21/22/23/24**，全部整除且 ≤36500 ⇒ **同余成立（A）**；但"v5 即来源"此前是 B——**【2026-10-18 更正】** 已由 `tas-clear-full.l5.jsonl` **证伪**（v5 f28500-36000=关 2 战斗段），本行只保留"同余算术"，来源改见 §3.6（C1 `tas-stg08b2-direct` 等） | `python -c "[print(f, f%1500==0, f//1500) for f in (28500,30000,31500,33000,34500,36000)]"` |
 | D3 | 候选场景覆盖算术 | 全部 True：gameplay-stage1 2400≥2349；stg03-timeline 24000≥12000；stg02-timeline 19000≥12000；stg04-timeline 26000≥12000；stg08-timeline 34000≥28000；stg07-timeline 32000≥28000；tas-clear-full-v5 300000≥36000；v4/v3/v2 30000≥30000；title-menu 1080≥180 | 读各 `oracle/scenarios/<name>.txt` 的 `frames` 行 |
 | D4 | probe 配置对照 | `gameplay-stage1` 15 条 probe_mem（含 `002f 0030`/`2006 2007` **重复登记**）；`stg03-timeline`/`stg08-timeline` = 标准 8 区间；`tas-clear-full-v5` **无 probe_mem**（→ overlay 必须新增，§3.2） | `grep -c '^probe_mem ' oracle/scenarios/*.txt` |
 | D5 | 独立 12 对 expected/actual **内容画像**（非验收；供 P0-1 后族判据参考） | expected 非黑像素：clear-inject 58,209 / fade-clear 59,371 / combat-variety 27,974 / shop-window 16,880 / stg07-start 11,017 / stg07-combat 9,649 / gameplay 1,074/1,571/1,751 / stg03-start 1,222 / late-combat 1,552 / title 0；actual 非黑像素同序仅 876/0/756/902/861/789/951/1,027/1,109/1,066/116/0 ⇒ 数据面印证"多数内容帧 actual 近黑"（B，待 P0-0 后重算） | 见下方脚本 |
 | D6 | 附录 B 39 env 计数（复核方点名项） | `render_frame.rs` 中 `var("…")` 去重 = **39 个诊断 env + REPO_ROOT**（附录 B 与代码逐项一致） | 见下方脚本 |
 | D7 | `--out-dir/--log-path` 代码 diff 规格 | 已可交 porter 预实现（§4.1）；**验收仍等 P0-0**（此改动本身不产生基线数字） | — |
 | D8 | overlay 生成脚本 / wrapper 完整实现 | **已按 task-30 F1/F3 修正**：overlay 生成器按区间去重（§3.2）、wrapper 为完整实现（读 mapping.tsv→22 行断言→全字段 manifest→dedupe→可选 `--strict`，§5.3）；可先提交评审、环境就绪直接跑 | §3.2/§5.3 |
-| D9 | **v5 帧预算复算（2026-10-18 更正·L5 交叉核对）** | `tas-clear-full.l5.jsonl` 检查点：stg01-clear **f28364** / stg02-clear f51332 / stg03-clear f72823 / stg04-combat **f73939** ⇒ **36500f 截断时 v5 仍在关 2** ⇒ 原 I5/§7.2"按 stage_no==6/8 选帧"**必然失败**；四联来源更正为 §3.7（`tas-stg08b2-direct` + `stg06-timeline`），v5 降为负候选 | `python3 -c "import json;[print(json.loads(l)['f'],json.loads(l)['checkpoint']) for l in open('oracle/traces/tas-clear-full.l5.jsonl')]"` |
+| D9 | **v5 帧预算复算（2026-10-18 更正·L5 交叉核对）** | `tas-clear-full.l5.jsonl` 检查点：stg01-clear **f28364** / stg02-clear f51332 / stg03-clear f72823 / stg04-combat **f73939** ⇒ **36500f 截断时 v5 仍在关 2** ⇒ 原 I5/§7.2"按 stage_no==6/8 选帧"**必然失败**；四联来源更正为 §3.7（`tas-stg08b2-direct` + `stg06-timeline`），v5 降为负候选 | `python -c "import json;[print(json.loads(l)['f'],json.loads(l)['checkpoint']) for l in open('oracle/traces/tas-clear-full.l5.jsonl')]"` |
 
 **D5/D6 复现脚本**（只读；本机可跑）：
 ```python
@@ -1698,7 +1757,7 @@ print(", ".join(x for x in env if x!="REPO_ROOT"))
 | **F17** | 次要 | §7.5 | "DUO"→**DUP** |
 | **S1** | 建议 | §5.3 | wrapper 完整工具化（同 F3） |
 | **S2** | 建议 | §7.5 | 去重脚本按 manifest 名过滤 + 输出 `dedupe.tsv`（同 F2） |
-| **S3** | 建议 | E11 | 环境清单增系统依赖行（Xvfb/X11；P0-0 只构建 game-desktop/game-oracle） |
+| **S3** | 环境（2026-10-18 更正） | E11 | **Windows headless 主路径无 Xvfb/X11 依赖**（Mesen.exe 自带 runtime）；P0-0 构建 game-desktop/game-oracle（**会编译 game-desktop 的 winit/softbuffer 依赖**；task-87 F-1）；POSIX 备选构建才需 X11 库 |
 | **S4** | 建议 | 附录 D D8 | 状态更新：overlay/wrapper 已按 F1/F3 修正 |
 | **S5** | 建议 | §3.3 末注、附录 D2/D3 | "同余≠来源"醒目交叉引用 |
 | **S6** | 建议 | 头部、§11 | 标注"环境事实核验时点 HEAD 167d8a9（分析时点）"，执行前重核 `--out-dir` 是否已实现 |
@@ -1751,3 +1810,57 @@ print(", ".join(x for x in env if x!="REPO_ROOT"))
   `trigger=injected` 如实登记。
 - **不改变**：expected 唯一安装点（§7.7）、四联"重采真值"裁定本身、组 D 重裁（§3.6）与其余判据。
 
+---
+
+## 16. 【2026-10-18 环境更正】Windows Mesen2 2.1.1 headless 打通（task-81）
+
+> 本节=环境主路径的 dated 更正与实测证据。原「Linux+Mesen2 入口/自管 Xvfb/xvfb-run/`/DoNotSaveSettings`」
+> 表述仅作 **POSIX 备选**留档（§1.4）；主路径以本节 + §1 为准。
+
+### 16.1 环境事实（本机实测）
+
+| 事实 | 值/证据 |
+|---|---|
+| 宿主/工具链 | Windows x64；Python **3.12.1**；cargo **1.96.0-nightly (cbb9bb8bd 2026-03-13)** |
+| Mesen2 | **Windows 版 2.1.1 x64**：`tools/mesen2/Mesen.exe`，sha256=`d2eb03c2590c648bf329f127ebcfefd70130e7690a9e2ccdba8616faea1fe96b`（70,470,144B；gitignored 可再生件） |
+| headless 驱动 | `Mesen.exe --testRunner <lua> <rom>`（**无显示/Xvfb**）；`scenario_run.py` 在 Windows 自动 `HEADLESS=1`（`GUNNAC_MESEN`/`GUNNAC_HEADLESS` 可覆盖） |
+| Lua IO 配置前置 | `%USERPROFILE%\Documents\Mesen2\settings.json` → **`Debug.ScriptWindow.AllowIoOsAccess=true`**（有效键；`ScriptWindowConfig.AllowIoOsAccess` 实测不生效；机理/判据见 [gotcha-mesen2-headless-windows-io](../knowledge/gotcha-mesen2-headless-windows-io.md)）；改后重启 Mesen；校验命令见 §1.1 E3 |
+| WSL2/Linux 版 Mesen2 | 2.1.1 Linux 任何 invocation `std::bad_cast`（exit 134）⇒ **不可用**，仅备选（换可用构建才谈 Linux 路径） |
+
+### 16.2 冒烟实测（2026-10-18，本机）
+
+```
+== scenario run: title-menu ==
+  DSL: oracle/scenarios/title-menu.txt sha256=258067a319351ef9…
+  frames: 1080 trace_lines: 1080 captures: 37 shots: 37 wall: 3.5s
+  DONE: {"frames": 1080, "trace_lines": 1080, "captures": 37, "shots": 37, "bot_stop": false}
+```
+- **两跑确定性**：trace sha256=`62c9ea09580654ce691662c4d35ef98d0e722bdeaa88ccd893172a5d9389a331` 两跑相同；
+  `shots/title-menu_f*.png` **37/37 逐字节相同**；
+- **门禁**：`gates/cli.py status` = PASS=11 / FAIL=0 / SKIP=1（addr-bridge）/ TOLERATED=0，**STATUS: OK**；
+  `gates/cli.py rom` = `[PASS] rom-integrity`（4 锚点 sha）。
+- **结论：P0-0-0（环境接收）通过，可启动 P0-0-1（§2 输入采集）。**
+
+### 16.3 影响面（已同步修改）
+
+- **§1**：E1-E11 改 Windows 主路径（E3=Lua IO 配置、E3b=无显示、E11=无 X11/Xvfb 依赖〔**构建 game-desktop
+  仍会编译 winit/softbuffer 依赖；POSIX 备选构建才需 X11 库**，见 §1.1 E11〕）；§1.2 冒烟判据+
+  两跑确定性；§1.3 版本记录（Mesen.exe sha）；§1.4 headless 驱动/POSIX 备选。
+- **§0.5**：新增「环境就绪 ⇒ P0-0-0 通过，可启动 P0-0-1」。
+- **§2**：命令解释器统一 `python`（Windows；POSIX 备选换 `python3`）。
+- **§8.2**：验收清单新增环境接收项（冒烟/两跑/gates 证据）。
+- **§9.2/§10.1**：「必须 Linux+Mesen2」降级为「需 Mesen2 实机采集（Windows headless 主路径）」；
+  Linux 入口事项标记**已解决**（历史留档）。
+- **§11/附录 S3/附录 C**：Xvfb/`/DoNotSaveSettings`/Windows 路径风险降级为 POSIX 备选表述。
+- **【2026-10-18 task-87（task-85 复审 F-1..F-4）】** E11 依赖事实更正（winit/softbuffer 必编译、
+  POSIX 才需 X11；§1.4/附录 S3 同步）；E3/§16.1 补证据指针（知识库 gotcha）；
+  §1.3/§8.2 的 `analysis/p0-0-env.txt` 注明为 P0-0-0 执行时产物；E9 内存 GiB/GB 双口径统一。
+
+### 16.4 复现
+
+```powershell
+python tools/scenario_run.py run title-menu --timeout 600
+python gates/cli.py status
+python gates/cli.py rom
+```
+判据见 §1.2；若 E3 未配置，典型症状=无 trace/shots（Lua `io.open` 被拒）。
