@@ -37,6 +37,16 @@
 | 4 | 击杀数单位 | Soig sheet2 vs 实测事件计数对照 | W-BOSSUNIT |
 | 5 | 终 boss 结局链衔接 | $180==9 → $95F9 与终 boss 死亡时序 | OBS-1/结局段 |
 
+## 2.5 E-W07 首钻定谳（f64e0cb——实装输入）
+
+- **生成链三级**：`$CA→$CB×N→$CD` 部件链（`$0400,Y type` 写实证——⑧子对象生成器同族）；
+- **`$48C` 状态机=相位机本体**：0/1 互切+参数表 `$A3B4/$A3BC` 对随状态切——
+  `BossDmgPath.phase_coeff` 挂 **`$48C` 状态维**（非独立相位旗）；`boss_behavior_step`
+  的 `phase`=状态机值（fail-closed 单相照执）；
+- **`$ADF4` 轨迹 helper**（`$EBF4` 表×速度参）；**死亡门 `$ADCF`**（HP==0→`$ADF2`
+  死亡态参流）——boss_hits_to_kill 的 HP 归 0 判据同源；
+- 切换条件（HP/计时）=trace 后补判据表（W-BOSSID 绑定随附）。
+
 ## 3. fail-closed 边界
 - 相位判据/伤害系数未证前：`phase_coeff=None`（无系数）+`boss_behavior_step` 单相直通；
 - 多相状态机不发明（E-W07 取证后按 ①②③ 表逐项实装）；
