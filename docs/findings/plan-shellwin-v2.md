@@ -136,4 +136,39 @@ cargo run -p shell-win                             # GUI 手动：模式角标/H
 
 ## 8. 实施状态（2026-10-18 回填）
 
-**结论**：**实施中**——方案落盘；实现/门禁/复核结果待实现 commit 后回填（不改写 §0-§7 历史主张）。
+**结论**：**实现完成，待独立对抗复核**（spec §4 状态回填待 task-29 的 `platform-shell.md` 未提交改动入库后
+以精确 pathspec 补；见 §8.4）。
+
+### 8.1 commit 列表（task-10 写范围）
+
+| commit | 主题 |
+|---|---|
+| `a630666` | `docs(platform)`：本方案（接口对照/呈现管线/view 摘要/未证域声明） |
+| `4a0672b` | `feat(platform)`：shell-win v2 FrameView 渲染（模式占位画面/HUD 数值域占位/敌槽 Some 路径） |
+| 待补 | `docs(spec)`：platform-shell §4.1/§4.2 状态回填（阻塞于 task-29 并发写，见 §8.4） |
+
+### 8.2 实测（本机 Windows，2026-10-18；HEAD `4a0672b` + 并发 task-29 工作树）
+
+| 验收项 | 命令 | 结果 |
+|---|---|---|
+| 单 crate | `cargo test -p shell-win` | lib **12** + smoke **21** = **33 passed / 0 failed** |
+| 渲染覆盖层 | lib 单测 | view 摘要确定性/敏感性、模式占位色、HUD 2×2/位行编码、敌槽 Some 门、present 计数语义 |
+| 模式推进（集成） | `tests/smoke.rs::menu_dispatch_progresses_modes_with_platform_input_only` | 1100 帧按键透传→Host 内派发，实测序列 `Boot→Black→Title→Menu→Shop→ShopInfo→Transition→StageStart→Combat`（mode_tag 0..8），`stage_loaded=true`、`gameplay_tick>0`；shell 不实现派发 |
+| 自检 | `cargo run -p shell-win -- --selftest-frames 300` ×2 | stdout 逐行一致、exit 0；`view_signature=0xf6603346bf818ffd`（新增行）；`display_signature=0xe99af5849b632fbd`（v2 覆盖层改变合成）；`canvas_signature=0x963ac9a776a57625` 不变 |
+| 自检 host 签名时点 | 同上 | `host_signature=0x5d7156266d6ac19d`（=task-29 B1 修后的树口径；platform-porter 独立复现同值。值链：task-1 `0xcde9…` → task-9 `0xf51d…` → task-29 `0x5d71…`；**非回归**） |
+| GUI 实跑 | `target/debug/shell-win.exe` + PrintWindow 截图 | 窗口标题 `gunnac-remake (Stage A)`；CHR 背景；**Title 模式黄色角标**（`MODE_MARKER_COLORS[2]`）；HUD 占位位行；整数缩放上屏（单元测试锁 2×/3×/黑边）。截图 `target/gui-shellwin-v2-printwindow.png`（可再生不入库） |
+| GUI 模式推进 | 键注入（SendKeys） | **环境限制**：本机会话 SendKeys 未送达 winit 窗口（stderr 仅自动锚 Boot→Black→Title）⇒ 键驱动推进以集成测试为证据；GUI 键推进仍为手动验收项（不声称已自动验证） |
+
+### 8.3 未证域落实（与 §5 一致）
+
+敌槽 `position=None`⇒不画（运行态 20 槽全 None；集成测试断言）；`type_code` 不反推坐标；玩家子弹不画
+（仅 `view_digest` 登记计数，集成测试断言"计数变化不改像素"）；HUD 只画已证数值域且为占位编码
+（点阵/位行，非原版字形/布局）；模式画面仅占位角标；未改 game-shell/core/platform。
+
+### 8.4 待办
+
+1. **spec §4 状态回填**：`docs/spec/platform-shell.md` 当前有 task-29 未提交改动（触发键分离行/签名值链），
+   为避免再次误卷，待其入库后只补 §4.1 渲染内容/自检行 + §4.2 新值（精确 pathspec）。
+2. **独立对抗复核**（task-12）：本产出在复核 pass 前只算"待审稿"。
+3. GUI 键驱动模式推进的手动验收（环境限制已如实登记）。
+
