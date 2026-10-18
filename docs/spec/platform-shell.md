@@ -157,7 +157,7 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 > 此处保留历史口径以免读者把旧注当现状。
 | 存储 | `FileStorage`（`Storage` impl）：`%APPDATA%/gunnac`（Win）/`~/.local/share/gunnac`（Linux），`slot{n}.sav` | 单测：往返/空槽 fail-closed；**不自动保存**（原版存档语义未证） |
 | 生命周期 | `LifecycleQueue`：关窗→`Quit`；焦点丢失/获得→`Suspend`/`Resume`（最小平台策略）；宿主 suspend 停逻辑帧 | FIFO 单测；game-shell 门控测试 |
-| 渲染内容（v2，task-10） | `FrameView` 覆盖层：CHR 背景（v1 灰阶占位）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）+ **模式占位角标**（`mode_tag`→`MODE_MARKER_COLORS`；Boot/Title/Menu/Shop/Stage 可见区分；**非原版美术/文字**）+ **HUD 数值域占位编码**（`money_digits(digit,show)` 逐桁 2×2 点阵、`bomb_ammo` 8bit 位行、`stage` 4bit 位行；固定占位槽；**非原版字形/布局/文本**）+ **敌槽占位块**（仅 `position+type_code` 均 `Some`；v1 运行态 `position` 恒 None⇒不画；`type_code` 不反推坐标）+ **玩家子弹不画**（无坐标面；仅入 view 摘要） | 单测：合成保玩家块/模式占位色/HUD 编码/敌槽门/子弹计数不改像素；smoke：1100 帧按键透传→Host 内派发模式推进（Boot→…→Combat）；GUI PrintWindow：标题/CHR 背景/Title 角标/HUD 占位位行 |
+| 渲染内容（v2，task-10；task-44 子弹） | `FrameView` 覆盖层：CHR 背景（v1 灰阶占位）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）+ **模式占位角标**（`mode_tag`→`MODE_MARKER_COLORS`；Boot/Title/Menu/Shop/Stage 可见区分；**非原版美术/文字**）+ **HUD 数值域占位编码**（`money_digits(digit,show)` 逐桁 2×2 点阵、`bomb_ammo` 8bit 位行、`stage` 4bit 位行；固定占位槽；**非原版字形/布局/文本**）+ **敌槽占位块**（仅 `position+type_code` 均 `Some`；v1 运行态 `position` 恒 None⇒不画；`type_code` 不反推坐标）+ **玩家子弹占位块**（task-44：`player_bullets` 中 `Some(BulletView)` 按已证坐标面 `$04EE/$055E` 画 4×4 纯色占位块；图样/尺寸/颜色/弹道未证⇒`TODO(shell-v2)`；`hits_this_frame` 不画布、仅入 view 摘要） | 单测：合成保玩家块/模式占位色/HUD 编码/敌槽门/子弹坐标+数量变化⇒像素变化；smoke：1400 帧按键透传→Host 内派发→Combat→按 B 实弹渲染断言；GUI PostMessage+PrintWindow 抽样：子弹占位色像素出现（bbox/计数见 plan-shellwin-v2 §8.6） |
 | 自检 | `cargo run -p shell-win -- --selftest-frames N`：无窗口、真实 `AssetSource`、固定已证 `ModeEvent`/按钮脚本；每帧用 `Host::frame_view()` 最新视图重合成覆盖层；新增**独立 view 摘要签名**（仅 FrameView 字段 FNV、平台无关；**不改** `Host::signature()` 语义） | 300 帧连跑两次 stdout 逐行一致、退出码 0（§4.2，含 `view_signature`） |
 
 **迁移**：旧骨架的 `FrameDriver`/`GameHost`（重复宿主逻辑）已删除，改接 `game_shell::FixedStep`/
@@ -174,7 +174,7 @@ selftest: mode=Combat stage=1 frame=300
 selftest: host_signature=0x68547665bf1ab396
 selftest: canvas_signature=0x963ac9a776a57625
 selftest: display_signature=0xe99af5849b632fbd
-selftest: view_signature=0xf6603346bf818ffd
+selftest: view_signature=0x15dbc2c7b0ba0a5d
 selftest: audio_writes=2 audio_frames=300
 selftest: rom_len=Some(262160)
 selftest: OK
@@ -203,6 +203,13 @@ selftest: OK
 > 溢出计数）；**非回归**，300 帧连跑两次逐行一致。`canvas_signature`/`display_signature`/
 > `view_signature` 均不变（渲染与 FrameView 视图签名字段语义未改；shell-win 仅 FrameView 字面量
 > 适配 `..Default::default()`，见 [plan-bullets-hit.md](../findings/plan-bullets-hit.md) §8.1）。
+>
+> 【2026-10-18 task-44 更新】`view_signature` 由 `0xf6603346bf818ffd` → **`0x15dbc2c7b0ba0a5d`**：
+> 原因=平台侧 view 摘要扩展纳入 `player_bullets`（20 槽：None/Some tag + `slot/x/y/type_code`）与
+> `hits_this_frame`（事件面）；并开始按已证坐标面渲染玩家子弹 4×4 占位块（图样/尺寸/颜色未证）。
+> `display_signature`/`canvas_signature`/`host_signature` 不变（selftest 无关卡装载⇒不产弹，
+> 游戏逻辑未改）；**非回归**：300 帧连跑两次 stdout 逐行一致。GUI 实跑（PostMessage+PrintWindow）
+> 抽样到子弹占位色像素（§4.1 验证列 / plan-shellwin-v2 §8.6）。
 
 **口径**：`host_signature`/`canvas_signature`/`display_signature`/`view_signature` 是**确定性回归锚**，
 **不声称**等价真机 trace 对拍（platform-shell.md §3/§9 同口径）；`display_signature` 含平台侧
@@ -210,10 +217,11 @@ CHR 背景+`FrameView` 覆盖层占位合成（非原版像素/布局，L4 不�
 字段（平台无关）。GUI 视觉（缩放/黑边/CHR 背景/模式角标/HUD 占位）为手动验收项。
 
 **未证/未接（与 §8 一致）**：菜单/模式派发已由 game-shell 接线（窗口可从 Boot 推进、Start 派发、
-转场帧装载 STG-01）；**shell-win 渲染（v2）**=CHR 背景+玩家块+**占位覆盖层**（模式角标/HUD 数值域
-占位编码/敌槽 Some 占位门）；**敌坐标写者链/敌图样、玩家子弹坐标（H-01）、HUD 字形/布局/文本、
-原版 BG/nametable/美术一律未画/不发明**；GUI 键驱动模式推进受本机会话输入注入限制，以集成测试为
-证据、GUI 键推进列手动验收项；音频 PCM 静音占位；spawn 坐标写者链/初生记录未接；
+转场帧装载 STG-01）；**shell-win 渲染（v2+）**=CHR 背景+玩家块+**占位覆盖层**（模式角标/HUD 数值域
+占位编码/敌槽 Some 占位门/**玩家子弹已证坐标面 4×4 占位块**）；**敌坐标写者链/敌图样、玩家子弹
+图样/尺寸/颜色/弹道（H-01 余项）、HUD 字形/布局/文本、原版 BG/nametable/美术一律占位/不画/不发明**；
+GUI 键推进已可用 `PostMessage(WM_KEYDOWN)`+`PrintWindow` 自动化（task-44 实测；`SendKeys`/前台授权
+在本会话失败属环境限制）；音频 PCM 静音占位；spawn 坐标写者链/初生记录未接；
 `shell-win→shell-pc` 更名待用户裁定。
 
 ## 5. 平台矩阵（PC / Android 对照）
@@ -319,7 +327,8 @@ cargo test -p game-shell --test stg01_replay -- --nocapture
 
 # 4) 平台侧回归（shell-win 未改行为；selftest 两次逐行一致）
 cargo run -p shell-win -- --selftest-frames 300
-#   2026-10-18 task-37 后 host_signature=0x68547665bf1ab396（弹/命中接线语义更新；canvas/display/view 不变）
+#   2026-10-18 task-37 后 host_signature=0x68547665bf1ab396（弹/命中接线语义更新；canvas/display 不变；
+#   view 由 task-44 摘要扩展更新为 0x15dbc2c7b0ba0a5d，见 §4.2）
 
 # 4b) STG-01 战斗弹丸/命中集成（task-37；真实 ROM，两次 run 全等）
 cargo test -p game-shell --test stg01_combat -- --nocapture

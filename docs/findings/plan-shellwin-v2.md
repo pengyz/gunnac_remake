@@ -50,7 +50,9 @@
 | `stage: u8`（`$180`） | A 级 | HUD 位行占位编码 + view 摘要 | 布局/图标未证 |
 | `player: PlayerState` | `$04E0/$04FC` A 级 | 玩家 8×8 仍由 game-shell `compose_frame` 画；shell 不重复画 | 保持单一绘制源 |
 | `live_bullets: u16` | 引擎活弹计数（A 级地址面） | 不画；入 view 摘要 | 全槽计数 |
-| `player_bullets_live: u16` | 槽分类计数（A 级 `PLAYER_ONLY_SLOTS`∪`SHARED_SLOTS`） | 不画；入 view 摘要 | **无坐标面**（H-01 未证）|
+| `player_bullets_live: u16` | 槽分类计数（A 级 `PLAYER_ONLY_SLOTS`∪`SHARED_SLOTS`） | 不画（绘制源=坐标面 `player_bullets`）；入 view 摘要 | 计数本身不定位 |
+| `player_bullets: [Option<BulletView>;20]`（task-37） | **坐标面 A 级**：`BulletView{slot,x=$04EE,y=$055E,type_code=$063E}`；存活=弹网格空槽判 | **task-44：按已证坐标画 4×4 占位块**（图样/尺寸/颜色未证→`TODO(shell-v2)`）；型值不命名/不用于视觉；入 view 摘要 | 首次"玩家输出可见"；不发明弹型视觉 |
+| `hits_this_frame: [Option<EnemyHitEvent>;4]`（task-37） | 事件面（命中管线可观测结果） | **不画布**；入 view 摘要 | 事件≠画面，避免发明命中特效 |
 | `enemy_slots: [EnemySlotView; 20]` | 槽 8..=27；`$0400` 型值 A 级；坐标 **v1 恒 None**（写者链未证） | 仅 `position=Some && type_code=Some` 画 8×8 占位块（图样未证→`TODO(shell-v2)`）；`None` 一律不画；`type_code` **不反推坐标**、不命名语义 | 运行态 None⇒不画；单测用合成 view 覆盖 Some 路径 |
 | `hud.money_digits: [(u8,bool);7]` | R-money-4 已证显示桁位（逐位左起/前导零跳位/至少个位） | **2×2 点阵占位块**：bit0..3 二进制编码 digit(0..9)；固定占位槽位；`show=false` 不画 | 字形/位图/布局未证 |
 | `hud.bomb_ammo: u8`（`$018F`） | A 级 | **8 位位行占位**（8×2 像素，bit i→第 i 列）固定槽位 | 图标/文本未证 |
@@ -58,11 +60,11 @@
 
 **锁定口径**（Lead + platform-porter 已对齐，实施必须遵守）：
 1. `position=None` ⇒ 不画（不得当 (0,0)）；
-2. 子弹不画（无坐标面）；
+2. 玩家子弹**只画已证坐标面**（task-37 `player_bullets`）；图样/尺寸/颜色/弹道未证 ⇒ 占位块，不发明弹型视觉；`hits_this_frame` 不画布；
 3. HUD 只画数值域、显式占位编码，文档/汇报**不得声称**原版 HUD 像素/布局一致；
 4. 模式画面只做占位区分；派发在 `Host::tick` 内，shell 只透传按键；`set_auto_flow(false)` 仅测试用；
 5. view 摘要**平台无关**（仅 FrameView 字段；不混 renderer 尺寸/缩放/present 计数等平台态），
-   既有 `host/canvas/display` 三签名语义不动。
+   既有 `host/canvas/display` 三签名语义不动；task-44 起摘要含玩家子弹/命中事件字段。
 
 ## 3. 呈现管线（shell 侧合成，v2）
 
@@ -77,7 +79,9 @@ shell FrameRenderer.present()
        - 模式标记：8×8 角标（mode_tag→MODE_MARKER_COLORS）
        - HUD：money_digits 2×2 点阵 + bomb_ammo 8bit 位行 + stage 4bit 位行（固定占位槽）
        - 敌槽：position/type_code 均 Some 时 8×8 占位块（v1 运行态无）
-       - 子弹：不画（TODO；仅摘要）
+       - 玩家子弹（task-44）：Some(BulletView) 按 `$04EE/$055E` 画 4×4 占位块
+         （图样/尺寸/颜色未证 → TODO(shell-v2)；不发明弹型视觉）
+       - hits_this_frame：不画布（事件面；仅入 view 摘要）
   4) 整数缩放/黑边 → softbuffer（v1 已有）
 ```
 
@@ -97,7 +101,9 @@ softbuffer present**。收口前为 **2 次**（tick 内 blit 上一帧 view + r
 
 `pub fn frame_view_digest(view: &FrameView) -> u64`：FNV-1a 64 over
 `frame`、`snapshot::mode_tag(mode)`、`stage`、玩家 6 字段、`live_bullets`、`player_bullets_live`、
-20×敌槽（slot/type_code/position）、HUD（7×(digit,show)、bomb_ammo、stage）。
+20×敌槽（slot/type_code/position）、**20×玩家子弹**（None/Some tag + slot/x/y/type_code，task-44）、
+**4×命中事件**（None/Some tag + enemy_slot/bullet_slot/damage/fail_closed/frame，task-44）、
+HUD（7×(digit,show)、bomb_ammo、stage）。
 **不混入**：窗口尺寸/缩放/present 计数等平台态。用途=`--selftest-frames` 新输出行
 `selftest: view_signature=0x…`（两次一致）；**不改** `Host::signature()`。
 
@@ -107,7 +113,8 @@ softbuffer present**。收口前为 **2 次**（tick 内 blit 上一帧 view + r
 |---|---|---|
 | 敌坐标写者链（spawn 定位/行为 VM 位置写） | 未证 | `position` 恒 None⇒不画；`type_code` 不反推坐标 |
 | 敌精灵图样/尺寸/调色板/优先级 | 未证 | 8×8 纯色占位块（类型值→占位色）；`TODO(shell-v2)` |
-| 玩家子弹坐标/弹道（H-01） | 未证 | 不画；摘要只登记 `player_bullets_live` |
+| 玩家子弹**图样/尺寸/颜色/弹道**（H-01 余项） | 坐标面已证（task-37 `$04EE/$055E`）；视觉未证 | **task-44：按已证坐标画 4×4 纯色占位块**；不发明弹型视觉/弹道特效；`TODO(shell-v2)` |
+| 敌命中事件（`hits_this_frame`）的画面表现（命中特效/闪光） | 未证 | **不画布**；事件仅入 view 摘要 |
 | HUD 字形/位图/屏幕坐标/文本/图标 | 未证 | 2×2 点阵/位行占位编码 + 固定占位槽；**非原版 HUD** |
 | **HUD 可见性/显示时机（模式门）** | 未证 | v2 **所有模式**（含 Boot/Title/Menu/Shop）恒画 HUD 数值域占位；**不声称原版显示时机/可见性一致**；不改绘制行为（task-36 E5） |
 | 原版 BG/nametable/调色板/文本流/结局卡 | 未证 | CHR 背景沿用 v1 灰阶占位；不新增 |
@@ -211,4 +218,38 @@ cargo run -p shell-win                             # GUI 手动：模式角标/H
 
 > **提交说明**：按 task-36 卡指示，本卡改动**不 git add/commit**（留在工作树），完成后回报改动与实测，
 > 由 Lead/独立复核后统一提交。
+
+### 8.6 task-44 玩家子弹渲染（2026-10-18 回填）
+
+**来源**：task-44（前置 task-37 FrameView 弹丸字段复核 pass）。目标=首次"玩家输出可见"；只画**已证坐标面**。
+
+| commit | 主题 |
+|---|---|
+| `3dc4333` | `feat(platform)`：shell-win 渲染玩家子弹（已证坐标面 4×4 占位块 + view 摘要扩展 + F4 注释更正 + 契约测试） |
+| 本次 docs commit | `docs(spec/finding)`：plan §2/§3/§4/§5 + platform-shell §4 区回填（本 §8.6） |
+
+**实现口径**
+- `player_bullets: [Option<BulletView>;20]`（task-37：`slot`+`x=$04EE`/`y=$055E`/`type_code=$063E` A 地址面；
+  存活=弹网格空槽过滤）⇒ `Some` 按坐标画 **4×4 纯色占位块**（`PLAYER_BULLET_PLACEHOLDER_RGBA`，
+  唯一色便于 GUI 抽样）；`type_code` **不命名/不用于视觉**（仅入摘要）；图样/尺寸/颜色/弹道未证
+  ⇒ `TODO(shell-v2)`，**不发明弹型视觉**。
+- `hits_this_frame`：**不画布**（事件面；避免发明命中特效），仅入 view 摘要。
+- `frame_view_digest` 扩展：玩家子弹 20 槽（None/Some 显式 tag + slot/x/y/type_code）+
+  命中事件 4 条（tag + enemy_slot/bullet_slot/damage/fail_closed/frame）；仍平台无关、独立于 `Host::signature()`。
+- F4：lib 顶部/`draw_frame_view_overlay`/main.rs 未证域注释里过期的「FrameView 无坐标面/子弹不画」
+  已更正为「坐标面已证、视觉未证⇒占位块」。
+
+**task-44 实测（本机 Windows，2026-10-18；HEAD `3dc4333`）**
+
+| 验收项 | 命令 | 结果 |
+|---|---|---|
+| 单 crate | `cargo test -p shell-win` | lib **14** + smoke **22** = **36 passed / 0 failed**（本卡 +3：lib 子弹占位/摘要敏感 2 + smoke 实弹渲染 1） |
+| 全量 | `cargo test --workspace` | exit 0 全绿 |
+| 总闸 | `python gates/cli.py check` | **CHECK: PASS**（PASS=11 FAIL=0 SKIP=1 TOLERATED=0；期间一次 docs-links FAIL 归因并发未跟踪复核文件，对方落定后复跑 PASS） |
+| 自检 | `cargo run -p shell-win -- --selftest-frames 300` ×2 | stdout 逐行一致、exit 0；`host=0x68547665bf1ab396`（task-37 语义不变）/ `canvas=0x963ac9a776a57625`（不变）/ `display=0xe99af5849b632fbd`（selftest 无关卡装载⇒不产弹，不变）/ **`view=0x15dbc2c7b0ba0a5d`**（摘要扩展，**非回归**） |
+| GUI 实弹 | `PostMessage(WM_KEYDOWN)` 注入（Title→Menu→Shop→ShopInfo→Transition→StageStart→Combat）+ 按住 B（X 键）2s + `PrintWindow` 像素采样 | 到达 Combat（stderr `mode=Combat ... frame=1085`）；截图 `target/gui-shellwin-v2-bullets.png`（可再生不入库）中子弹占位色像素 **128px**、bbox `(264,99)-(271,232)`（窗口 528×519=客户区 2×）⇒ 子弹按已证坐标面真实上屏 |
+| 黑边/缩放 | `view_rect`/`blit_scaled` 既有单测 | 保持（本卡未改缩放/blit 代码） |
+
+**未证/边界（与 §5 一致）**：玩家弹**图样/尺寸/颜色/弹道**（H-01 余项）未证⇒占位块；`hits_this_frame`
+不画布；敌弹/敌坐标/敌图样仍未接/不画。**不声称**任何原版弹型视觉或像素一致；L4 不适用。
 
