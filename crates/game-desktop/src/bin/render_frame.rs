@@ -9,7 +9,7 @@
 
 use game_core::terrain::Nametable;
 use game_desktop::{Canvas, SCREEN_H, SCREEN_W};
-use std::io::Write;
+use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 
 // ===== CLI / 输出参数化（task-94，P0-0-2；规格=l4-baseline-freeze-plan §4.1）=====
@@ -262,37 +262,38 @@ pub fn env_explicit_summary() -> String {
     format!("{{{}}}", kv.join(","))
 }
 
-/// SHA-256（自含实现；P0-0 manifest 用 `sha12`=前 12 hex）。
-pub fn sha256_hex12(bytes: &[u8]) -> String {
-    let digest = sha256(bytes);
-    digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
+/// SHA-256 流式累加器（task-138：大 text 文件不得整读；输出与整读实现逐字节一致）。
+pub struct Sha256 {
+    h: [u32; 8],
+    total: u64,
+    buf: Vec<u8>,
 }
 
-fn sha256(bytes: &[u8]) -> [u8; 32] {
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-    let mut h: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    let bit_len = (bytes.len() as u64).wrapping_mul(8);
-    let mut data = bytes.to_vec();
-    data.push(0x80);
-    while data.len() % 64 != 56 {
-        data.push(0);
+impl Sha256 {
+    pub fn new() -> Self {
+        Self {
+            h: [
+                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c,
+                0x1f83d9ab, 0x5be0cd19,
+            ],
+            total: 0,
+            buf: Vec::with_capacity(128),
+        }
     }
-    data.extend_from_slice(&bit_len.to_be_bytes());
-    for chunk in data.chunks_exact(64) {
+
+    fn compress(h: &mut [u32; 8], chunk: &[u8; 64]) {
+        const K: [u32; 64] = [
+            0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+            0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+            0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+            0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+            0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+            0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+            0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+            0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+            0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+            0xc67178f2,
+        ];
         let mut w = [0u32; 64];
         for (i, b) in chunk.chunks_exact(4).enumerate() {
             w[i] = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
@@ -324,11 +325,127 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
             *x = x.wrapping_add(v);
         }
     }
-    let mut out = [0u8; 32];
-    for (i, v) in h.iter().enumerate() {
-        out[i * 4..i * 4 + 4].copy_from_slice(&v.to_be_bytes());
+
+    /// 追加任意长度字节（内部按 64B 块累积；不保存全文）。
+    pub fn update(&mut self, mut data: &[u8]) {
+        self.total = self.total.wrapping_add(data.len() as u64);
+        if !self.buf.is_empty() {
+            let need = 64 - self.buf.len();
+            let take = need.min(data.len());
+            self.buf.extend_from_slice(&data[..take]);
+            data = &data[take..];
+            if self.buf.len() == 64 {
+                let block: [u8; 64] = self.buf[..].try_into().expect("64B");
+                Self::compress(&mut self.h, &block);
+                self.buf.clear();
+            }
+        }
+        while data.len() >= 64 {
+            let block: [u8; 64] = data[..64].try_into().expect("64B");
+            Self::compress(&mut self.h, &block);
+            data = &data[64..];
+        }
+        self.buf.extend_from_slice(data);
     }
-    out
+
+    pub fn finalize(mut self) -> [u8; 32] {
+        let bit_len = self.total.wrapping_mul(8);
+        self.buf.push(0x80);
+        while self.buf.len() % 64 != 56 {
+            self.buf.push(0);
+        }
+        let tail = self.buf.clone();
+        self.buf.clear();
+        let mut padded = tail;
+        padded.extend_from_slice(&bit_len.to_be_bytes());
+        for block in padded.chunks_exact(64) {
+            let b: [u8; 64] = block.try_into().expect("64B");
+            Self::compress(&mut self.h, &b);
+        }
+        let mut out = [0u8; 32];
+        for (i, v) in self.h.iter().enumerate() {
+            out[i * 4..i * 4 + 4].copy_from_slice(&v.to_be_bytes());
+        }
+        out
+    }
+}
+
+fn hex12(digest: [u8; 32]) -> String {
+    digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
+}
+
+/// SHA-256（一次性字节输入；P0-0 manifest 用 `sha12`=前 12 hex）。
+pub fn sha256_hex12(bytes: &[u8]) -> String {
+    let mut s = Sha256::new();
+    s.update(bytes);
+    hex12(s.finalize())
+}
+
+/// 文件 sha256 前 12 hex（**流式 1MB 块**，大 text 文件 RAM 有界；sha 与整读一致）。
+pub fn sha256_file_hex12(path: &Path) -> Option<String> {
+    let f = std::fs::File::open(path).ok()?;
+    let mut rdr = std::io::BufReader::with_capacity(1 << 20, f);
+    let mut s = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        match rdr.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => s.update(&buf[..n]),
+            Err(_) => return None,
+        }
+    }
+    Some(hex12(s.finalize()))
+}
+
+/// text 写集流式读取统计（task-138；日志 `in_frames_read=/text_records_read=/early_exit=`）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TextReadStats {
+    /// 已读记录的最高帧（含触发早退的那条）。
+    pub in_frames_read: u32,
+    /// 已解析记录数（含触发早退的那条）。
+    pub text_records_read: u64,
+    /// 是否因 `f > limit` 提前停止读取。
+    pub early_exit: bool,
+}
+
+/// 流式读取 text 写集并按 `limit`（目标帧+margin）早退；**与整读+稳定排序前缀等价**。
+///
+/// 前提（A 级）：生产者 `phase_batch.rs`（L28-33/L70-78）按 trace 帧序输出 ⇒ 文件帧号单调不减。
+/// 解析失败行与旧实现一样静默跳过；打开失败 ⇒ 空集（保持旧 `read_to_string().unwrap_or_default()` 语义）。
+pub fn read_text_writes(path: &str, limit: u32) -> (Vec<(u32, u16, u8, u32, u32)>, TextReadStats) {
+    let mut raw: Vec<(u32, u16, u8, u32, u32)> = Vec::new();
+    let mut stats = TextReadStats::default();
+    if path.is_empty() {
+        return (raw, stats);
+    }
+    match std::fs::File::open(path) {
+        Ok(fh) => {
+            let reader = std::io::BufReader::with_capacity(1 << 20, fh);
+            for line in reader.lines() {
+                let Ok(l) = line else { break };
+                let parsed = (|| -> Option<(u32, u16, u8, u32, u32)> {
+                    let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
+                    let a = u16::from_str_radix(l.split("\"addr\":\"").nth(1)?.split('"').next()?, 16)
+                        .ok()?;
+                    let v = l.split("\"val\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
+                    let inv = l.split("\"inv\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
+                    let seg = l.split("\"seg\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
+                    Some((f, a, v, inv, seg))
+                })();
+                if let Some(rec) = parsed {
+                    stats.text_records_read = stats.text_records_read.saturating_add(1);
+                    stats.in_frames_read = stats.in_frames_read.max(rec.0);
+                    if rec.0 > limit {
+                        stats.early_exit = true;
+                        break;
+                    }
+                    raw.push(rec);
+                }
+            }
+        }
+        Err(e) => eprintln!("WARN text write set 打开失败（{}）：{e}；按空集处理", path),
+    }
+    (raw, stats)
 }
 
 fn hex_decode(s: &str) -> Vec<u8> {
@@ -996,16 +1113,18 @@ fn main() {
     } else {
         text_path
     };
-    let raw_writes: Vec<(u32, u16, u8, u32, u32)> = std::fs::read_to_string(&text_path)
-        .map(|t| t.lines().filter_map(|l| {
-            let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
-            let a = u16::from_str_radix(l.split("\"addr\":\"").nth(1)?.split('"').next()?, 16).ok()?;
-            let v = l.split("\"val\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
-            let inv = l.split("\"inv\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
-            let seg = l.split("\"seg\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
-            Some((f, a, v, inv, seg))
-        }).collect())
-        .unwrap_or_default();
+    // task-138：text 写集**流式读取 + 按目标帧早退**（新 GUI trace 写流量 ~90×：stg03 text 1.27GB）。
+    // 语义前提（A 级代码事实）：生产者 `phase_batch.rs` L28-33/L70-78 按 trace 帧序 push →
+    // 文件帧号单调不减 ⇒ 读到 `f > target+margin` 即可停；prefix 与整读等价（后续稳定排序同序）。
+    let text_margin: u32 = std::env::var("TEXT_MARGIN")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(64);
+    let text_limit = (frame.min(u64::from(u32::MAX)) as u32).saturating_add(text_margin);
+    let (raw_writes, text_stats) = read_text_writes(&text_path, text_limit);
+    let in_frames_read = text_stats.in_frames_read;
+    let text_records_read = text_stats.text_records_read;
+    let early_exit = text_stats.early_exit;
     // 按 (inv,seg) 分组求段起点 → 过滤七段 → 组内按写序展开（后写胜自然成立）
     let mut groups: std::collections::BTreeMap<(u32, u32), Vec<(u32, u16, u8)>> = std::collections::BTreeMap::new();
     for (f, a, v, inv, seg) in &raw_writes {
@@ -1397,11 +1516,9 @@ fn main() {
     )).expect("侧车");
     let _ = idx_rows;
     // 日志（P0-0 manifest 复用；旧字段前缀保持、新增字段追加在行尾）
+    // task-138：`in=` 仍为**全文 sha**（流式计算，与整读一致）；新增流式读取可观测字段。
     let sha_file = |p: &str| -> String {
-        match std::fs::read(p) {
-            Ok(b) => sha256_hex12(&b),
-            Err(_) => "-".into(),
-        }
+        sha256_file_hex12(Path::new(p)).unwrap_or_else(|| "-".into())
     };
     let out_sha = std::fs::read(&out_path).map(|b| sha256_hex12(&b)).unwrap_or_else(|_| "-".into());
     let mut log = std::fs::OpenOptions::new()
@@ -1411,7 +1528,7 @@ fn main() {
         .unwrap_or_else(|e| panic!("日志 {}: {e}", log_path.display()));
     writeln!(
         log,
-        "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={} scene={scene} env={} argv={:?} in=frames:{},probe:{},text:{} out={}",
+        "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={} scene={scene} env={} argv={:?} in=frames:{},probe:{},text:{} out={} in_frames_read={} text_records_read={} early_exit={} text_margin={}",
         nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count(),
         probe.len(),
         env_explicit_summary(),
@@ -1419,7 +1536,11 @@ fn main() {
         sha256_hex12(trace.as_bytes()),
         sha_file(&probe_path),
         sha_file(&text_path),
-        out_sha
+        out_sha,
+        in_frames_read,
+        text_records_read,
+        early_exit,
+        text_margin
     )
     .unwrap();
     let _ = (SCREEN_W, SCREEN_H);
@@ -1631,6 +1752,70 @@ mod cli_tests {
         // 跨块（>64B）自检：长度 200 的确定性输入，两跑一致
         let buf: Vec<u8> = (0..200u32).map(|i| (i % 251) as u8).collect();
         assert_eq!(sha256_hex12(&buf), sha256_hex12(&buf));
+    }
+
+    #[test]
+    fn sha256_stream_matches_oneshot() {
+        // task-138：流式累加器必须与整读 sha 逐字节一致（分块边界 1/63/64/65/1MB-1/1MB）
+        let data: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+        let oneshot = sha256_hex12(&data);
+        for chunk in [1usize, 63, 64, 65, 1_000, 65_536, 1_048_576] {
+            let mut s = Sha256::new();
+            for part in data.chunks(chunk) {
+                s.update(part);
+            }
+            assert_eq!(hex12(s.finalize()), oneshot, "chunk={chunk} 流式 sha 不一致");
+        }
+    }
+
+    #[test]
+    fn sha256_file_stream_matches_and_cleans_up() {
+        // task-138：文件流式 sha（1MB 缓冲）与整读一致；大 text 不整读。
+        let data: Vec<u8> = (0..250_000u32).map(|i| (i % 251) as u8).collect();
+        let p = std::env::temp_dir().join(format!("gunnac-t138-sha-{}", std::process::id()));
+        std::fs::write(&p, &data).expect("write temp");
+        let got = sha256_file_hex12(&p).expect("stream sha");
+        assert_eq!(got, sha256_hex12(&data), "文件流式 sha 与整读不一致");
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn text_stream_early_exit_prefix_equivalent() {
+        // task-138：limit 内 prefix 与整读一致（生产者帧序单调前提；此处构造有序 JSONL）。
+        let p = std::env::temp_dir().join(format!("gunnac-t138-text-{}", std::process::id()));
+        let mut content = String::new();
+        for (f, a, v, inv, seg) in [
+            (1u32, 0x2006u16, 1u8, 7u32, 0u32),
+            (2, 0x2007, 2, 7, 0),
+            (2, 0x2006, 3, 7, 1),
+            (3, 0x2007, 4, 7, 1),
+            (10, 0x2006, 5, 8, 0),
+        ] {
+            content.push_str(&format!(
+                "{{\"f\":{f},\"addr\":\"{a:04X}\",\"val\":{v},\"inv\":{inv},\"seg\":{seg}}}\n"
+            ));
+        }
+        std::fs::write(&p, content).expect("write text");
+        let ps = p.to_string_lossy().into_owned();
+
+        let (limited, stats) = read_text_writes(&ps, 3);
+        assert_eq!(stats.early_exit, true, "f>limit 须早退");
+        assert_eq!(stats.in_frames_read, 10, "已读最高帧=触发早退的记录");
+        assert_eq!(stats.text_records_read, 5);
+        assert_eq!(limited.len(), 4, "limit 内保留 4 条记录");
+        assert_eq!(limited.iter().map(|r| r.0).collect::<Vec<_>>(), vec![1, 2, 2, 3]);
+
+        let (full, stats_full) = read_text_writes(&ps, u32::MAX);
+        assert_eq!(stats_full.early_exit, false);
+        assert_eq!(stats_full.text_records_read, 5);
+        assert_eq!(&full[..limited.len()], &limited[..], "prefix 与整读一致（无需重解析语义）");
+
+        // 空路径/不存在文件保持旧"空集"语义
+        let (empty, st) = read_text_writes("", 3);
+        assert!(empty.is_empty() && st.text_records_read == 0);
+        let (missing, st2) = read_text_writes("target/definitely-missing-text-138.jsonl", 3);
+        assert!(missing.is_empty() && st2.text_records_read == 0);
+        let _ = std::fs::remove_file(&p);
     }
 
     #[test]

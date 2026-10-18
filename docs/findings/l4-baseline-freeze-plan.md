@@ -1792,7 +1792,26 @@ PY
 | probe 事件上限 = **3,000,001 事件**（`probeN>3,000,000` 后静默丢弃；F10）；probe_mem 为观察性回调（不改行为） | `tools/scenario_capture.lua`（probeN 上限；addMemoryCallback） |
 | Q4 输入注入 +1 帧延迟约定（frame 对齐口径） | `oracle/scenarios/README.md` §帧计数 |
 | `phase-batch`：读 `analysis/traces/{scene}.{frames,probe}.jsonl` → 写 `analysis/phase/<scene>-text.jsonl`（cwd=仓库根；需 probe 含 `$2F/$30`） | `crates/game-oracle/src/bin/phase_batch.rs` |
-| `render_frame`：读 `analysis/traces/{scene}.frames.jsonl`/`.probe.jsonl`/`analysis/phase/{scene}-text.jsonl`；输出写死 actual+append `.render.log`；39 诊断 env+REPO_ROOT；`--out-dir/--log-path` 尚不存在 | `crates/game-desktop/src/bin/render_frame.rs`（参数/输入/导出段） |
+| `render_frame`：读 `analysis/traces/{scene}.frames.jsonl`/`.probe.jsonl`/`analysis/phase/{scene}-text.jsonl`；39 诊断 env+REPO_ROOT；`--out-dir/--log-path` 已实现（task-94/100；真实路径 fail-closed）；**text 写集=流式 BufReader + 目标帧早退（task-138；`TEXT_MARGIN` 缺省 64）** | `crates/game-desktop/src/bin/render_frame.rs`（参数/输入/导出段；`read_text_writes`/`sha256_file_hex12`） |
+
+> 【2026-10-18 task-138 实现状态：text replay 流式 + 按目标帧早退】
+> - **根因**：新 GUI trace 的 PPU 写流量 ~90×（stg03 text **1.27GB**、stg08 **306MB**、gameplay 39MB），旧实现
+>   `std::fs::read_to_string` 整读 + 全量排序且不早退 ⇒ stg03 单次 536.6s、并行 4 路 ~17GB OOM 风险。
+> - **实现**：`read_text_writes()` 用 `BufReader`（1MB）逐行解析，读到 `f > target + TEXT_MARGIN`（缺省 64 帧）
+>   即 `break`；`in=` 的 text sha 改为 **1MB 块流式 SHA-256**（与整读逐字节同值，RAM 有界）；日志行追加
+>   `in_frames_read=` / `text_records_read=` / `early_exit=` / `text_margin=`（旧字段前缀不变）。
+> - **语义等价证明（A 级，代码事实+实测）**：生产者 `phase_batch.rs` L28-33/L70-78 按 trace 帧序 push ⇒
+>   text 文件帧号单调不减（实测 stg03/stg08 全文件 0 逆序）；渲染循环 L1077 `if f > frame { break; }` ⇒
+>   `f>target` 的写点**永不应用**；后续按 f **稳定排序**（prefix 与整读同序）。
+> - **A/B sha 实测**：①gameplay-stage1 f1260（无早退）：old/new png+idx **逐字节相同**
+>   （png `C39BBEFFE098…`、idx `BA1140D6B74D…`；`in=` text sha 同 `f05ce843840e`）；
+>   ②stg03 l4_stg03-start f5700（**早退 true**）：new 全文件 vs old+截断 prefix（=实际应用写集）
+>   png+idx **逐字节相同**（png `3F6272110FC0…`、idx `F131F592BF69…`）；old 全文件后台复核亦同值。
+> - **性能实测（本机 Windows debug build）**：stg03 127.35s（旧 536.6s，**−76%**，达 <180s 目标）、
+>   峰值 RAM **247MB**（旧整读 1.27GB+ ⇒ 远低于 2GB）；stg03 日志 `in_frames_read=6925
+>   text_records_read=2393980 early_exit=true`（读量≈全文件 **10%**：行 10.14%（2,393,979/23,609,155）/
+>   字节 9.75%（123.7MB/1269.0MB），task-141 点验实测；其余被早退跳过；`in=` 仍全文 sha `fdad599d24f2`）。
+> - **不改**：判定/阈值/expected/渲染逻辑；`--out-dir/--log-path` 语义不变；非 bot 场景零影响（本条只涉 render_frame）。
 | `diff_visual.py` 两种模式：默认=分类账口径、`--strict`=0 容差；会重写 report/diff/whitelist-application；模板残留 W-C1（R8） | `tools/diff_visual.py`；方案 §5.6/R1 |
 | 旧 22 对 probe 签名/帧/scroll/expected/actual sha | 方案 §2.6；`.render.log` 末条；git blob |
 | 22 对资产问题（F-0：同 blob/无效 expected/输入缺失） | 方案 §2.4；task-24 复审 §2 |
