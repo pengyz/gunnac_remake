@@ -71,6 +71,11 @@
 - [ ] 迭代流水线文档定稿，且实际跑通 ≥3 轮完整循环（轮次日志为证）
 - [ ] 完备性矩阵 v0 建立且四维（符号/数据/行为/规则）均有收敛记录
 - [ ] Stage A：8 关可通关（L5 全绿），L1–L3 全绿，L4 白名单外像素一致
+
+> 【2026-10-18 用户裁定】上方 L4 判据**维持原文 0 容差**（白名单外像素 100% 一致）：
+> `l4-signing-criteria.md` 的"判定式转正 5/5 / 带声明签署"仅为过程里程碑，**不构成 L4 达成**。
+> 当前 L4 **未达成**（现行 22 对截图 1/22 逐像素相等，合计差 20.72%，见
+> [rewrite-completion-audit](findings/rewrite-completion-audit.md) §4）；残余缺口转 P0 攻坚。
 - [ ] `gates/cli.py all` 本地可跑且与 CI 等效；SKIP/TOLERATED 全部显式
 - [ ] 台账（naming/bug）与知识库齐备，提交纪律（Evidence/Confidence）全程执行
 
