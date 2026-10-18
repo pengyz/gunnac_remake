@@ -60,6 +60,9 @@
 > 重裁未决/无来源时 ending+fade 6 对**不 staging、manifest 标 blocked:no-source**（P0-0 不得宣称全绿）。
 > **【2026-10-18 更正·四联来源】** §7a 内四联选帧改为 **§3.7**（stg08-* ← `tas-stg08b2-direct`；
 > stg06-late ← `stg06-timeline`），原 v5 36500f 方案作废；环境清单同步删 v5 36500f、加 I5/I6（§2.1）。
+> **【F55-1 执行顺序】** §3.3 ① 的 **POST 段（`l4-stg06-pass2`）依赖 §7a（§7.2/§3.7）生成的 pass2
+> probe 文件**——§3 阶段先跑 ① 的 PRE 段，POST 段到 §7a 后补跑（脚本对缺失打印 `SKIP` 不崩）；或把整段 ①
+> 移到 §7a 后统一跑一次（两种等价，取其一）。
 > §5 的 manifest 需要 §7a 的最终 expected sha，故实际执行顺序 §7a 先于 §5（步骤编号保留原方案 §5.0 的
 > 0-6 映射，不重排）。
 
@@ -475,6 +478,9 @@ if __name__ == "__main__":
 > **M2**：不再为 #13(5400) 生成 I3b overlay——源 `stg03-timeline` 的 `capture_every 300 probe` 已产出
 > `shots/stg03-timeline_f05400_probe.png`（5400=18×300），直接用于 §3.3 ③ blob 校验。
 **自检判据**（生成后立刻跑；两个 pass2 overlay）：
+> **执行时点（F55-2）**：本自检必须在 **§3.7 的 `make(...)` 生成两个 pass2 overlay 之后**执行
+> （§3.2 本节只给生成规则；`l4-stg08b2-pass2.txt`/`l4-stg06-pass2.txt` 到 §3.7 才落盘）。
+> 若在 §3.2 立即跑会 `FileNotFoundError`——属预期（不是生成失败），按 §3.7 后补跑。
 ```bash
 python3 - <<'PY'
 import collections, pathlib
@@ -498,12 +504,20 @@ PY
 # ① probe 事件数（映射信号）：wc-l − 该场景头行数（§2.4 表）== 旧 .render.log 的 probe= 值
 python3 - <<'PY'
 import pathlib
-HDR={"gameplay-stage1":15,"stg03-timeline":8,"stg08-timeline":8,
-     "tas-stg08b2-direct":10,"l4-stg06-pass2":8}   # F49-1/F49-2：直入轨(10)/stg06 pass2(补8)
+# 【F55-1 更正】分两段：PRE 在 §3 即可跑；POST（pass2）在 §7.2/§3.7 生成后补跑——缺失显式 SKIP 而非崩。
+PRE={"gameplay-stage1":15,"stg03-timeline":8,"stg08-timeline":8,
+     "tas-stg08b2-direct":10}   # F49-1：直入轨 10 条
+POST={"l4-stg06-pass2":8}       # 到 §3.7 才生成（F55-1）
 OLD={"gameplay-stage1":1307322,"stg03-timeline":598571,"stg08-timeline":1167314,
-     "tas-stg08b2-direct":None,"l4-stg06-pass2":None}   # 新轨无对应旧签名（源配置不同）→ 不作来源判据
-for n,h in HDR.items():
+     "tas-stg08b2-direct":None,"l4-stg06-pass2":None}   # 新轨无对应旧签名 → 不作来源判据
+for n,h in PRE.items():
     lines=pathlib.Path(f"analysis/traces/{n}.probe.jsonl").read_text(encoding="utf-8").splitlines()
+    ev=len(lines)-h; print(n,"events=",ev,"old=",OLD[n],"match=", OLD[n]==ev if OLD[n] else "n/a")
+for n,h in POST.items():
+    p=pathlib.Path(f"analysis/traces/{n}.probe.jsonl")
+    if not p.exists():
+        print(f"SKIP {n}: 文件未生成（§7.2/§3.7 后补跑本步 POST 段；F55-1）"); continue
+    lines=p.read_text(encoding="utf-8").splitlines()
     ev=len(lines)-h; print(n,"events=",ev,"old=",OLD[n],"match=", OLD[n]==ev if OLD[n] else "n/a")
 PY
 # ② 输入确定性：§2.3 DETERMINISM: PASS
@@ -537,6 +551,9 @@ probe 区间集可能不同；组 D/直入轨无旧签名、不作来源判据�
 （scene/frame/capture_tag/`frame_offset` 写入 manifest）。**capture 来源标签（F49-5）**：③ 每行必须注明
 capture 出处——源 `capture_every N tag`（如 `stg03-timeline_f05400_probe.png`）或 overlay 显式
 `capture <f> l4f<f>`（如 pass2）；manifest `capture_tag` 字段与文件名 tag 一致。
+**执行顺序（F55-1）**：① 的 **PRE 段**（gameplay/stg03/stg08/tas-stg08b2）在 §3 跑；**POST 段**
+（`l4-stg06-pass2`）在其文件生成后（§7.2/§3.7）补跑本脚本 POST 段——缺失时打印 `SKIP ...` 并跳过、不
+`FileNotFoundError`；或把整段 ① 移到 §7a 后统一跑一次（两种执行等价，取其一）。
 **不成立时**：尝试同组下一候选场景/相邻帧（Q4 +1 帧延迟约定：`capture N` 与 render 帧 N 存 ±1 帧可能——
 若 N±1 命中同样记 A，但 manifest 记 `frame_offset`）；全候选失败 ⇒ `blocked:no-source`。
 > 组 D（v5）的"同余≠来源"：`capture_every 1500` 只保证帧可被覆盖；来源判定**只靠 ③ blob**（附录 D2/S5）。
@@ -669,13 +686,17 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
    `capture_every <N> <tag>`（如 `_probe.png`）还是 overlay 显式 `capture <f> l4f<f>`；manifest `capture_tag`
    与文件名 tag 一致；
 2. **语义/mode 匹配（F49-3 更正：可执行化）**：`frames.jsonl` 只有 `{"f","w"}`，**没有 mode 字段** ⇒
-   改为从候选场景的 `watch 0026 flags26` 推导（C1/C2/C3 均含该 watch）：
+   改为从候选场景的 `watch 0026 flags26` 推导（C1/C2/C3 均含该 watch）。**F55-3 更正：`<winner>` 给实际
+   文件示例**（按命中候选替换文件名即可）：
+   - **C1（首选）** → `analysis/traces/tas-stg08b2-direct.frames.jsonl`；**C2** → `analysis/traces/tas-stg07-relay.frames.jsonl`；
+     **C3** → `analysis/traces/tas-stg08-direct.frames.jsonl`（若该 run 未跑则先按 §2.2 采集）。
    - **Ending 判定**：`$26 bit7=0x80`（`$95F9` 入口 `LDA #$80/STA $26` 后置位；见 l5-all-clear R-l5-5）：
      ```bash
      python3 - <<'PY'
      import json
-     F=30000   # 目标帧
-     for l in open("analysis/traces/<winner>.frames.jsonl", encoding="utf-8"):
+     F=30000                                                     # 目标帧（28500/30000/...）
+     PATH="analysis/traces/tas-stg08b2-direct.frames.jsonl"      # C1 示例（C2: tas-stg07-relay）
+     for l in open(PATH, encoding="utf-8"):
          r=json.loads(l)
          if r["f"]==F:
              f26=int(r["w"]["flags26"])
@@ -687,7 +708,7 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
      python3 - <<'PY'
      import sys; sys.path.insert(0,"tools")
      from diff_visual import decode_png
-     _,_,px = decode_png("shots/<winner>_f28500_probe.png")
+     _,_,px = decode_png("shots/tas-stg08b2-direct_f28500_probe.png")   # C1 示例（C2 用 tas-stg07-relay_…）
      w,h=256,240
      mean=sum(px[y*3*w+x*3]+px[y*3*w+x*3+1]+px[y*3*w+x*3+2] for y in range(h) for x in range(w))/(3*w*h)
      print("mean_luminance=",round(mean,2),"（fade 经验阈值 < ~20/255 记近黑，B 级辅助）")
@@ -702,9 +723,10 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
 **处置**：
 - 命中 ⇒ 更新 §3.1/§3.3 的 mapping 行（scene/frame/capture_tag/frame_offset/trigger）+ §7.3/§7.4 的
   `expected_source` + §7.7 staging 源；并落 **`analysis/repro/l4-groupD-source.json`**（§7.7 A 读取的机器台账）：
-  `{"winner":"<run>","targets":[28500,30000,...],"captures":{"l4_fade-clear":"shots/<run>_f28500_<tag>.png",...},
+  `{"winner":"tas-stg08b2-direct","targets":[28500,30000,...],"captures":{"l4_fade-clear":"shots/tas-stg08b2-direct_f28500_probe.png",...},
   "trigger":{"l4_ending-1":"injected",...},"mode_evidence":{"l4_ending-1":"frames#f30000 flags26=0x80 (bit7)",
-  "l4_fade-clear":"capture 平均亮度=<v>（近黑）"},...}`；
+  "l4_fade-clear":"capture 平均亮度=<v>（近黑）"},...}`（**F55-3**：`winner`/文件名给 C1 实际示例；
+  命中 C2 时把 `tas-stg08b2-direct` 整体换成 `tas-stg07-relay` 即可）；
   原"组 D=v5"假设在本节划线留档。
 - 无来源 ⇒ 组 D 6 对 `status=blocked:no-source`；**新采集 `s5-full-inject`**（§C5；场景名/帧锚/assist 规则按
   C5 表；产物 `analysis/traces/s5-full-inject.*` 与 capture 图），按上述三判据复验后回填（同样落 `l4-groupD-source.json`）。
