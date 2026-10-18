@@ -3,10 +3,22 @@
 
 输入：oracle/screens/expected（Mesen2 oracle 截图=A 级真值）vs oracle/screens/actual
 （Rust 帧缓冲 export_png）；命名 <场景>_f<帧>_<tag>.png 逐对匹配。
-判定：**256×240 原生逐像素、0 容差**；色彩空间=**灰阶公共口径**（双方量化至 GREY4 四级
-0/85/170/255——调色板映射未证（W-C1 候选），公共域声明）；白名单 gates/visual_whitelist.json
-若存在则豁免其条目（本卡仅列候选不启用——文件不存在=无豁免）。
-退出码：0 = 全部对通过 **或** 全部差异有显式四分类记录（visual-report.md）；1 = 存在未分类差异。
+判定：**256×240 原生逐像素、0 容差**；色彩空间=**真彩域**（t99 ②；GREY4 公共域退役）；
+白名单 gates/visual_whitelist.json 若存在则豁免其条目（本卡仅列候选不启用——文件不存在=无豁免）。
+
+两种退出模式（2026-10-18 用户裁定：diff_visual 门禁硬化，两步走）：
+
+- **默认模式（分类账口径，pre-commit/既有流水线沿用）**：
+  exit 0 = 全部对比对通过 **或** 全部差异有显式四分类记录（oracle/screens/visual-report.md）；
+  exit 1 = 存在未分类差异；exit 2 = 输入目录缺失。
+  ⚠ 注意：默认 PASS **≠** 像素一致（22 对差异已有分类记录 ⇒ 默认 PASS）。
+- **`--strict`（L4 0 容差验收判据）**：
+  exit 0 = **任意外差异为零**（含"已分类差异"/缺失实际图/尺寸不符；白名单外的像素差全部计入）；
+  exit 1 = 存在任意外差异。输出固定行 `STRICT: FAIL/PASS diff=<总差异像素数>`。
+  L4 0 容差验收判据 = `python tools/diff_visual.py --strict` exit 0。
+
+TODO(task-21)：**默认翻转**（把 pre-commit 的 visual 门禁切到 `--strict`）待 P0-0 基线冻结
+（l4-baseline-freeze-plan）+ 独立复核后另卡执行；本卡保持默认行为不变，避免 pre-commit 恒红。
 """
 import json
 import struct
@@ -141,13 +153,23 @@ def load_whitelist():
     return json.loads(WHITELIST.read_text(encoding="utf-8"))
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    """两种模式：默认=分类账口径；`--strict`=L4 0 容差验收判据（见模块 docstring）。"""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    strict = "--strict" in argv
+    unknown = [a for a in argv if a != "--strict"]
+    if unknown:
+        print(f"diff_visual：未知参数 {unknown}（仅支持 --strict）", file=sys.stderr)
+        return 2
     if not EXPECTED.is_dir() or not ACTUAL.is_dir():
         print("L4 视觉：expected/actual 目录缺失", file=sys.stderr)
         return 2
     exp_files = sorted(EXPECTED.glob("*.png"))
     act_map = {p.name: p for p in ACTUAL.glob("*.png")}
     whitelist = load_whitelist()
+    exempt_all = bool(whitelist)  # 白名单=容差的具名化；存在条目则整对豁免（现基线=0 条）
+    strict_diff = 0
+    strict_fail = False
     results = []
     classified = []
     unclassified = []
@@ -156,10 +178,14 @@ def main() -> int:
         ap = act_map.get(ep.name)
         if ap is None:
             classified.append((ep.name, "规格缺口：无 Rust 侧实际图（actual/ 未生成）"))
+            if strict and not exempt_all:
+                strict_fail = True
             continue
         diffs, err = compare(ep, ap)
         if err:
             classified.append((ep.name, f"移植错：{err}"))
+            if strict and not exempt_all:
+                strict_fail = True
             continue
         if not diffs:
             passed += 1
@@ -167,6 +193,10 @@ def main() -> int:
             continue
         results.append((ep.name, len(diffs)))
         write_diff_png(ep.stem, diffs)
+        if strict:
+            strict_diff += len(diffs)
+            if not exempt_all:
+                strict_fail = True
         # 差异分类（四分类，t33 口径）：按差异根归因——
         # 投影输入含已声明未证根（缓冲→nametable 映射 / 输出表占位 / 调色板 W-C1），
         # 差异面按区域归因；若出现区域外无归因差异 ⇒ 未分类（移植错待查）。
@@ -241,7 +271,13 @@ def main() -> int:
             "\n## 状态\n申请中（未启用）——captain 转用户裁定前 gates/visual_whitelist.json 不建立。\n",
             encoding="utf-8", newline="\n")
     print(f"L4 视觉：{passed} 通过 / {len(results)} 比对；分类记录 {len(classified)}；未分类 {len(unclassified)}")
-    # 退出码口径（t92 ⑤）：≥1 通过帧（灰阶公共口径 0 容差）或 全部差异有显式四分类记录 ⇒ 0
+    if strict:
+        # L4 0 容差验收判据：任意外差异（含已分类差异）⇒ exit 1；白名单外无豁免。
+        print(f"STRICT: {'FAIL' if strict_fail else 'PASS'} diff={strict_diff}")
+        return 1 if strict_fail else 0
+    # 退出码口径（t92 ⑤，**默认/分类账模式**）：≥1 通过帧（灰阶公共口径 0 容差）或
+    # 全部差异有显式四分类记录 ⇒ 0。⚠ 默认 PASS ≠ 像素一致；0 容差验收用 `--strict`。
+    # TODO(task-21)：P0-0 基线冻结 + 独立复核后，另卡把 pre-commit visual 门禁切 `--strict`。
     if unclassified:
         return 1
     return 0
