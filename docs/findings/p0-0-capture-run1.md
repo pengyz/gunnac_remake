@@ -26,7 +26,7 @@
 
 ## 1. 环境与执行方式（P0-0-0 记录）
 
-> 完整记录见 `analysis/p0-0-env.txt`（63 行，gitignored）。关键项：
+> 完整记录见 `analysis/p0-0-env.txt`（**73 行 / 66 行非空**，gitignored；含 §7 采集完成记录）。关键项：
 
 | 项 | 值 |
 |---|---|
@@ -83,16 +83,23 @@ python tools/scenario_run.py run <name> --timeout 3600
 ### 4.1 R1：Mesen2 testRunner 默认 100s 超时（工具缺陷，已修复）
 
 - 首轮（16:38 启动）长场景全部在 wall≈120.6s 被截断：`stg08-timeline trace=18171/34000`、
-  `tas-stg08b2-direct trace=10984/40000`、`stg03-timeline trace=13681/24000`，`done=None`。
+  `tas-stg08b2-direct trace=11069/40000`（**16:38 首跑**）、`stg03-timeline trace=13681/24000`，`done=None`；
+- **16:42 次跑** `tas-stg08b2-direct` 同样截断：`trace=10984/40000`（`done=None`）——**两次 100s 截断并列**
+  （首跑 11069、次跑 10984；数值不同但都在第 100s 处被 testRunner 强停）。
 - 根因（Lead 定位）：Mesen2 testRunner `TestRunnerTimeout` 默认 **100s**（`CommandLineHelper.cs:31`）；
   `scenario_run.py` headless 未传 `--timeout`。修复：自动传 `--timeout=max(120, timeout_s+120)`（工作区已改，
   task-86 重跑生效；本轮 I4/I3/I2/I6/I1 全部正常）。
+- **ledger 审计补记（F107-4）**：v1 早期截断行原 `status=None`，已在 ledger **追加**
+  `phase=v1-annotation` 补记（`status=failed:truncated-100s`，注明“审计友好补记，不改历史事实”）；
+  涉及 `tas-stg08b2-direct`（11069/40000、10984/40000）、`stg08-timeline`（18171/34000）、
+  `stg03-timeline`（13681/24000）。
 
 ### 4.2 R2：bot 场景 + 10 条 probe 的 IO 过重（over-budget）
 
 - `tas-stg08b2-direct` 是 **bot 场景**（`bot stg01-clear from 1265`，per-frame 决策）+ **10 条 probe_mem** +
   `capture_every 1500` + assist 三 poke；产物极大。
-- 实测（17:02:01 启动，17:26 kill）：
+- 实测（17:02:01 启动，**kill 于 `17:23:46`**——以 `incident-tas-stg08b2-stall.json` 的 `killed_at` 为准，
+  报告旧文曾写 17:26，此处统一）：
   - `frames.jsonl` **39998/40000 行**、40,014,329B，最后写入 **17:07:56** 后 15+ 分钟未再增长；
   - `probe.jsonl` **188,704,783B**（≈ 3,000,001 事件上限，17:12 封盘）；
   - `inputs.jsonl` 16,921,241B、`events.jsonl` 9,968,167B——**bot 侧仍持续增长**；
@@ -136,7 +143,8 @@ python tools/scenario_run.py run <name> --timeout 3600
 
 1. **v1**（16:38）：未感知 testRunner 100s 超时 → 长场景截断（I5/I4/I3），短场景 OK（I2/I1）；
 2. **v2**（16:49）：修复后首跑立即 rc=2（前一轮 kill 遗留串行锁）→ 失败记录，未污染产物；
-3. **v3**（17:01）：I5 长跑 bot+probe IO 过重，21min 未落 DONE → 按 Lead 指示 kill，标 over-budget；
+3. **v3**（17:01）：I5 长跑 bot+probe IO 过重，17:02:01 启动到 17:23:46 kill（~21.7min）仍未落 DONE → 按
+   Lead 指示 kill，标 over-budget；
 4. **v4**（17:24）：跳过 I5，完成 I4/I3/I2×2/I6/I1×2 全部 PASS；
 5. **v5**（17:37–17:50）：I5 长预算（5400s）单独重试 → **仍在 f=39998 定点 stall**（与 R2 一致）⇒ 标
    `BLOCKED: capture-termination`（§4.3），不阻塞其它场景。

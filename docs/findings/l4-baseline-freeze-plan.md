@@ -61,6 +61,8 @@
 > actual 渲染）；§7b 只做 actual 侧重渲与 dup 登记核对。
 > **【2026-10-18 更正·组 D】** §7a 内新增子步骤 **§3.6 组 D 重裁**（候选来源/三判据），仍必须在 §5 前完成；
 > 重裁未决/无来源时 ending+fade 6 对**不 staging、manifest 标 blocked:no-source**（P0-0 不得宣称全绿）。
+> **【2026-10-18 定谳】** 现状即此分支：**`blocked:no-source`**（见 §3.6 顶部更正块与
+> `docs/findings/p0-0-groupD-source-decision.md`）。
 > **【2026-10-18 更正·四联来源】** §7a 内四联选帧改为 **§3.7**（stg08-* ← `tas-stg08b2-direct`；
 > stg06-late ← `stg06-timeline`），原 v5 36500f 方案作废；环境清单同步删 v5 36500f、加 I5/I6（§2.1）。
 > **【F55-1 执行顺序】** §3.3 ① 的 **POST 段（`l4-stg06-pass2`）依赖 §7a（§7.2/§3.7）生成的 pass2
@@ -186,7 +188,7 @@ git log -1 --format='%H %ad %s' --date=iso                >> analysis/p0-0-env.t
 | I2 | `gameplay-stage1` | #1-3（probe sig 1,307,322；源已有 capture 1260/1500/2349） | 2400 | **15**（8 标准 + 7 额外：`0200 02ff`,`0014 0015`,`0020 0021`,`8000 8001`,`001a 001a` + `002f 0030`/`2006 2007` 各重复一次）——**源原样跑，不 overlay**（F1/F4） | ~2-4min | 同 I1 |
 | I3 | `stg03-timeline` | #4/#5/#12/#13/#14/#15（sig 598,571；源已有 capture 3404/4600/5700/6500/12000 + `capture_every 300`） | 24000 | **8**（源原样） | ~10-20min | 同 I1 |
 | I4 | `stg08-timeline` | #16-#21（sig 1,167,314；源已有 capture 14600/16000/16600/18000/22000/28000） | 34000 | **8**（源原样） | ~15-30min | 同 I1 |
-| I5 | `tas-stg08b2-direct`（**stage8 直入轨**） | **四联 stg08-start/combat/late 真值候选 + §3.6 组 D 重裁候选 C1**：`poke 1265 0180 08` 选关 stage8、frames 40000、源已含 **10** 条 probe（8 标准 + `048c` + `4000-4017`）、capture_every 1500、assist 三 poke | 40000 | **10**（源原样） | ~15min | `tas-stg08b2-direct.*` |
+| I5 | `tas-stg08b2-direct`（**stage8 直入轨**〔2026-10-18 定谳：**"直入"前提不成立**，见 §3.6/§3.7 顶部 dated 更正；四联来源待重评〕） | **四联 stg08-start/combat/late 真值候选 + §3.6 组 D 重裁候选 C1**：`poke 1265 0180 08` 选关 stage8、frames 40000、源已含 **10** 条 probe（8 标准 + `048c` + `4000-4017`）、capture_every 1500、assist 三 poke | 40000 | **10**（源原样） | ~15min | `tas-stg08b2-direct.*` |
 | I5b | `l4-stg08b2-pass2`（§7.2 两遍 capture；**仅加 capture**） | 按 §7.2 选帧（stage_no==8）加 `capture <f> l4f<f>` → 新 expected 源图 | 40000 | **10**（源原样 + 选定帧 capture） | ~15min | `l4-stg08b2-pass2.*` |
 | I6 | `stg06-timeline`（**STG-06 自关窗**） | **四联 stg06-late 真值候选**：源已有 STG-06 关内数据（f13000 stg06-combat、`capture_every 300`、冻结前窗 f13000-13977）；**【F49-2 更正】源 `probe_mem` 实测 = 0** | 30000 | **0**（不产 `.probe.jsonl`；pass2 补） | ~10-20min | `stg06-timeline.*` |
 | I6b | `l4-stg06-pass2`（§7.2 两遍 capture；**补 8 probe + 加 capture**） | 按 §7.2 选帧（stage_no==6）加 `capture <f> l4f<f>`；§3.2 make 对源 0 probe **补 8 标准区间** | 30000 | **8**（源 0 + 补 8 + 选定帧 capture） | ~10-20min | `l4-stg06-pass2.*` |
@@ -198,6 +200,8 @@ git log -1 --format='%H %ad %s' --date=iso                >> analysis/p0-0-env.t
 > **四联真内容帧来源**：stg08-* → I5/I5b（`tas-stg08b2-direct` 直入轨）；stg06-late → I6/I6b
 > （`stg06-timeline` 自关窗）——【**2026-10-18 更正·L5 交叉核对**】原"由 v5 `capture_every 1500` 覆盖"
 > 不成立（v5 帧预算见 §3.7 反证）。overlay 生成器对 `probe_mem` **按区间去重**（F1）：已存在区间不重复追加。
+> 【**2026-10-18 定谳·task-106/113**】"**直入轨**"前提亦不成立（C1 `stage_no==8` 仅 f1265–5216，目标帧实为
+> stage1/2）⇒ **四联真值来源待重评**，见 §3.6/§3.7 顶部 dated 更正；重评前不得按旧硬帧号 staging。
 > **【2026-10-18 更正·组 D】** 组 D（fade/ending 6 对）**不再假定 v5 为来源**（语义反证见 §3.6）；
 > 组 D 的 expected 重采改为 §3.6 重裁选中来源（候选含 `tas-stg08b2-direct` 等）后再 staging。
 
@@ -272,14 +276,40 @@ cargo run -q -p game-oracle --bin phase-batch -- tas-stg08b2-direct
   trace: analysis/traces/<name>.frames.jsonl
   run清单: analysis/traces/<name>.run.json
 ```
-**判据（逐场景；防截断，2026-10-18 task-91 强化）**：`run.json` 中 `timed_out=false`、**`done!=null`**、
-**`trace_lines==frames`**（**三项缺一不可**：testRunner 内置 100s 超时会造成 `timed_out=false` 但 `done`
-缺失/`trace_lines<frames` ⇒ 截断产物不得进入基线；见上方超时注）；
+**判据（逐场景；防截断，2026-10-18 task-91 强化；task-110 起**以 DONE 为准**）**：`run.json` 中
+`timed_out=false`、**`done!=null`**、`trace_lines>0`，且 **`trace_lines == done.trace_lines`**、
+**`done.frame_errors == 0`**（task-105 后 DONE 自带 `trace_lines`/`frame_errors`；bot 早停/overshoot 时
+`trace_lines` 可 ≠ plan，**plan `frames` 仅是上限**）；DONE 若为 legacy（无 `trace_lines` 字段）⇒ 回退
+`trace_lines==frames(plan)`，无 `frame_errors` 字段视为 0。
+（三项缺一不可：testRunner 内置 100s 超时会造成 `timed_out=false` 但 `done` 缺失/`trace_lines` 与 DONE 不一致
+⇒ 截断产物不得进入基线；见上方超时注）；
 `.probe.jsonl` **头行数按 §2.4 表断言**（title 无文件；gameplay 15；stg03/stg08 **8**；`tas-stg08b2-direct` **10**；
 **`stg06-timeline` 0 → 不产 `.probe.jsonl`**；`l4-stg06-pass2` 8），并记录到 `analysis/repro/probe_counts.tsv`
 （用于 §3.3 校验）。【F49-2 更正】**
 **`phase-batch` 期望**：打印 `phase-batch: <n> 调用回放，<m> 写点 → analysis/phase/<scene>-text.jsonl`；
 `run.json` 无（该工具无清单）→ 记录文件大小+sha 到 `analysis/repro/phase_sha.tsv`。
+
+> 【2026-10-18 task-105 修复：capture 终止条件】`tools/scenario_capture.lua` 旧条件 `frame == frames`
+> 在 **bot 场景**（跳帧/分叉使 frame 越过 PLAN.frames）下永不命中 ⇒ 旧判据 `DONE` 缺失、`trace_lines=39998/40000`
+> 卡死（本轮 `tas-stg08b2-direct` BLOCKED:capture-termination 根因）。现改为 **`frame >= frames or bot_stop`**，
+> overshoot 帧不再写 trace（帧号不越界/不断裂），DONE 幂等并记录：
+> `{"frames":<actual>,"frames_plan":<plan>,"frames_actual":<actual>,"overshoot":<bool>,"trace_lines":…,"captures":…,"shots":…,"bot_stop":…}`。
+> **判据更新**：非 bot 场景行为不变（`frames==plan`、`trace_lines==frames`）；bot 场景若 `overshoot=false` 旧判据照用；
+> 若 `overshoot=true` ⇒ 接受 `frames_actual>=frames_plan` 且 `trace_lines=实际渲染帧数（≤plan）`，**不是截断**
+> （截断特征=无 DONE/`timed_out=true`，压测超时注仍适用）。DONE 新增字段向后兼容（旧 `frames` 语义在非 bot 不变）。
+> **可选未实现（记录）**：bot 场景 probe 稀疏化（`probe_mem` 每 N 帧 flush/限行）——本卡只记录建议，不实现。
+> **并发异常韧性（task-105 补强）**：`endFrame` 逐帧工作体与 `inputPolled` 的 bot 决策/录制/poke 均 `pcall` 包裹，
+> 单帧异常计数写入 DONE `frame_errors`，**终止判定在 pcall 之外恒执行**——旧 C3 快照"f120000 采集已写但 DONE 缺失"
+> 更可能的根因（逐帧工作体异常中断在 DONE 前）也一并封堵。
+> **实测（C3 重跑，第一波修复版 lua）**：frame 越过 plan（120000→120001）时由 `inputPolled` 兜底 finalize，
+> DONE=`{"frames":120001,"frames_plan":120000,"frames_actual":120001,"overshoot":true,"trace_lines":120000,
+> "captures":80,"shots":80,"finalize_by":"inputPolled-overshoot"}`，trace 120000 行（overshoot 帧不写）——
+> 证明 `==` 不命中路径已收尾；`run` 判据（task-110）据此以 DONE 为准，不再误判 FAIL。
+> **驱动判据（task-110）**：`tools/scenario_run.py` 的 `run`/`run-all` 完成判据改为**以 DONE 为准**
+> （`done!=null ∧ ¬timed_out ∧ trace_lines>0 ∧ trace_lines==done.trace_lines ∧ done.frame_errors==0`；
+> legacy 无 `trace_lines`/`frame_errors` 字段时分别回退 plan 相等/视为 0）。**`frame_errors>0` = 降级完成**：
+> `run` 打 `RUN: FAIL` 并附 `frame_errors` 与 lua.log 首条帧级异常；`run-all` 打 `RUN-ALL: DEGRADED <name>`。
+> 单测见 `tools/test_scenario_run.py`（bot 早停/overshoot/legacy/失败/frame_errors 五态 + run/run-all 退出码）。
 
 > **不要用 `run-all`**：全量 40 场景会跑数小时且引入无关产物/踩踏风险；只跑 I1-I6。
 > `run-all` 仅在全量重建时使用，且必须确认 `analysis/.scenario.lock` 独占。
@@ -441,8 +471,8 @@ analysis/p0-0-env.txt
 | 20 | l4_stg08-late | 28000 | `stg08-timeline` | `capture 28000 stg08-late` | **否**（§7.2 重采真值） |
 | 21 | l4_stg08-start | 16600 | `stg08-timeline` | `capture 16600 stg08-start-approx` | **否**（§7.2 重采真值） |
 | 22 | title-menu_f00180_boot-black | 180 | `title-menu` | `capture 180 boot-black` | **否** |
-| 6-10 | l4_ending-1..5 | 30000/31500/33000/34500/36000 | ~~`tas-clear-full-v5`~~ **来源待重裁（§3.6）** | `capture_every 1500 probe` → tag=`probe`（**仅当重裁命中该来源**） | **否**（capture 已覆盖；I5 只为补 probe） |
-| 11 | l4_fade-clear | 28500 | ~~`tas-clear-full-v5`~~ **来源待重裁（§3.6）** | 同上 | **否**（同上） |
+| 6-10 | l4_ending-1..5 | 30000/31500/33000/34500/36000 | ~~`tas-clear-full-v5`~~ ~~**来源待重裁（§3.6）**~~ **已定谳 blocked:no-source（2026-10-18，见 §3.6 顶部更正）** | `capture_every 1500 probe` → tag=`probe`（**仅当重裁命中该来源**） | **否**（capture 已覆盖；I5 只为补 probe） |
+| 11 | l4_fade-clear | 28500 | ~~`tas-clear-full-v5`~~ ~~**来源待重裁（§3.6）**~~ **已定谳 blocked:no-source（2026-10-18，见 §3.6 顶部更正）** | 同上 | **否**（同上） |
 
 > 结论：**overlay 只用于 pass2 选帧 capture**——四联：`l4-stg08b2-pass2`（源 10 probe）+ `l4-stg06-pass2`
 > （源 **0 probe → make 补 8**）；#13(5400) 用源 `capture_every 300` 图（M2），**不再造 I3b**（省一次 24000 帧重跑）。
@@ -463,7 +493,7 @@ analysis/p0-0-env.txt
 | 3 | gameplay-stage1_f02349 | 2349 | (0,96) | 1,307,322 | A | `gameplay-stage1` | 2349/end | 有效 | 同上 |
 | 4 | l4_clear-inject | 4600 | (0,120) | 598,571 | B | `stg03-timeline` | 4600/stg02-clear-inject | 有效 | 同上 |
 | 5 | l4_combat-variety | 6500 | (0,52) | 598,571 | B | `stg03-timeline` | 6500/stg03-combat | 有效 | 同上 |
-| 6 | l4_ending-1 | 30000 | (0,0) | 990,904 | D | ~~`l4-baseline-v5`（v5 overlay）~~ **来源待重裁（§3.6）** | 30000/probe（capture_every） | 有效 | 恢复+重渲（破同 blob） |
+| 6 | l4_ending-1 | 30000 | (0,0) | 990,904 | D | ~~`l4-baseline-v5`（v5 overlay）~~ ~~**来源待重裁（§3.6）**~~ **已定谳 blocked:no-source（2026-10-18，见 §3.6 顶部更正）** | 30000/probe（capture_every） | 有效 | 恢复+重渲（破同 blob） |
 | 7 | l4_ending-2 | 31500 | (0,0) | 990,904 | D | 同上 | 31500/probe | 有效 | 同上 |
 | 8 | l4_ending-3 | 33000 | (0,0) | 990,904 | D | 同上 | 33000/probe | 有效 | 同上 |
 | 9 | l4_ending-4 | 34500 | (0,0) | 990,904 | D | 同上 | 34500/probe | 与 #10 同文件（待裁） | 同上+裁定 |
@@ -485,7 +515,8 @@ analysis/p0-0-env.txt
 > 必须经 §3.3 校验升 A。若所有候选都不过校验 → 该对 `blocked:no-source`，交 §7 重采裁定。
 > **【2026-10-18 更正·组 D】** 上表 #6-#11 的 "scene 候选=`l4-baseline-v5`（v5 overlay）/源 capture=30000/probe"
 > **作废**：`tas-clear-full.l5.jsonl` 证明 v5 的 f28500-36000 是关 2 战斗段（stg01-clear f28364、
-> stg02-combat f29478、stg02-clear f51332），组 D 来源待重裁——**候选/判据/影响见 §3.6**。
+> stg02-combat f29478、stg02-clear f51332），组 D 来源待重裁——**候选/判据/影响见 §3.6**
+> （**2026-10-18 定谳：`blocked:no-source`**，见 §3.6 顶部更正块）。
 > 标"同 blob 复制"的 4 张 expected：**同 blob=sha 事实（A）**；"为 OBS-1 商店冻结屏"是 B 级解释（`docs/bug-ledger.md`
 > OBS-1 末关出店截断），不作为 A 级断言（F15）。
 
@@ -630,6 +661,8 @@ capture 出处——源 `capture_every N tag`（如 `stg03-timeline_f05400_probe
 > 组 D（v5）的"同余≠来源"：`capture_every 1500` 只保证帧可被覆盖；来源判定**只靠 ③ blob**（附录 D2/S5）。
 > **【2026-10-18 更正·L5 交叉核对】** "组 D=v5"假设已被语义反证（v5 f28500-36000 = 关 2 战斗段，
 > 见 §3.6 的 A 级证据表）；③ 校验对组 D 需改用 §3.6 重裁选中的来源，v5 只作负候选对照。
+> **【2026-10-18 定谳】** 组 D 现状=**`blocked:no-source`**（C3/C2 blob 0/6、C2 DEGRADED、C1 BLOCKED；
+> 见 §3.6 顶部更正块 / §8.2）——**当前无适用组 D 来源**，③ 校验无对象。
 
 ### 3.4 候选回退顺序（逐组）
 
@@ -638,7 +671,7 @@ capture 出处——源 `capture_every N tag`（如 `stg03-timeline_f05400_probe
 | A | `gameplay-stage1`（capture 1260/1500/2349 已在源） | — | `blocked:no-source` |
 | B | `stg03-timeline`（capture 3404/4600/5700/6500/12000 已在源 + `capture_every 300` 覆盖 5400） | `stg02-timeline`(19000f)/`stg04-timeline`(26000f) | `blocked:no-source` |
 | C | `stg08-timeline`（capture 14600/16000/16600/18000/22000/28000 已在源） | `stg07-timeline`(32000f) | `blocked:no-source` |
-| D | ~~`l4-baseline-v5`（源 `tas-clear-full-v5`；capture_every 覆盖 ending/fade）~~ **来源待重裁（§3.6）** | ~~`tas-clear-full-v4/v3/v2`~~ **§3.6 候选 C1-C5（`tas-stg08b2-direct` 优先）** | **重裁命中→回填；无来源→`blocked:no-source` + `s5-full-inject` 新采集**（§3.6） |
+| D | ~~`l4-baseline-v5`（源 `tas-clear-full-v5`；capture_every 覆盖 ending/fade）~~ ~~**来源待重裁（§3.6）**~~ **已定谳 blocked:no-source（2026-10-18，见 §3.6 顶部更正）** | ~~`tas-clear-full-v4/v3/v2`~~ **§3.6 候选 C1-C5（`tas-stg08b2-direct` 优先）** | **重裁命中→回填；无来源→`blocked:no-source` + `s5-full-inject` 新采集**（§3.6） |
 | E | `title-menu`（capture 180 boot-black 已在源） | — | `blocked` |
 
 > 组 D 的 probe 签名 990,904 与现行场景不直接对应，是**最不确定**组；~~`tas-clear-full-v5` 的
@@ -663,6 +696,28 @@ probe_match \t det \t blob_eq \t status \t duplicate_of \t reuse`
 
 ### 3.6 【2026-10-18 更正·L5 交叉核对】组 D（fade/ending 6 对）来源≠v5 → 重裁流程
 
+> **【2026-10-18 定谳更正（task-106/task-113）】组 D = `blocked:no-source`；本节以下两处前提被推翻，原文保留：**
+> 1) **判据②错误**：`$26 bit7` **不是 Ending 判据**——实测 C3/C2 目标帧 `flags26=0x00/0x80` 且 `stage_no=1/2`
+>    （`stage_no==8` 只在 f1255–5216；`flags26 bit7=0x80` 自 f≈5217 起在 **stage2 战斗段**即出现，非 Ending 专属）。
+>    **未证前不得用 bit7 断 Ending**；Ending 判据须改用 **`$95F9` 入口后的 mode/checkpoint 等已证信号**
+>    （本节下方"判据②：flags26 推导"整段降级为历史方案，见其行内更正标记）。
+> 2) **"stage8 直入 / 固定旧帧号跨 run 硬映射"不成立**：C3 `tas-stg08-direct` 的 `stage_no==8` 只在
+>    **f1255–5216**（`poke 0180=08` 后即被引擎流程覆盖）；其目标帧 28500–36000 实为 **stage1/2 战斗段**；
+>    旧 expected 的帧号属**另一条历史 run 帧域** ⇒ 跨 run 固定帧号硬映射不成立。
+> 3) **定谳证据**：C3/C2 采集合法（C3 DONE `frames_actual=120001/overshoot=true/finalize_by=inputPolled-overshoot`；
+>    C2 DONE 但 **DEGRADED `frame_errors=142149`**，不可复用真值）却 **blob 0/6**（C3/C2 各 80 张 shots 与 6 张旧
+>    expected **逐张 sha 全不等**，`BLOB_HITS: NONE`）；C1 `tas-stg08b2-direct` **BLOCKED: capture-termination**
+>    （capture.lua 修复后未重试）⇒ **组 D 现状 = `blocked:no-source`**：6 对 **不 staging、不替换 expected**，
+>    manifest 6 行 `status=blocked:no-source`，P0-0 **不得宣称全绿**。
+> 4) **更正后的组 D 取证路径**（替代"目标帧=28500..36000 硬映射"）：先取得一条**确实到达 ending 的合法 run**
+>    （`tas-clear-full-v5` **300000f 全长**，或注入全链 `s5-full-inject`），再在该 run 上做 **any-frame blob 搜索**
+>    （dense capture，如 `capture_every 300`）匹配 6 张旧 expected 的 sha256——**不按固定旧帧号**；
+>    命中后再按三条判据（blob / 语义〔按本条①更正〕/ trigger）定源并回填 `analysis/repro/l4-groupD-source.json`。
+> 5) **证据指针（可核）**：`docs/findings/p0-0-groupD-source-decision.md` §0/§2/§3/§5；
+>    `analysis/repro/p0-0-groupD/decision.json`（`"decision":"blocked:no-source"`、
+>    `"blob":"0/6 target pairs; full 80-shot scans NONE for both"`）、`blob-compare-C3.json`、
+>    `capture-tas-stg08-direct.json`、`capture-tas-stg07-relay.json`（gitignored 可再生）。
+
 > **原假设（保留留档，不删）**：§0 R-1/§2.1 I5/§3.0-§3.4 曾以 `tas-clear-full-v5` 为组 D
 > （#6-#11：ending-1..5 + fade-clear）来源候选，依据是其 `capture_every 1500 probe` 与
 > 28500/30000/31500/33000/34500/36000 精确同余（附录 D2）。**该假设"帧可覆盖"的算术成立，但"来源=v5"不成立。**
@@ -679,8 +734,10 @@ probe_match \t det \t blob_eq \t status \t duplicate_of \t reuse`
 （来源 `tas-clear-full-v5(assist=invincible)`；复现：`python -c "import json;[print(json.loads(l)) for l in open('oracle/traces/tas-clear-full.l5.jsonl')]"`）
 ⇒ 在 v5 帧域里 **f28500 仍在关 1 关末段、f30000-36000 = 关 2 战斗段**（stg02-clear 要到 f51332），不可能是
 ending/fade 画面。**组 D 来源待重裁**；P0-0 若按原假设执行会取错帧/错判来源。
+**（2026-10-18 定谳：`blocked:no-source`——C1 BLOCKED / C2 DEGRADED / C3 blob 0/6；见本节顶部更正块。）**
 
-**重裁候选清单（环境内按序验；优先级=证据强度）**：
+**重裁候选清单（环境内按序验；优先级=证据强度）**（【2026-10-18 定谳】候选现状：C1 BLOCKED / C2 DEGRADED /
+C3 直入前提不成立且 blob 0/6——用前必读本节顶部【2026-10-18 定谳更正】）：
 
 | 序 | 候选来源 | 理由/证据 | 需 overlay |
 |---|---|---|---|
@@ -756,12 +813,12 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
    （fade/ending-1..3 逐对；ending-4/5 同 blob 一并核）。**capture 来源标签（F49-5）**：必须注明是源
    `capture_every <N> <tag>`（如 `_probe.png`）还是 overlay 显式 `capture <f> l4f<f>`；manifest `capture_tag`
    与文件名 tag 一致；
-2. **语义/mode 匹配（F49-3 更正：可执行化）**：`frames.jsonl` 只有 `{"f","w"}`，**没有 mode 字段** ⇒
+2. **~~语义/mode 匹配（F49-3 更正：可执行化）~~【2026-10-18 定谳·判据②作废：`$26 bit7` 不是 Ending 判据（stage2 战斗段亦置位、目标帧 stage_no=1/2）；改用 `$95F9`/mode/checkpoint 等已证信号——以下为历史方案留档，不得再用】**：`frames.jsonl` 只有 `{"f","w"}`，**没有 mode 字段** ⇒
    改为从候选场景的 `watch 0026 flags26` 推导（C1/C2/C3 均含该 watch）。**F55-3 更正：`<winner>` 给实际
    文件示例**（按命中候选替换文件名即可）：
    - **C1（首选）** → `analysis/traces/tas-stg08b2-direct.frames.jsonl`；**C2** → `analysis/traces/tas-stg07-relay.frames.jsonl`；
      **C3** → `analysis/traces/tas-stg08-direct.frames.jsonl`（若该 run 未跑则先按 §2.2 采集）。
-   - **Ending 判定**：`$26 bit7=0x80`（`$95F9` 入口 `LDA #$80/STA $26` 后置位；见 l5-all-clear R-l5-5）：
+   - **~~Ending 判定~~【2026-10-18 定谳：本行 `$26 bit7` 判据作废（非 Ending 专属，stage2 战斗段即置位）；历史留档，不得再用】**：`$26 bit7=0x80`（`$95F9` 入口 `LDA #$80/STA $26` 后置位；见 l5-all-clear R-l5-5）：
      ```bash
      python - <<'PY'
      import json
@@ -787,7 +844,7 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
      ```
    **必须排除 Combat/Shop**：`flags26` 无 bit7 且画面平均亮度不低 ⇒ 不是 ending/fade（A 级 trace 字段+截图，
    不看文件名）。若需**精确 mode 字段**：须另产 `.l5.jsonl`（当前无独立 bin；由 port/engine 侧另出，不属 P0-0
-   路径）——本步骤以 flags26+亮度为可执行判据；
+   路径）——本步骤以 flags26+亮度为可执行判据〔2026-10-18 定谳：本句判据作废，见本节顶部更正块①〕；
 3. **trigger 合法**：stage-select poke（`0180`）⇒ `trigger=injected`；assist（`01be/01b6/01b7`）⇒ 标
    `trigger=assisted`（README 纪律：poke run 不得冒充 natural）；natural 仅当无 poke 且自然到达。
 
@@ -801,6 +858,8 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
   原"组 D=v5"假设在本节划线留档。
 - 无来源 ⇒ 组 D 6 对 `status=blocked:no-source`；**新采集 `s5-full-inject`**（§C5；场景名/帧锚/assist 规则按
   C5 表；产物 `analysis/traces/s5-full-inject.*` 与 capture 图），按上述三判据复验后回填（同样落 `l4-groupD-source.json`）。
+  （**2026-10-18 定谳：已按本分支落定 `blocked:no-source`**——C1 BLOCKED / C2 DEGRADED / C3 blob 0/6；
+  `s5-full-inject` 尚未采集；见本节顶部【2026-10-18 定谳更正】。）
 
 **对 P0-0 的影响（必读）**：
 - **§0.5**：§7a 内新增子步骤"§3.6 组 D 重裁"，仍必须在 §5 wrapper 之前完成（expected 定稿依赖它）；
@@ -810,7 +869,7 @@ trigger=injected（每关都 poke）。**当前状态**：骨架已给，stage-8
   §8.2 验收对这 6 行不通过（P0-0 不得宣称全绿，直到重裁完成）。
 - **§7.3/§7.4**：动作语义从"用 v5 capture 比对"改为"用 §3.6 重裁选中来源的 capture 比对"；旧动作留档。
 
-### 3.7 【2026-10-18 更正·L5 交叉核对】I5/§7.2 的 36500f 截断失效——四联真值来源改"直入/自关窗轨"
+### 3.7 【2026-10-18 更正·L5 交叉核对】I5/§7.2 的 36500f 截断失效——四联真值来源改"直入/自关窗轨"（〔2026-10-18 定谳：**"直入"前提不成立**，见本节末 dated 更正〕）
 
 > **原假设（留档不删）**：§2.1 I5/I5b 用 `l4-baseline-v5`（**截断 v5 到 36500f**）+ pass2，按
 > `stage_no==6/8` 选帧 → 替换四联 #16/#19/#20/#21 expected。
@@ -874,6 +933,16 @@ cargo run -q -p game-oracle --bin phase-batch -- l4-stg06-pass2
 **影响面（本更正同时改）**：§0.5（执行顺序/环境清单）、§2.1（I5/I5b→I5/I5b + I6/I6b；旧 v5 降负候选）、
 §2.2（命令/phase-batch）、§2.3（两跑集合）、§2.4（头行表）、§2.6（产物清单）、§7.2（选帧来源）、
 §7.7（staging 源）、§8.2（验收项）、附录 D（新增 D9 帧预算复算）。**旧 I5/I5b 不再用于四联/组 D staging。**
+
+> **【2026-10-18 定谳更正（task-106/task-113）】** 本节"**直入轨**"前提同样不成立（详见 §3.6 顶部
+> 【2026-10-18 定谳更正】）：`tas-stg08b2-direct`（**C1**）的 `stage_no==8` 只在 **f1265–5216**
+> （C1 选关 poke = `oracle/scenarios/tas-stg08b2-direct.txt:28` 的 `poke 1265 0180 08`；frames 实测
+> `stage_no==8` min=**1265**/n=**3952**；**C2/C3 为 f1255–5216**——C2 stage7 min=1255/n=3962、
+> C3 stage8 min=1255/n=3962）后被引擎覆盖，
+> 其目标帧实为 stage1/2；**跨 run 固定帧号选帧不可用**（旧 expected 帧号属另一历史 run 帧域）。
+> ⇒ 本节"四联真值来源 = I5/I5b 的 `stage_no==8` 硬帧号选帧"**降级为待重评**（task-111/后续卡须改为
+> "**确实到达 stage8 的合法 run + any-frame/blob/dense-capture 选帧**"）；**重评完成前，四联 expected
+> 不得按本节旧选帧脚本 staging**（与组 D 同纪律：不硬凑、不 staging 未证来源）。
 
 ---
 
@@ -1251,9 +1320,14 @@ if __name__ == "__main__":
 
 > **【2026-10-18 更正·L5 交叉核对】选帧来源已更正（§3.7）**：原"v5 36500f 截断 + stage_no==6/8 选帧"
 > 前提失效（v5 到 f73939 才 stage4-combat，36500f 仍在关 2）。**新来源**：
-> `l4_stg08-start/combat/late` ← `tas-stg08b2-direct`（stage8 直入、40000f、源含 10 probe）；
+> `l4_stg08-start/combat/late` ← `tas-stg08b2-direct`（stage8 直入、40000f、源含 10 probe）
+> 〔**2026-10-18 定谳："直入"前提不成立**（C1 `stage_no==8` 仅 f1265–5216，目标帧实为 stage1/2）⇒
+> 本节选帧来源待重评，见 §3.7 末 dated 更正；重评前不得按旧硬帧号 staging〕；
 > `l4_stg06-late` ← `stg06-timeline`（自关窗 f13000-13977、源 **0 probe** → I6b pass2 补 8）。
 > 选帧脚本/pass2 生成/重跑命令统一见 **§3.7**（本节的旧 v5 脚本/命令作废，保留留档见 §3.7 原假设）。
+> **【2026-10-18 task-105】** 本区依赖的 `tas-stg08b2-direct`（40000f bot）此前因 capture 终止条件未命中
+> 而 BLOCKED；已修 `tools/scenario_capture.lua`（`frame >= frames or bot_stop` + DONE 记实际帧/overshoot），
+> 判据更新见 §2.2「capture 终止条件」注；重跑后本区选帧按实际 `frames_actual`/`trace_lines` 记录。
 
 - **现状**：四张 expected **同 blob（sha 事实 A）**，6,074B；"该屏=商店冻结屏"是 **B 级解释**（OBS-1 末关
   出店截断，`docs/bug-ledger.md` OBS-1），不作 A 级断言（F15）。`stg08-timeline` 在商店处冻结、后续
@@ -1280,10 +1354,18 @@ if __name__ == "__main__":
 > 重裁未命中 ⇒ 这 5 对 `blocked:no-source`（不 staging）；原 v5 动作仅作负候选对照留档（预期 blob 不等）。
 > 旧动作留档：~~用 I5 的 capture_every 产物比对~~。
 
+> **【2026-10-18 定谳·task-106/task-113】组 D = `blocked:no-source`（C1 BLOCKED / C2 DEGRADED / C3 blob 0/6
+> 且 `$26 bit7` 非 Ending 判据）**：本节"重裁后动作"在当前无来源下**整体不执行**——5 对（#6-#10）保持旧
+> expected（`blocked:no-source`，**不 staging**）；§7a 的"用新 capture 替换对应帧"分支**不触发**；
+> §7b（actual 侧）仍独立执行（canonical 渲染后的两两不同/documented duplicate 判定与来源无关）。
+> 恢复条件 = §3.6 顶部更正块第 4 条（先有到达 ending 的合法 run + any-frame blob 搜索命中）。
+> 证据：`docs/findings/p0-0-groupD-source-decision.md` §0/§2；`analysis/repro/p0-0-groupD/decision.json`。
+
 **§7a（§5 之前，expected 侧）**：
 - **现状（A）**：五张 actual 同 blob（TBLDRV=1 共用 ending-1 golden 表）；expected-4/5 同文件。
 - **动作（重裁后）**：用 **§3.6 命中来源**在 `{30000,31500,33000,34500,36000}` 的 capture 与旧 expected-1..5
-  逐一做 sha256 比对（同时核该帧 mode=Ending/fade，§3.6 判据②）：
+  逐一做 sha256 比对（同时核该帧 mode=Ending/fade，§3.6 判据②〔**2026-10-18 定谳：判据②作废，改用 `$95F9`/
+  mode/checkpoint 已证信号，见 §3.6 顶部更正块①**〕）：
   - 全部相等 ⇒ 映射确认（A），**expected 不动**（`status=ok`）；
   - ending-4/5 的重采仍相同 ⇒ **裁定 documented duplicate**：staging 保留原两份（或合并一份+manifest 注记，
     由 Lead 裁），`status=documented-duplicate`、mapping `duplicate_of` 标注从属名；
@@ -1297,10 +1379,13 @@ documented duplicate（静态同图），必须已在 manifest `dedupe.documente
 
 > **【2026-10-18 更正·组 D】** 原"用 `l4-baseline-v5_f28500_probe.png` 比对"前提同 §7.3 作废；
 > **先用 §3.6 重裁选中来源**的 28500 capture 比对（候选 C1/C2 优先；v5 作负候选，预期不等）。
+> **【2026-10-18 定谳·task-106/task-113】fade 对（#11）同组 D：`blocked:no-source`**（C3/C2 blob 0/6、
+> C1 BLOCKED）——旧 expected 保留、**不 staging**；恢复条件同 §3.6 顶部更正块第 4 条。
 
 **§7a**：用 **§3.6 命中来源**的 f28500 capture 与旧 expected sha 比对 → 相等即映射确认（expected 不动）；
 不等/无来源 ⇒ 按 §3.6 走 `blocked:no-source` + 新采集 `s5-full-inject`（命中后再 staging 到
 `analysis/expected-new/`，`status=replaced-invalid-asset`，记录 run/帧/trigger）。**须在 §5 前完成安装**（B1）。
+（**2026-10-18 定谳：现状已落 `blocked:no-source`、不 staging；`s5-full-inject` 尚未采集。**）
 
 ### 7.5 去重判据与登记（**F2/F8/B2：按 manifest 22 名过滤 + 按组核对 + 重复 ⊆ manifest**）
 
@@ -1558,7 +1643,11 @@ PY
       **expected 安装由 §7.7 在 §5 前完成**，§8.1 步骤 3 核验 `expected_sha256` 全等（B1）；
 - [ ] **§3.6 组 D 重裁完成**（`analysis/repro/l4-groupD-source.json` 存在且 winner 非空/或 6 对显式
       `blocked:no-source`）；ending-4/5/fade 的 expected 必须来自重裁命中来源，**不是 v5**；
-      未完成 ⇒ 本清单不通过（P0-0 不得宣称全绿）；
+      未完成 ⇒ 本清单不通过（P0-0 不得宣称全绿）。
+      **【2026-10-18 定谳·task-106/task-113】现状 = `blocked:no-source`**（C3/C2 blob 0/6、C2 DEGRADED
+      `frame_errors=142149`、C1 BLOCKED；`$26 bit7` 非 Ending 判据；见
+      `docs/findings/p0-0-groupD-source-decision.md` §0/§2/§3）⇒ **6 对不 staging、旧 expected 保留，
+      本清单在组 D 取得合法来源前维持不通过**（P0-0 不得宣称全绿）；
 - [ ] **§3.7 四联来源更正落地**：四联 expected 来自 `l4-stg08b2-pass2`/`l4-stg06-pass2` 的选帧 capture
       （`l4-selected-frames.json` 含 `scene`/`frame`；`expected_source` 指向 pass2 场景），**不是**
       `l4-baseline-v5-pass2`(36500f)；I1-I6 采集与两跑集合已按 §2.3 更新；
@@ -1866,7 +1955,9 @@ print(", ".join(x for x in env if x!="REPO_ROOT"))
 - **更正落点**：§2.1（I5/I5b→I5/I5b+I6/I6b；旧 v5 降负候选）、§2.2/§2.3/§2.4/§2.6（命令/两跑/头行/产物）、
   **新增 §3.7**（来源表+选帧脚本+pass2 命令+trigger 登记）、§7.2（新来源+旧动作留档）、§7.7 staging 源、
   §0.5（执行顺序/环境清单）、§8.2（验收项）、附录 D 新增 **D9**。
-- **新来源**：stg08-start/combat/late ← `tas-stg08b2-direct`（stage8 直入、40000f、源 10 probe）；
+- **新来源**：stg08-start/combat/late ← `tas-stg08b2-direct`（stage8 直入、40000f、源 10 probe）
+  〔**2026-10-18 定谳："直入"前提不成立**——C1 `stage_no==8` 仅 f1265–5216，目标帧实为 stage1/2；
+  四联来源待重评，见 §3.7 末 dated 更正；重评前不得按旧硬帧号 staging〕；
   stg06-late ← `stg06-timeline`（自关窗 f13000-13977、源 **0 probe → I6b pass2 补 8**，F49-2 更正）。
   `trigger=injected` 如实登记。
 - **不改变**：expected 唯一安装点（§7.7）、四联"重采真值"裁定本身、组 D 重裁（§3.6）与其余判据。
