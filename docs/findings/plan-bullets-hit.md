@@ -66,15 +66,20 @@
 
 ### 3.4 命中 + 受限额伤害（`fire::resolve_player_hits`）
 
-**命中顺序（task-42 F1 修；判据与差异见下）**：弹外层/敌内层与已证命中语义不符——
+**命中粒度（task-42 F1 去重 → task-58 槽级 → task-67 收口：per-rect 消费）**：
 `engine::combat_frame`（engine.rs L236-285）是**敌槽/矩形外层 → 弹内层、每矩形命中后 `break`**
-（=**每矩形 1 伤**），task-38 §2.4 L104 的 `clear_hit_entry`+`release` 判据亦按框记。本实现：
-敌槽 8..=27 外层 → 该槽框形矩形次外层 → 玩家弹**内层**（按槽序取首颗命中弹，`break`）；
-同一敌槽本帧命中后**跳过其余矩形**（`slot_hit` 门）⇒ **每槽每帧 1 伤**。
-⚠ **与 engine 的粒度差异（F1-new，task-63 复核）**：本实现比 engine 的"每矩形 1 伤"**更严**
-（多矩形同帧探针：shell=1 伤 / engine=2 伤；旧 shell=2 伤）——该差异**待 ROM 多框同帧证据**；
-per-rect 消费修复归 **task-67**（Boss/多矩形接线前必做）。此处先保"同帧不回打"的防重复伤害语义。
-默认装载（level0/单弹型/Δ7f/弹间 63px）不可达该形态，但多弹型/weapon_level/`$3C` 升级接线前必须保真。
+（=**每矩形 1 伤、同矩形同帧不回打**），task-38 §2.4 L104 的 `clear_hit_entry`+`release` 判据亦按框记。
+**选定 per-rect 消费**：本实现改为——敌槽 8..=27 外层 → 该槽框形矩形次外层 → 玩家弹**内层**
+（按槽序取首颗命中弹、`break`）→ 继续处理**下一矩形**（不再做槽级 `slot_hit` 跳过）。
+理由：①与 engine/已证判据一致（Boss/多矩形敌接线前的对齐要求）；②默认装载（level0/单弹型/Δ7f/
+弹间 63px）不可达多矩形同帧形态，回归风险可控；③槽级取严（task-58）在 task-63 复核被判与 engine
+不一致（多矩形同帧探针 shell=1/engine=2），本卡按 F1-new 改回矩形粒度。
+**回归设计**（修复前对应用例红）：
+1. `two_bullets_same_frame_different_rects_of_same_enemy_two_damage`：同敌两矩形各被 1 弹同帧命中
+   ⇒ **2 事件/2 伤**（engine 对拍；旧槽级=1 伤且第二弹保留）；
+2. 同矩形同帧 2 弹 ⇒ 仍 1 伤（现有 `two_bullets_same_frame_same_enemy_box_one_damage` 保持绿）；
+3. 单弹/多弹正常命中、`$4A` 7 发 14→0、负例（远框/属性不交/敌弹）保持绿。
+默认装载不可达该形态，但多弹型/weapon_level/`$3C` 升级接线前必须保真。
 
 1. 敌槽 8..=27（`type_!=0` 且 `type_ & 0x80 == 0`）：`shape_stream_addr(slot.f518)` → `StageState.shape_data`
    查流（缺流⇒跳过，fail-closed 不造框）→ `fetch_shape_boxes`（x/y/`$0534` 翻转）；
@@ -153,7 +158,7 @@ python gates/cli.py check                     # CHECK: PASS
 
 | 文件 | 改动 |
 |---|---|
-| `crates/game-shell/src/fire.rs`（新） | 玩家弹：B 门控+`$39/$3A`（reload=7/`$94DF` 表）、六型生成器、`shot::tick` 运动/死亡、shell 命中管线（**敌/矩形外层→弹内层；槽级同帧不回打**——比 engine 每矩形 1 伤更严，待 ROM 多框证据/F1-new→task-67；注册/敌框/4边属性/清框/回收）、`$4A` 伤害白名单、事件类型/视图、9 组单测 |
+| `crates/game-shell/src/fire.rs`（新） | 玩家弹：B 门控+`$39/$3A`（reload=7/`$94DF` 表）、六型生成器、`shot::tick` 运动/死亡、shell 命中管线（**per-rect 消费**：敌槽/矩形外层→弹内层、每矩形 1 伤、同矩形同帧不回打；task-67 与 engine 每矩形判据对拍；注册/敌框/4边属性/清框/回收）、`$4A` 伤害白名单、事件类型/视图、10 组单测 |
 | `crates/game-shell/src/shape.rs`（新） | ROM bank2 框形流装载（`$97BA/$9812` 表 → `shape_data`；fail-closed 截断/重复）+ 2 单测 |
 | `crates/game-shell/src/host.rs` | 自有弹网格字段/装载重置；Combat 帧生成→tick→stage_tick→命中解析；`weapon_slot==0` 门；FrameView/签名/读数 getter；host 级正/负例测试 |
 | `crates/game-shell/src/render.rs` | FrameView 新增 `player_bullets`/`hits_this_frame` + `Default` |
@@ -163,10 +168,10 @@ python gates/cli.py check                     # CHECK: PASS
 
 ### 8.2 实跑结果（本地 Windows；独立 target 复验）
 
-- `cargo test -p game-shell --lib`：**54 passed / 0 failed**（task-58 新增 F1 回归：同帧 2 弹同框仅 1 伤；
-  修复前必红：2 事件）。
+- `cargo test -p game-shell --lib`：**55 passed / 0 failed**（task-58 F1 回归：同帧 2 弹同矩形仅 1 伤；
+  task-67 per-rect 回归：同敌不同矩形同帧各 1 伤=2 伤，修复前必红 1 伤）。
 - `CARGO_TARGET_DIR=target/verify37 cargo test --workspace`：**exit 0，全 workspace 绿**
-  （game-shell lib 54 + contract 2 + mock 3 + combat 1 + replay 3；shell-win lib 12 + smoke 21；
+  （game-shell lib 55 + contract 2 + mock 3 + combat 1 + replay 3；shell-win lib 12 + smoke 21；
   此前 shell-win smoke E0063 已由 §8.1 FrameView `Default`/字面量适配修复）。
   复现时请用独立 target（仓库内相对路径），勿指向共享 `target/`（构建设施纪律 2026-10-18）。
 - `cargo test -p game-shell --test stg01_combat -- --nocapture`：
@@ -175,9 +180,11 @@ python gates/cli.py check                     # CHECK: PASS
   默认单弹路径/事件序不变；replay 亦无命中 ⇒ mock/replay/selftest 签名均不变，见下）。
 - mock-300：`host=0x8170870e7c5e4ac6 canvas=0x963ac9a776a57625 advanced_frames=290`
   （task-37 时点值；F1 修复未改变默认路径 ⇒ 不变）。
-- **F1-new（task-63 复核，非阻塞 latent）**：多矩形同帧探针 shell=1 伤 / engine=2 伤（旧 shell=2 伤）
-  ⇒ 当前实现按**敌槽粒度**取严（非 engine 的每矩形 1 伤）；差异**待 ROM 多框同帧证据**，
-  per-rect 消费修复归 **task-67**（Boss/多矩形接线前必做）。本卡仅修正"同构"措辞，不改逻辑。
+- **F1-new（task-63 复核）→ 已由 task-67 收口**：旧实现按**敌槽粒度**取严（多矩形同帧 shell=1 伤 /
+  engine=2 伤）。task-67 改为 **per-rect 消费**（同矩形同帧 1 伤、不同矩形各 1 伤），与 engine
+  `combat_frame` 每矩形 `break` 判据对拍；回归 `two_bullets_same_frame_different_rects_of_same_enemy_two_damage`
+  **修复前红（1 伤）→修复后绿（2 伤、14→10、两弹回收）**；现有"2 弹同矩形 1 伤"回归保持绿。
+  文档不再称"同构"（改为与 engine per-rect 判据一致）。
 - STG-01 replay-3000：`host=0xdc3496b92f49ef45 canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807`
   （task-37 时点值；C1 1207/1207、C6 571/571、C4 共同槽 16/16 未变）。
 - shell-win `--selftest-frames 300` ×2：stdout 逐行一致；
@@ -187,7 +194,9 @@ python gates/cli.py check                     # CHECK: PASS
   系 shell-porter task-44 工作树（子弹渲染 + `frame_view_digest` 纳入 `player_bullets`）所致，
   其记录值由 task-44/复核更新；task-58 仅 game-shell 命中顺序修复，不改 FrameView 字段语义。
 - `python gates/cli.py check`（共享 target）→ **CHECK: PASS**（PASS=11 FAIL=0 SKIP=1）；
-  rust-tests **381**（基线 377；本卡 +1 F1 回归测试，另并行 task-44 工作树 +3）。
+  rust-tests **382**（基线 381；task-67 +1 per-rect 回归测试）。
+- **签名未变（task-67）**：per-rect 修复只影响"多矩形同帧命中"形态，默认单矩形/单弹路径不变 ⇒
+  mock-300/replay-3000/combat/selftest `host_signature` 与 task-37/58 时点值一致（见上）。
 
 ### 8.3 表述边界
 

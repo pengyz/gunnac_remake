@@ -209,12 +209,11 @@ pub fn apply_hit_damage(stage: &mut StageState, slot_index: usize) -> (u8, bool)
 /// `fetch_shape_boxes`，数据由装载侧喂 ROM bank2）→ 4 边+属性（`hit_resolves`）→
 /// 清框（`clear_hit_entry`）+ 弹回收（`$87FD`）→ 受限额伤害（[`apply_hit_damage`]）。
 ///
-/// **命中顺序 = 敌槽/矩形外层 → 弹内层**（task-42 F1 修；敌/矩外层遍历序与
-/// `engine::combat_frame` L236-285 一致）：每矩形只消费**一颗**弹（`break`），且同一敌槽本帧
-/// 命中后跳过其余矩形（`slot_hit` 门）⇒ **每槽每帧 1 伤**。⚠ 粒度差异（F1-new，task-63 复核）：
-/// 本实现比 engine 的**每矩形 1 伤**更严（多矩形同帧探针：shell=1 伤 / engine=2 伤）——
-/// 该差异**待 ROM 多框同帧证据**；per-rect 消费修复归 task-67（Boss/多矩形接线前必做）。
-/// 目的=避免同帧多弹对同一敌槽重复伤害（task-38 §2.4 L104 判据）。
+/// **命中粒度 = 逐矩形消费**（task-42 F1 去重 → task-58 槽级 → task-67 按 F1-new 收口）：
+/// 敌槽/矩形外层 → 弹内层（按槽序取首颗命中弹，`break`）→ **继续下一矩形**——每矩形每帧最多
+/// 1 伤、同矩形同帧不回打；**不做**槽级跳过，故同一敌的多个矩形可各被 1 弹同帧命中 = engine
+/// `combat_frame`（L236-285，每矩形 `break`）与 task-38 §2.4 L104 判据的 per-rect 语义
+/// （task-63 复核多矩形探针已对拍：shell=2 伤 / engine=2 伤）。
 ///
 /// 敌弹防护：玩家弹按 `type_code & 0x80 == 0` 过滤；敌对象槽若 `type_ & 0x80 != 0` 也跳过。
 /// `shape_data` 缺失/无对应流 ⇒ 该敌槽跳过（fail-closed，不造框）。
@@ -246,11 +245,7 @@ pub fn resolve_player_hits(
             )
         };
         let enemy_attr = enemy.f4c4 & 0xF0;
-        let mut slot_hit = false; // 同帧不回打：该敌槽本帧已命中 ⇒ 跳过其余矩形
         for (left, right, top, bottom) in rects {
-            if slot_hit {
-                break;
-            }
             let enemy_box = HitBoxEntry {
                 left,
                 right,
@@ -280,8 +275,7 @@ pub fn resolve_player_hits(
                     damage,
                     fail_closed,
                 });
-                slot_hit = true;
-                break; // 本矩形只消费一颗弹（槽级同帧不回打，见函数文档 F1-new）
+                break; // 本矩形只消费一颗弹（per-rect：同矩形同帧不回打；其余矩形继续）
             }
         }
     }
@@ -312,6 +306,18 @@ mod tests {
         let mut stage = StageState::default();
         let addr = shape_stream_addr(0).expect("形 0 地址");
         stage.shape_data.push((addr, vec![1, 0xF0, 16, 0xF0, 16]));
+        stage
+    }
+
+    /// 双矩形框形（相对敌坐标：左框 x∈[-40,-30]、右框 x∈[+30,+40]；y∈[-8,+8]）——
+    /// 用于「同一敌不同矩形同帧各 1 伤」回归（task-67）。
+    fn stage_with_two_rects() -> StageState {
+        let mut stage = StageState::default();
+        let addr = shape_stream_addr(0).expect("形 0 地址");
+        // [count=2] + 两框 4B 有符号偏移 (左,右,上,下)
+        stage
+            .shape_data
+            .push((addr, vec![2, 0xD8, 0xE2, 0xF8, 8, 30, 40, 0xF8, 8]));
         stage
     }
 
@@ -459,6 +465,25 @@ mod tests {
         assert_eq!(ev2[0].damage, 0);
         assert_eq!(stage2.grid.slots[8].f630, 4, "不写 f630");
         assert_ne!(g2.state[0x81], 0, "第二弹不消费");
+    }
+
+    #[test]
+    fn two_bullets_same_frame_different_rects_of_same_enemy_two_damage() {
+        // task-67：同一敌不同矩形、同帧各被 1 弹命中 ⇒ 2 伤（engine `combat_frame` 对拍）。
+        // 修复前（槽级 slot_hit）=1 伤且第二弹保留（本用例红）。
+        let mut stage = stage_with_two_rects();
+        enemy_at(&mut stage, 8, BOSS_MID_TYPE, 128, 100, 0x10, BOSS_MID_HP);
+        let mut g = BulletGrid::default();
+        bullet_at(&mut g, 0x80, 93, 100, 0); // 左框 88..98 × 92..108
+        bullet_at(&mut g, 0x81, 163, 100, 0); // 右框 158..168 × 92..108
+        let events = resolve_player_hits(&mut g, &mut stage, 77);
+        assert_eq!(events.len(), 2, "同一敌不同矩形同帧各 1 伤（engine 对拍；旧槽级=1）");
+        assert_eq!(events[0].enemy_slot, 8);
+        assert_eq!(events[1].enemy_slot, 8);
+        assert!(events.iter().all(|e| e.damage == 2 && !e.fail_closed));
+        assert_eq!(stage.grid.slots[8].f630, BOSS_MID_HP - 4, "14→10（每矩形各 2 伤）");
+        assert_eq!(g.state[0x80], 0, "弹0 已回收");
+        assert_eq!(g.state[0x81], 0, "弹1 已回收");
     }
 
     #[test]
