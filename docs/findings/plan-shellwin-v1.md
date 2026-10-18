@@ -285,4 +285,11 @@ findings）。本卡只做小修，不改可玩性功能（task-9/10 负责）�
 > 口径说明：§9.2 的 `host_signature` 等记录值是 **task-1 交付树（`a93704b`）时点值**；后续
 > game-shell（task-9）扩展签名覆盖字段会导致该值变化——属预期演进，以各卡交付记录为准；
 > `canvas_signature`/`display_signature`（本卡未改渲染）保持同值。
+>
+> 【2026-10-18 task-9 收尾后复核】task-9 代码提交（`05e3135`/`96415c1`）+ spec 回填（`b94ede8`）后，
+> 本机在 HEAD=`b94ede8` 重跑 `cargo run -p shell-win -- --selftest-frames 300` ×2：stdout 逐行一致、
+> exit 0；新语义读数 `host_signature=0xf51d5a517e7458b7`（§9.2 的 `0xcde9dc99514b5f4b` 为 task-1
+> 交付树时点值），`canvas_signature=0x963ac9a776a57625`/`display_signature=0xf68f9ffc0607cbad`
+> 不变（渲染面未改）。task-18 新增 smoke 断言不依赖具体签名值（只断言两次一致 + 结构量），无需改值。
+> `cargo test -p shell-win` 在 `b94ede8` 复跑仍 24 passed / 0 failed。
 
