@@ -168,6 +168,8 @@ def git_staged_files() -> list[str]:
         cwd=ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if proc.returncode != 0:
         raise RuntimeError(f"git diff --cached 失败（fail-closed）: {proc.stderr.strip()}")
@@ -775,6 +777,8 @@ def gate_rust_tests() -> tuple[str, str]:
         cwd=ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if proc.returncode != 0:
         tail = (proc.stdout + proc.stderr).strip().splitlines()[-5:]
@@ -797,7 +801,8 @@ def _gate_runner_dispatch(runner_name: str, prereq: Path, label: str) -> tuple[s
         if not runner.is_file():
             missing.append(f"tools/{runner_name} 未建立")
         return SKIP, f"{label}：{'；'.join(missing)}（启用前置齐备后自动启用，显式 SKIP）"
-    proc = subprocess.run([sys.executable, str(runner)], cwd=ROOT, capture_output=True, text=True)
+    proc = subprocess.run([sys.executable, str(runner)], cwd=ROOT, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         tail = (proc.stdout + proc.stderr).strip().splitlines()[-5:]
         return FAIL, f"{label} 差分不一致: " + " | ".join(tail)
