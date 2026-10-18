@@ -464,6 +464,7 @@ name = "game-shell"
 version = "0.1.0"
 dependencies = [
  "game-core",
+ "game-data",
  "game-platform",
 ]
 

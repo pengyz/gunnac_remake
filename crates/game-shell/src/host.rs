@@ -1,4 +1,5 @@
-//! 平台无关游戏宿主（60Hz 固定步驱动 + 宿主状态机 + tick 序列 + 渲染/音频/资产/存档/生命周期接线）。
+//! 平台无关游戏宿主（60Hz 固定步驱动 + 宿主状态机 + 菜单派发 + STG-01 装载 +
+//! tick 序列 + 渲染/音频/资产/存档/生命周期接线）。
 //!
 //! 分层合同（platform-shell.md §1）：`game-core`（纯逻辑）← 调用/依赖 ← 本层 ← 注入 ← 平台实现
 //! （`shell-pc`/`shell-android` 实现 `game-platform` trait 后注入）。本 crate **零平台依赖**
@@ -6,13 +7,27 @@
 //!
 //! 纪律（未证不发明）：
 //! - 状态迁移只走 `game_core::flow` 的**已证边集**；未证边由 core `Err` + 宿主关号守卫 fail-closed；
-//! - tick 序列只在已证 gameplay 模式（`Combat`/`DeathRespawn`/`StageClear`）内跑引擎，
-//!   玩家移动只在 `Combat` 跑（重生窗冻结=A 级，见 `respawn-window.md`）；
-//! - 渲染=占位合成（见 `render.rs`）；音频=流消费契约（生产者 v1 未接）；未证域见方案 §6。
+//! - 菜单派发=输入驱动（`InputLatch` +1f/12f、`MenuInputGate` 两层门、`ShopState::on_b`），
+//!   帧锚/响应时延逐条标级（见 `docs/findings/plan-playable-loop.md` §4）；
+//! - STG-01 装载/滚动源/spawn 落地=现有 game-core 公开 API（`decode_sched`/`stage::scroll_delta`/
+//!   `land_pair`/`land_leader`）；滚动源与 `.scroll.jsonl` 逐帧 1:1（A 级，`tests/stg01_replay.rs`）；
+//! - 引擎 tick 活跃段：`Combat`=已证 gameplay 段；`Transition/StageStart`=B 级接线依据
+//!   （载入后滚动/出敌在 stage-start 窗内仍在跑：`stage-appear` f1278 ∈ [f1260,f1500)）；
+//!   `DeathRespawn/StageClear`=接线约定（细粒度未隔离，G-S5-5，见 platform-shell §8）；
+//! - spawn 落地发生在 `stage_tick` 返回后同逻辑帧内；组长首员因 engine 无 wave_tick→behavior 间
+//!   hook 而晚 1 帧滴灌（已知偏差，登记 platform-shell §8）。
 
-use game_core::engine::{self, StageEffects, StageState, TickInputs};
+use std::collections::VecDeque;
+
+use game_core::engine::{
+    self, InputLatch, MenuInputGate, ScriptCursor, StageEffects, StageState, TickInputs,
+    RUN_STAGE_INTRO_FRAMES, TRANSITION_TAIL_FRAMES,
+};
 use game_core::flow::{FlowState, Mode, ModeEvent};
 use game_core::player::{self, PlayerState};
+use game_core::shot::{PLAYER_ONLY_SLOTS, SHARED_SLOTS};
+use game_core::ui::{render_digits, ShopState};
+use game_core::wave::{decode_sched, SchedItem};
 use game_core::FrameClock;
 use game_platform::{
     AppEvent, AssetSource, Audio, Buttons, Clock, Input, Lifecycle, Renderer, Storage,
@@ -20,8 +35,8 @@ use game_platform::{
 
 use crate::audio::AudioPipe;
 use crate::fixed_step::FixedStep;
-use crate::input::{held_bitmap, pressed_bitmap, resolve_directions};
-use crate::render::{compose_frame, FrameView};
+use crate::input::{held_bitmap, menu_pressed_bitmap, pressed_bitmap, resolve_directions};
+use crate::render::{compose_frame, EnemySlotView, FrameView, HudView};
 use crate::snapshot::{decode_snapshot, encode_snapshot, mode_tag, HostSnapshot};
 
 /// 玩家初始 X（`$04E0`）：已证重生复位锚点 (128,160)（`respawn-window.md` R-respawn-3，A 级）。
@@ -32,11 +47,35 @@ pub const INITIAL_PLAYER_X: u8 = 128;
 pub const INITIAL_PLAYER_Y: u8 = 160;
 /// 炸弹弹药初值（`$018F:=4`，bank00:9C5D，A 级）。
 pub const INITIAL_BOMB_AMMO: u8 = 4;
-/// `Combat` 段滚动增量（px/帧）：engine 侧 `tick=scroll/16` ⇒ 1 tick/帧（Wt-2 A 级）。
-///
-/// 逐帧滚动增量真值来自 stage-timeline；v1 未接关卡数据装载 ⇒ 固定 16 为**接线约定**
-/// （与 `engine::ClearRun` 的 `Combat` 分支同值），不声称是逐帧真值。
+/// `Combat` 段滚动增量（px/帧）——保留常量（v1 兼容）；task-9 起滚动源改由
+/// [`Host`] 的 STG-01 stage clock + `stage::scroll_delta` 逐帧导出（见 `Host::stage_scroll_delta`）。
 pub const SCROLL_DELTA_PX_PER_FRAME: u16 = 16;
+
+/// 开机黑场 capture 帧锚（R-ui-7：boot-black f180，A 级 trace）。
+pub const TITLE_BLACK_FRAME: u64 = 180;
+/// 标题 capture 帧锚（R-ui-7：title f360，A 级 trace）。
+pub const TITLE_FRAME: u64 = 360;
+/// 标题段输入锁：九班 `(450,550]`（`flow-response-latency.md` §3，A 级引证）⇒
+/// 首个解锁帧=551（不发明相位表；只用已证窗口边界）。
+pub const MENU_INPUT_UNLOCK_FRAME: u64 = 551;
+/// 出店转场响应时延：press@1160 → f1193 场景判定位（`flow-response-latency.md` §2，A 级 +33f）。
+pub const SHOP_EXIT_RESPONSE_FRAMES: u64 = 33;
+/// 转场尾常数（engine `TRANSITION_TAIL_FRAMES`，A 级常数；帧内分布未证）。
+pub const TRANSITION_TAIL_FRAMES_HOST: u32 = TRANSITION_TAIL_FRAMES as u32;
+/// 关始 intro 240f（R-ui-6 锚 f1260→f1500；engine `RUN_STAGE_INTRO_FRAMES`，A 级）。
+pub const STAGE_INTRO_FRAMES_HOST: u32 = RUN_STAGE_INTRO_FRAMES;
+/// STG-01 关卡数据装载帧锚（`gameplay-stage1.scroll.jsonl` 起点 f1193；A 级）。
+pub const STG01_LOAD_FRAME: u32 = 1193;
+/// STG-01 调度流头址（`bank8:$A26D`；`wave_timeline.py sched 1` + engine golden，A 级）。
+pub const STG01_SCHED_STREAM_ADDR: u16 = 0xA26D;
+/// STG-01 调度流记录数（A 级 golden：43 记录）。
+pub const STG01_SCHED_RECORDS: usize = 43;
+/// STG-01 调度流解码上限（43 记录 + 环检测余量）。
+pub const STG01_SCHED_MAX_RECORDS: usize = 64;
+/// STG-01 数据所在 PRG bank（MMC3 R7 数据 bank8 → CPU `$A000-$BFFF` 窗）。
+pub const STG01_PRG_BANK: usize = 8;
+/// 自机对象型值（`$0400` 槽0）：A 级 trace 快照 `gameplay-stage1.enemy.jsonl` f1264 槽0 `state=1`。
+pub const PLAYER_OBJECT_TYPE: u8 = 0x01;
 
 /// FNV-1a 64 偏移基。
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -76,6 +115,14 @@ impl StageFxSummary {
     }
 }
 
+/// 敌槽激活事件（`$0400` 槽 0→非0 判定式；**型值不命名**）。帧号=宿主逻辑帧。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpawnEvent {
+    pub frame: u64,
+    pub slot: u8,
+    pub type_code: u8,
+}
+
 /// 一逻辑帧的结果（平台观测面；不承载游戏语义）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FrameOutcome {
@@ -87,7 +134,7 @@ pub struct FrameOutcome {
     pub stage: u8,
     /// 消解后的按钮（对向同持已置 0）。
     pub buttons: Buttons,
-    /// `$16` 边沿位图（v1 只产出不消费）。
+    /// `$16` 边沿位图（v1 只产出不消费；方向+A/B 子集）。
     pub pressed: u8,
     /// 本帧是否推进了逻辑（suspend/quit 帧为 false）。
     pub advanced: bool,
@@ -120,6 +167,19 @@ pub struct Host {
     pacer: FixedStep,
     last_fx: StageFxSummary,
     last_canvas_sig: u64,
+    // ===== task-9：菜单派发 / 模式时序 / STG-01 装载 =====
+    menu_latch: InputLatch,
+    menu_gate: MenuInputGate,
+    shop_state: ShopState,
+    pending_events: VecDeque<(u64, ModeEvent)>,
+    stage_loaded: bool,
+    stage_load_frame: u64,
+    stage_sched_records: usize,
+    spawn_log: Vec<SpawnEvent>,
+    prev_slot_types: [u8; 28],
+    last_mode: Mode,
+    mode_frames: u32,
+    auto_flow: bool,
 }
 
 impl Host {
@@ -149,6 +209,18 @@ impl Host {
             pacer: FixedStep::new(0),
             last_fx: StageFxSummary::default(),
             last_canvas_sig: 0,
+            menu_latch: InputLatch::default(),
+            menu_gate: MenuInputGate::default(),
+            shop_state: ShopState::default(),
+            pending_events: VecDeque::new(),
+            stage_loaded: false,
+            stage_load_frame: 0,
+            stage_sched_records: 0,
+            spawn_log: Vec::new(),
+            prev_slot_types: [0; 28],
+            last_mode: Mode::Boot,
+            mode_frames: 0,
+            auto_flow: true,
         }
     }
 
@@ -238,6 +310,27 @@ impl Host {
         &self.pacer
     }
 
+    /// 菜单派发器状态（trait 契约测试/排障用；只读）。
+    pub fn menu_dispatch_unlocked(&self) -> bool {
+        self.menu_gate.phase_unlocked
+    }
+
+    /// 商店面板状态（`ui::ShopState`；只读）。
+    pub fn shop_state(&self) -> ShopState {
+        self.shop_state
+    }
+
+    /// 自动模式时序开/关（默认开）。关=replay/门禁测试按 capture 帧锚显式投递 `ModeEvent`
+    /// （见 `docs/findings/plan-playable-loop.md` §7）；**不改变任何模式迁移合法性**。
+    pub fn set_auto_flow(&mut self, enabled: bool) {
+        self.auto_flow = enabled;
+    }
+
+    /// 待投递延迟事件数（响应时延队列；只读）。
+    pub fn pending_events(&self) -> usize {
+        self.pending_events.len()
+    }
+
     // ================= 生命周期 =================
 
     /// 应用一个平台生命周期事件（宿主策略占位：suspend 停逻辑帧、quit 停一切）。
@@ -310,6 +403,96 @@ impl Host {
         true
     }
 
+    // ================= STG-01 装载 =================
+
+    /// 已装载 STG-01 关卡数据。
+    pub fn stage_loaded(&self) -> bool {
+        self.stage_loaded
+    }
+
+    /// 关卡数据装载所在宿主逻辑帧（滚动源偏移基准；见 [`STG01_LOAD_FRAME`]）。
+    pub fn stage_load_frame(&self) -> u64 {
+        self.stage_load_frame
+    }
+
+    /// 已装载调度流记录数（A 级 golden=43）。
+    pub fn stage_sched_records(&self) -> usize {
+        self.stage_sched_records
+    }
+
+    /// 敌槽激活事件日志（`$0400` 0→非0 判定式；对拍摘要用）。
+    pub fn spawn_log(&self) -> &[SpawnEvent] {
+        &self.spawn_log
+    }
+
+    /// 清空 spawn 日志（自检/对拍分段用）。
+    pub fn clear_spawn_log(&mut self) {
+        self.spawn_log.clear();
+    }
+
+    /// 从已装载 ROM 构造并装载 STG-01 `StageState`（`AssetSource` → bank8 → decode_sched）。
+    ///
+    /// 失败（ROM 未装载/bank 越界/调度流不是完整 43 记录）⇒ false，**不改宿主状态**（fail-closed）。
+    pub fn load_stg01(&mut self) -> bool {
+        let Some(rom) = self.rom.as_deref() else {
+            return false;
+        };
+        let Some(bank8) = game_data::rom::prg_bank(rom, STG01_PRG_BANK) else {
+            return false;
+        };
+        // 复制 bank8 以避免同时借用 self.rom 与 &mut self（8KB，装载期一次开销）。
+        let bank8 = bank8.to_vec();
+        self.load_stg01_from_bank8(&bank8)
+    }
+
+    /// 从 PRG bank8 窗口字节装载 STG-01（上游已装载 ROM 窗/门禁测试用；语义同 [`Host::load_stg01`]）。
+    ///
+    /// 构造（全部现有 game-core 公开 API）：`ScriptCursor::stg01` + `SchedCursor::load(decode_sched($A26D))`
+    /// + 自机对象初态（A 级 trace 快照：槽0 `$0400=1/x=128/y=160`）。不写槽 1-7 型值
+    /// （f1264 trace 快照其余槽语义未证，不发明）。
+    pub fn load_stg01_from_bank8(&mut self, bank8: &[u8]) -> bool {
+        let stream = decode_sched(bank8, STG01_SCHED_STREAM_ADDR, STG01_SCHED_MAX_RECORDS);
+        if stream.records.len() != STG01_SCHED_RECORDS || stream.unknown_ctrl.is_some() {
+            return false; // A 级 golden 不满足 ⇒ fail-closed（不是完整 STG-01 视界）
+        }
+        let mut stage = StageState {
+            sched: engine::SchedCursor::load(stream),
+            script: ScriptCursor::stg01(),
+            scene: "stg01".into(),
+            ..StageState::default()
+        };
+        stage.grid.slots[0] = engine::ObjectSlot {
+            type_: PLAYER_OBJECT_TYPE,
+            x: INITIAL_PLAYER_X,
+            y: INITIAL_PLAYER_Y,
+            ..engine::ObjectSlot::default()
+        };
+        self.stage_state = stage;
+        self.stage_loaded = true;
+        self.stage_load_frame = self.clock.frame();
+        self.stage_sched_records = STG01_SCHED_RECORDS;
+        self.prev_slot_types = [0; 28];
+        self.spawn_log.clear();
+        true
+    }
+
+    /// 当前帧对应的 STG-01 ROM 帧号（`STG01_LOAD_FRAME + (host_frame - stage_load_frame)`）。
+    pub fn stage_abs_frame(&self, host_frame: u64) -> u32 {
+        STG01_LOAD_FRAME.saturating_add(host_frame.saturating_sub(self.stage_load_frame) as u32)
+    }
+
+    /// 本帧滚动增量（px）：`-stage::scroll_delta(abs).1`（A 级逐帧公式；`Combat` 外 v1 亦用同一源）。
+    ///
+    /// 口径：stg01 stage clock 与 `.scroll.jsonl` 对齐（A 级，见 `tests/stg01_replay.rs` C1）。
+    pub fn stage_scroll_delta(&self, host_frame: u64) -> u16 {
+        let (_, dy) = game_core::stage::scroll_delta(self.stage_abs_frame(host_frame));
+        if dy < 0 {
+            (-(i32::from(dy))) as u16
+        } else {
+            0
+        }
+    }
+
     // ================= 宿主状态机（接 flow 已证边集） =================
 
     /// 投递一个 flow 模式事件（只走 `game_core::flow` 已证边集 + 宿主关号守卫）。
@@ -320,6 +503,8 @@ impl Host {
     /// - `AllClear`（E392 `CMP #9`）仅在 `stage_index==8` 合法。
     ///
     /// 成功时同步关号/通关标志；失败返回 core 的 fail-closed 原因（宿主状态不变）。
+    /// **v1 驱动方=平台/上层**：除 `Combat→StageClear` 自动接线外，模式事件由平台显式投递
+    /// 或本宿主菜单派发（输入驱动的已证序列）投递。
     pub fn apply_event(&mut self, event: ModeEvent) -> Result<Mode, String> {
         match event {
             ModeEvent::StageAdvance if self.stage_index >= 8 => {
@@ -343,6 +528,162 @@ impl Host {
         }
         self.flow = next;
         Ok(self.flow.mode)
+    }
+
+    /// 平台/上层显式投递事件入口：同 [`Host::apply_event`] 的已证边校验 +
+    /// **宿主副作用**（转场帧 `ExitTransition` 成功后装载 STG-01，A 级 f1193 锚）。
+    ///
+    /// 成功返回实际投递的事件；失败 `None`（状态不变，fail-closed）。
+    pub fn apply_event_hooked(&mut self, event: ModeEvent) -> Option<ModeEvent> {
+        self.apply_event_with_side_effects(event)
+    }
+
+    /// 投递事件并处理宿主副作用（转场帧装载 STG-01）；失败 ⇒ None（状态不变）。
+    fn apply_event_with_side_effects(&mut self, event: ModeEvent) -> Option<ModeEvent> {
+        match self.apply_event(event) {
+            Ok(_) => {
+                if event == ModeEvent::ExitTransition && self.flow.mode == Mode::Transition {
+                    // 转场帧装载 STG-01（A 级：scroll trace 起点 f1193；装载失败=fail-closed 不伪造）
+                    let _ = self.load_stg01();
+                }
+                Some(event)
+            }
+            Err(_) => None,
+        }
+    }
+
+    // ================= 菜单/模式派发（输入驱动；证据见 plan-playable-loop §4） =================
+
+    /// 标题/菜单/商店段输入派发（`MenuInputGate` 两层门 + `ShopState::on_b`）。
+    fn dispatch_menu(&mut self, frame: u64) {
+        let Some(bits) = self.menu_gate.dispatch(self.menu_latch.bitmap_18) else {
+            return;
+        };
+        match self.flow.mode {
+            Mode::Title if bits & crate::input::MENU_START != 0 => {
+                let _ = self.apply_event_with_side_effects(ModeEvent::Menu);
+            }
+            Mode::Menu if bits & crate::input::MENU_START != 0 => {
+                let _ = self.apply_event_with_side_effects(ModeEvent::ShopArrival);
+            }
+            Mode::Shop if bits & crate::input::MENU_B != 0 => {
+                self.shop_state = self.shop_state.on_b(); // Main→Info（R-shop-6）
+                let _ = self.apply_event_with_side_effects(ModeEvent::ShopPage);
+            }
+            Mode::ShopInfo if bits & crate::input::MENU_B != 0 => {
+                self.shop_state = self.shop_state.on_b(); // Info→Exited（R-shop-7 两连 B）
+                // 出店转场响应 +33f（A 级：press@1160→f1193）⇒ 延迟投递 ExitTransition。
+                let due = frame.saturating_add(SHOP_EXIT_RESPONSE_FRAMES.saturating_sub(1));
+                self.pending_events.push_back((due, ModeEvent::ExitTransition));
+            }
+            _ => {}
+        }
+    }
+
+    /// 帧锚自动推进 + 阶段计时（Transition 33f / StageStart 240f 常数，A 级；帧内分布未证）。
+    fn auto_advance(&mut self, frame: u64) {
+        if !self.auto_flow {
+            return;
+        }
+        match self.flow.mode {
+            Mode::Boot if frame >= TITLE_BLACK_FRAME => {
+                let _ = self.apply_event_with_side_effects(ModeEvent::Black);
+            }
+            Mode::Black if frame >= TITLE_FRAME => {
+                let _ = self.apply_event_with_side_effects(ModeEvent::Title);
+            }
+            Mode::Transition => {
+                self.mode_frames = self.mode_frames.saturating_add(1);
+                if self.mode_frames >= TRANSITION_TAIL_FRAMES_HOST {
+                    let _ = self.apply_event_with_side_effects(ModeEvent::StageStart);
+                }
+            }
+            Mode::StageStart => {
+                self.mode_frames = self.mode_frames.saturating_add(1);
+                if self.mode_frames >= STAGE_INTRO_FRAMES_HOST {
+                    let _ = self.apply_event_with_side_effects(ModeEvent::MidCombat);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// 到点的延迟模式事件（响应时延队列）。
+    fn due_events(&mut self, frame: u64) {
+        loop {
+            let Some(&(due, event)) = self.pending_events.front() else {
+                break;
+            };
+            if due > frame {
+                break;
+            }
+            self.pending_events.pop_front();
+            let _ = self.apply_event_with_side_effects(event);
+        }
+    }
+
+    // ================= 引擎 tick / spawn 落地 =================
+
+    /// 引擎 tick 活跃模式（`Combat`=已证 gameplay 段；`Transition/StageStart`=B 级接线依据；
+    /// `DeathRespawn/StageClear`=接线约定、细粒度未隔离 G-S5-5——见 platform-shell §8）。
+    fn engine_tick_active(mode: Mode) -> bool {
+        matches!(
+            mode,
+            Mode::Transition | Mode::StageStart | Mode::Combat | Mode::DeathRespawn | Mode::StageClear
+        )
+    }
+
+    /// 玩家移动活跃模式：`Combat` + `StageStart`。
+    ///
+    /// - `Combat`=已证 gameplay 段；
+    /// - `StageStart`=**A 级 trace 证据**：`gameplay-stage1.player.jsonl` f1301 首移
+    ///   （x=128→130、held=$81），该帧落在 flow capture「stage-start f1260→mid-combat f1500」窗内
+    ///   ⇒ 关始段玩家可动（推翻"可动性未证"的旧保守假设；以 oracle 逐帧向量为准）；
+    /// - `DeathRespawn` 窗内 x/y/亚像素冻结=A 级（`respawn-window.md` §3 R-respawn-2）⇒ 不跑；
+    /// - `StageClear` 飞离段由引擎状态向量驱动，输入不参与（未证不发明）。
+    fn player_tick_active(mode: Mode) -> bool {
+        matches!(mode, Mode::Combat | Mode::StageStart)
+    }
+
+    /// spawn 效果落地：`Pair → land_pair`；`Spawn（组长）→ land_leader(...,None)`；
+    /// 其余 item（Jump/SetType/Reg/Unknown）不落地=fail-closed（SetType 语义未接线）。
+    ///
+    /// 口径：落地发生在 `stage_tick` 返回后的同逻辑帧内（1 帧滴灌延迟已知偏差，见 crate 文档）。
+    fn apply_stage_effects(&mut self, fx: &StageEffects) {
+        for item in fx.spawn_events.iter().chain(fx.drip_events.iter()) {
+            match *item {
+                SchedItem::Pair { type_, param } => {
+                    let _ = engine::land_pair(&mut self.stage_state.grid, type_, param);
+                }
+                SchedItem::Spawn { type_, args, .. } => {
+                    let _ = engine::land_leader(&mut self.stage_state.grid, type_, args, None);
+                }
+                _ => {} // fail-closed：不发明未接线 item 的落地语义
+            }
+        }
+    }
+
+    /// 扫描槽型值 0→非0（trace 同口径判定式；槽复用不可见——与 oracle 抽取口径一致）。
+    fn scan_spawns(&mut self, frame: u64) {
+        for slot in 0..28usize {
+            let type_code = self.stage_state.grid.slots[slot].type_;
+            if self.prev_slot_types[slot] == 0 && type_code != 0 {
+                self.spawn_log.push(SpawnEvent { frame, slot: slot as u8, type_code });
+            }
+            self.prev_slot_types[slot] = type_code;
+        }
+    }
+
+    fn live_bullet_count(&self) -> u16 {
+        self.stage_state.bullets.state.iter().filter(|&&s| s != 0).count() as u16
+    }
+
+    fn player_bullet_count(&self) -> u16 {
+        PLAYER_ONLY_SLOTS
+            .iter()
+            .chain(SHARED_SLOTS.iter())
+            .filter(|&&i| self.stage_state.bullets.state[i as usize] != 0)
+            .count() as u16
     }
 
     // ================= 帧推进 =================
@@ -370,8 +711,8 @@ impl Host {
         frames
     }
 
-    /// 一个逻辑帧（确定性核心）：输入采样→（按模式门）玩家/引擎 tick→音频流消费→
-    /// 渲染合成+present→虚拟时钟推进。suspend/quit 时**不推进、不呈现**。
+    /// 一个逻辑帧（确定性核心）：输入锁存/派发→（按模式门）玩家/引擎 tick→效果消费→
+    /// 音频流消费→渲染合成+present→虚拟时钟推进。suspend/quit 时**不推进、不呈现**。
     pub fn tick(
         &mut self,
         input: &dyn Input,
@@ -399,45 +740,68 @@ impl Host {
             };
         }
 
+        // ① 菜单 `$18` 锁存：先推进上一帧 pending（press@N→N+1f），再压入本帧按下沿。
+        self.menu_latch.tick_frame();
+        self.menu_latch.press(menu_pressed_bitmap(&self.prev_buttons, &buttons));
+
+        // ② 标题段输入锁（九班 (450,550]，A 级引证）：>550 解锁。
+        if frame > MENU_INPUT_UNLOCK_FRAME {
+            self.menu_gate.phase_unlocked = true;
+        }
+
+        // ③ 菜单/模式派发（输入驱动已证序列）
+        self.dispatch_menu(frame);
+
+        // ④ 帧锚自动推进 + 转场/关始阶段计时
+        self.auto_advance(frame);
+
+        // ⑤ 响应时延队列到点
+        self.due_events(frame);
+
         let held = held_bitmap(&buttons);
         let mode_before = self.flow.mode;
         let mut gameplay_tick = false;
         let mut stage_clear_requested = false;
         let mut flow_event = None;
 
-        if engine_tick_active(mode_before) {
+        // ⑥a 玩家移动（仅 Combat；重生窗冻结=A 级）。与关卡装载解耦：移动逻辑不依赖 StageState。
+        if Self::player_tick_active(mode_before) {
+            self.player = player::tick(&self.player, held);
+        }
+
+        // ⑥b 引擎 tick（已装载 + 已接线模式）
+        if self.stage_loaded && Self::engine_tick_active(mode_before) {
             gameplay_tick = true;
-            if player_tick_active(mode_before) {
-                self.player = player::tick(&self.player, held);
-            }
-            let scroll_delta = if mode_before == Mode::Combat { SCROLL_DELTA_PX_PER_FRAME } else { 0 };
+            let scroll_delta = self.stage_scroll_delta(frame);
             let fx = engine::stage_tick(&mut self.stage_state, &TickInputs { scroll_delta });
             self.last_fx = StageFxSummary::from_effects(&fx);
             stage_clear_requested = fx.stage_clear_requested;
+            self.apply_stage_effects(&fx);
+            self.scan_spawns(frame);
             // 已证自动接线：Combat→StageClear（flow 边集 + engine `$26 bit4` 门）。
             if mode_before == Mode::Combat && stage_clear_requested {
-                if self.apply_event(ModeEvent::StageClear).is_ok() {
+                if self.apply_event_with_side_effects(ModeEvent::StageClear).is_some() {
                     flow_event = Some(ModeEvent::StageClear);
                 }
             }
         }
 
-        // Audio 流消费（每帧恰一次 end_frame；v1 生产者空）。
+        // ⑦ Audio 流消费（每帧恰一次 end_frame；v1 生产者空）。
         self.audio.flush(audio, frame as u32);
 
-        // 渲染合成 + present（v1 占位：清屏 + 已证坐标面玩家块）。
-        let view = FrameView {
-            frame,
-            mode: self.flow.mode,
-            stage: self.stage_index,
-            player: self.player,
-            live_bullets: self.live_bullets(),
-        };
+        // ⑧ 渲染合成 + present（v1 占位：清屏 + 已证坐标面玩家块；view 供平台侧只读消费）。
+        let view = self.frame_view();
         self.last_canvas_sig = compose_frame(renderer.canvas_mut(), &view);
         renderer.present();
 
         self.prev_buttons = buttons;
         self.clock.tick();
+
+        // 模式变化检测（阶段计时基准）
+        if self.flow.mode != self.last_mode {
+            self.last_mode = self.flow.mode;
+            self.mode_frames = 0;
+        }
 
         FrameOutcome {
             frame,
@@ -454,13 +818,39 @@ impl Host {
         }
     }
 
-    fn live_bullets(&self) -> u16 {
-        self.stage_state.bullets.state.iter().filter(|&&s| s != 0).count() as u16
+    /// 只读渲染视图（平台侧渲染合成消费；未证域显式 None/TODO——见 `render.rs`）。
+    pub fn frame_view(&self) -> FrameView {
+        let mut enemy_slots = [EnemySlotView::EMPTY; 20];
+        for (i, view) in enemy_slots.iter_mut().enumerate() {
+            let slot = 8 + i;
+            let s = &self.stage_state.grid.slots[slot];
+            *view = EnemySlotView {
+                slot: slot as u8,
+                type_code: if s.type_ == 0 { None } else { Some(s.type_) },
+                // 坐标写者链（spawn 定位/行为 VM 位置写）未接线/未证 ⇒ 显式 None，
+                // 不得把 None 当 (0,0)（platform-shell §8 / plan-playable-loop §6）。
+                position: None,
+            };
+        }
+        FrameView {
+            frame: self.clock.frame(),
+            mode: self.flow.mode,
+            stage: self.stage_index,
+            player: self.player,
+            live_bullets: self.live_bullet_count(),
+            player_bullets_live: self.player_bullet_count(),
+            enemy_slots,
+            hud: HudView {
+                money_digits: render_digits(&self.flow.data.money),
+                bomb_ammo: self.player.bomb_ammo,
+                stage: self.stage_index,
+            },
+        }
     }
 
-    /// 确定性状态签名（FNV-1a 64）：覆盖宿主可观测状态 + 上一帧画布/音频摘要。
+    /// 确定性状态签名（FNV-1a 64）：覆盖宿主可观测状态 + 派发/装载/上一帧画布与音频摘要。
     ///
-    /// 用途：mock 契约测试「300 帧两次一致」；**不声称**等价于真机 trace 对拍。
+    /// 用途：mock/STG-01 replay 契约测试「两次一致」；**不声称**等价于真机 trace 对拍。
     pub fn signature(&self) -> u64 {
         let mut h = FNV_OFFSET;
         hash_u64(&mut h, self.clock.frame());
@@ -473,6 +863,25 @@ impl Host {
                 u8::from(self.all_clear),
                 u8::from(self.suspended),
                 u8::from(self.quit),
+                u8::from(self.stage_loaded),
+            ],
+        );
+        hash_u64(&mut h, self.stage_load_frame);
+        hash_u64(&mut h, self.stage_sched_records as u64);
+        hash_u64(&mut h, self.mode_frames as u64);
+        hash_u64(&mut h, self.pending_events.len() as u64);
+        hash_u64(&mut h, u64::from(self.menu_latch.bitmap_18));
+        hash_bytes(
+            &mut h,
+            &[
+                u8::from(self.menu_gate.phase_unlocked),
+                u8::from(self.menu_gate.prev_held),
+                match self.shop_state {
+                    ShopState::Main => 0,
+                    ShopState::Info => 1,
+                    ShopState::Exited => 2,
+                },
+                held_bitmap(&self.prev_buttons),
             ],
         );
         hash_bytes(
@@ -497,10 +906,16 @@ impl Host {
         hash_bytes(&mut h, &[self.stage_state.wave.flags_26]);
         hash_u64(&mut h, self.stage_state.sched.next as u64);
         hash_u64(&mut h, self.stage_state.script.next as u64);
-        for slot in &self.stage_state.grid.slots {
-            hash_bytes(&mut h, &[slot.type_]);
+        for (slot, prev) in self.stage_state.grid.slots.iter().zip(self.prev_slot_types.iter()) {
+            hash_bytes(&mut h, &[slot.type_, *prev]);
         }
-        hash_u64(&mut h, u64::from(self.live_bullets()));
+        hash_u64(&mut h, u64::from(self.live_bullet_count()));
+        hash_u64(&mut h, u64::from(self.player_bullet_count()));
+        hash_u64(&mut h, self.spawn_log.len() as u64);
+        for event in &self.spawn_log {
+            hash_u64(&mut h, event.frame);
+            hash_bytes(&mut h, &[event.slot, event.type_code]);
+        }
         hash_bytes(
             &mut h,
             &[
@@ -531,31 +946,15 @@ impl Default for Host {
     }
 }
 
-/// 引擎 tick 活跃模式：`Combat`=已证 gameplay 段（R-stage-tick / ui-flow R-ui-6 场景锚）。
-///
-/// `DeathRespawn`/`StageClear`=**接线约定**（行为等级降级，见复核 E1）：细粒度行为
-/// （死亡窗滚动/主环 poll/关末门并发 G-S5-5）未隔离——A2 细粒度 `death_chain_step` 与
-/// A3 `stage_clear_step` 尚未接线；差分对拍时死亡窗/关末并发窗仍应视为未证域。
-/// 不含 `StageStart`：关始 intro 段玩家可动性未证（R-ui-6 只证画面锚）。
-fn engine_tick_active(mode: Mode) -> bool {
-    matches!(mode, Mode::Combat | Mode::DeathRespawn | Mode::StageClear)
-}
-
-/// 玩家移动活跃模式：仅 `Combat`。
-///
-/// `DeathRespawn` 窗内 x/y/亚像素冻结=A 级（`respawn-window.md` §3 R-respawn-2 逐帧向量）；
-/// `StageClear` 飞离段由引擎状态向量驱动，输入不参与（未证不发明）。
-fn player_tick_active(mode: Mode) -> bool {
-    matches!(mode, Mode::Combat)
-}
-
 /// 宿主最小快照的持久化数据（re-export，便于平台侧做存档 UI）。
 pub use game_core::flow::PersistData as HostPersistData;
 
+// 测试模块（task-9：菜单派发 / STG-01 装载 / FrameView / 确定性）
 #[cfg(test)]
 mod tests {
     use super::{
-        Host, INITIAL_BOMB_AMMO, INITIAL_PLAYER_X, INITIAL_PLAYER_Y, ROM_ASSET_PATH,
+        Host, SpawnEvent, INITIAL_BOMB_AMMO, INITIAL_PLAYER_X, INITIAL_PLAYER_Y, ROM_ASSET_PATH,
+        STG01_SCHED_RECORDS, STG01_SCHED_STREAM_ADDR,
     };
     use crate::fixed_step::FRAME_NS;
     use game_core::flow::{Mode, ModeEvent};
@@ -658,6 +1057,36 @@ mod tests {
         }
     }
 
+    /// 合成 PRG bank8 窗口（门禁测试用）：43 条调度记录 + 环闭合（语义=计数/环检测，不对应真 ROM）。
+    ///
+    /// 布局：$A26D 起每记录 `[delay][ctrl0]`（ctrl0=记录分隔，下一记录=+2）；第 43 条以
+    /// `[delay][ctrl3 lo hi]` 跳回 $A26D ⇒ decode_sched 见环终止、记录数=43、truncated=false。
+    fn synthetic_stg01_bank8() -> Vec<u8> {
+        let mut window = vec![0u8; 0x2000];
+        let start = usize::from(STG01_SCHED_STREAM_ADDR - 0xA000);
+        for i in 0..(STG01_SCHED_RECORDS - 1) {
+            let pos = start + i * 2;
+            window[pos] = if i == 0 { 0 } else { 1 };
+            window[pos + 1] = 0; // ctrl0 记录分隔
+        }
+        let pos = start + (STG01_SCHED_RECORDS - 1) * 2;
+        window[pos] = 1;
+        window[pos + 1] = 3; // ctrl3 跳转
+        let target = STG01_SCHED_STREAM_ADDR.to_le_bytes();
+        window[pos + 2] = target[0];
+        window[pos + 3] = target[1];
+        window
+    }
+
+    /// 合成非法视界（非 43 记录）。
+    fn incomplete_bank8() -> Vec<u8> {
+        let mut window = vec![0u8; 0x2000];
+        let start = usize::from(STG01_SCHED_STREAM_ADDR - 0xA000);
+        window[start] = 0;
+        window[start + 1] = 0;
+        window
+    }
+
     // ---------------- 宿主状态机 ----------------
 
     /// 开机 → 关 1 战斗（全部走 flow 已证边集）。
@@ -701,6 +1130,7 @@ mod tests {
         assert_eq!(a.mode(), Mode::Boot);
         assert_eq!(a.stage_index(), 1);
         assert!(!a.all_clear() && !a.suspended() && !a.quit_requested());
+        assert!(!a.stage_loaded(), "未装载前 stage_loaded=false");
         assert_eq!((a.player().x, a.player().y), (INITIAL_PLAYER_X, INITIAL_PLAYER_Y), "已证复位锚点 (128,160)");
         assert_eq!(a.player().bomb_ammo, INITIAL_BOMB_AMMO, "bank00:9C5D $018F:=4");
         assert_eq!(a.frame(), 0);
@@ -709,6 +1139,7 @@ mod tests {
     #[test]
     fn walks_title_to_eight_stages_to_ending_via_proven_edges_only() {
         let mut host = Host::new();
+        host.set_auto_flow(false);
         walk_to_combat(&mut host);
         for stage in 1..=8u8 {
             assert_eq!(host.stage_index(), stage, "关号同步（E37C INC $180）");
@@ -722,12 +1153,12 @@ mod tests {
     #[test]
     fn host_guards_fail_closed_on_stage_consistency() {
         let mut host = Host::new();
+        host.set_auto_flow(false);
         assert!(host.apply_event(ModeEvent::AllClear).is_err(), "非关 8 AllClear fail-closed");
         walk_to_combat(&mut host);
         host.apply_event(ModeEvent::StageClear).expect("关末门");
         assert!(host.apply_event(ModeEvent::AllClear).is_err(), "关 1 AllClear fail-closed");
         host.apply_event(ModeEvent::StageAdvance).expect("关 1 关间");
-        // 走到关 8 关末
         for _ in 2..=8u8 {
             for ev in [ModeEvent::ExitTransition, ModeEvent::StageStart, ModeEvent::MidCombat] {
                 host.apply_event(ev).expect("下一关已证边");
@@ -747,15 +1178,14 @@ mod tests {
     #[test]
     fn unproven_flow_edge_is_rejected() {
         let mut host = Host::new();
-        // Boot + ModeEvent::MidCombat 不在已证边集（fail-closed）
         assert!(host.apply_event(ModeEvent::MidCombat).is_err());
         assert_eq!(host.mode(), Mode::Boot, "未证边不改状态");
     }
 
-    // ---------------- tick 序列 ----------------
+    // ---------------- tick 序列 / 装载 ----------------
 
     #[test]
-    fn tick_sequence_runs_engine_only_in_gameplay_modes() {
+    fn tick_sequence_runs_engine_only_after_stage_load() {
         let mut host = Host::new();
         let mut renderer = NullRenderer::new();
         let mut audio = RecAudio::default();
@@ -765,18 +1195,33 @@ mod tests {
         assert_eq!(renderer.presents, 1, "每逻辑帧一次 present");
         assert_eq!(audio.frames, vec![0], "每逻辑帧一次 end_frame");
 
+        host.set_auto_flow(false);
         walk_to_combat(&mut host);
         let out = host.tick(&right_only(), &mut renderer, &mut audio);
-        assert!(out.gameplay_tick, "Combat 跑 stage_tick");
-        assert_eq!(host.stage_state().frame, 1);
+        assert!(!out.gameplay_tick, "未装载关卡 ⇒ 不跑 engine tick（fail-closed）");
         assert_eq!(host.player().x, INITIAL_PLAYER_X + 2, "player::tick 输入当帧生效（POS 整数 +2）");
         assert_eq!(host.player().x_subpix, 208, "亚像素 +208（R-move-6）");
-        assert_eq!(audio.frames, vec![0, 1], "帧号随逻辑时钟");
+
+        assert!(host.load_stg01_from_bank8(&synthetic_stg01_bank8()), "合成 43 记录视界装载成功");
+        assert_eq!(host.stage_sched_records(), STG01_SCHED_RECORDS);
+        let out = host.tick(&no_input(), &mut renderer, &mut audio);
+        assert!(out.gameplay_tick, "装载后 Combat 跑 engine tick");
+        assert_eq!(host.stage_state().frame, 1);
+    }
+
+    #[test]
+    fn load_stg01_fail_closed_on_incomplete_stream() {
+        let mut host = Host::new();
+        assert!(!host.load_stg01_from_bank8(&incomplete_bank8()), "非 43 记录 ⇒ false");
+        assert!(!host.stage_loaded(), "失败不改装载状态");
+        assert!(!host.load_stg01(), "ROM 未装载 ⇒ false");
+        assert!(!host.load_stg01_from_bank8(&vec![0u8; 0x100]), "短窗 ⇒ false");
     }
 
     #[test]
     fn opposite_buttons_are_resolved_before_core() {
         let mut host = Host::new();
+        host.set_auto_flow(false);
         walk_to_combat(&mut host);
         let mut renderer = NullRenderer::new();
         let mut audio = RecAudio::default();
@@ -790,21 +1235,23 @@ mod tests {
     #[test]
     fn respawn_window_freezes_player_movement() {
         let mut host = Host::new();
+        host.set_auto_flow(false);
         walk_to_combat(&mut host);
         host.apply_event(ModeEvent::DeathRespawn).expect("死亡窗已证边");
         let mut renderer = NullRenderer::new();
         let mut audio = RecAudio::default();
         let before = *host.player();
         let out = host.tick(&right_only(), &mut renderer, &mut audio);
-        assert!(out.gameplay_tick, "死亡窗仍跑引擎");
+        assert!(!out.gameplay_tick, "未装载 ⇒ 引擎不 tick；玩家冻结断言仍成立");
         assert_eq!(*host.player(), before, "重生窗 x/y/亚像素冻结（A 级 L3）");
-        assert_eq!(host.stage_state().frame, 1);
     }
 
     #[test]
     fn stage_clear_effect_auto_advances_proven_edge() {
         let mut host = Host::new();
+        host.set_auto_flow(false);
         walk_to_combat(&mut host);
+        assert!(host.load_stg01_from_bank8(&synthetic_stg01_bank8()));
         // 已证写点注入（门禁测试）：$26 bit4 已臂 + slot0 在场（$0400 门）
         host.stage_state_mut().wave.flags_26 |= 0x10;
         host.stage_state_mut().grid.slots[0].type_ = 0x03;
@@ -816,6 +1263,139 @@ mod tests {
         assert_eq!(host.mode(), Mode::StageClear);
     }
 
+    // ---------------- 菜单派发（输入驱动） ----------------
+
+    /// 逐帧驱动宿主，返回进入新模式的顺序序列。
+    fn run_with_presses(host: &mut Host, frames: u64, presses: &[(u64, bool, bool)]) -> Vec<Mode> {
+        let mut renderer = NullRenderer::new();
+        let mut audio = RecAudio::default();
+        let mut modes = vec![host.mode()];
+        for f in 0..frames {
+            let (mut want_start, mut want_b) = (false, false);
+            for &(pf, s, b) in presses {
+                if pf == f {
+                    want_start = s;
+                    want_b = b;
+                }
+            }
+            let buttons = Buttons { start: want_start, b: want_b, ..Buttons::default() };
+            host.tick(&FixedInput(buttons), &mut renderer, &mut audio);
+            if modes.last() != Some(&host.mode()) {
+                modes.push(host.mode());
+            }
+        }
+        modes
+    }
+
+    #[test]
+    fn menu_dispatch_walks_title_menu_shop_stage_by_proven_sequence() {
+        let mut host = Host::new();
+        // 帧锚自动（Boot@180→Black，Black@360→Title）+ 输入：Start@600→Menu、Start@700→Shop、
+        // B@800→ShopInfo、B@900→ExitTransition(+33f)→Transition→(33f)→StageStart→(240f)→Combat。
+        let presses = [(600u64, true, false), (700, true, false), (800, false, true), (900, false, true)];
+        let modes = run_with_presses(&mut host, 1400, &presses);
+        assert_eq!(
+            modes,
+            vec![
+                Mode::Boot,
+                Mode::Black,
+                Mode::Title,
+                Mode::Menu,
+                Mode::Shop,
+                Mode::ShopInfo,
+                Mode::Transition,
+                Mode::StageStart,
+                Mode::Combat,
+            ],
+            "已证菜单/模式序列（R-ui-6/7 + R-shop-6/7 + 33f/240f 常数）"
+        );
+        assert_eq!(host.shop_state(), game_core::ui::ShopState::Exited, "两连 B 退出（R-shop-7）");
+        assert!(!host.stage_loaded(), "ROM 未装载 ⇒ 转场帧装载 fail-closed（不伪造）");
+    }
+
+    #[test]
+    fn title_input_lock_blocks_start_until_551() {
+        let mut host = Host::new();
+        // Start@500 落在九班输入锁 (450,550] 内 ⇒ 应被忽略；解锁后 Start@600 生效。
+        let presses = [(500u64, true, false), (600, true, false)];
+        let modes = run_with_presses(&mut host, 700, &presses);
+        assert_eq!(modes, vec![Mode::Boot, Mode::Black, Mode::Title, Mode::Menu], "锁窗内 Start 无效、解锁后生效");
+    }
+
+    #[test]
+    fn start_in_shop_has_no_effect() {
+        let mut host = Host::new();
+        // 先到 Shop（Start@600→Menu, Start@700→Shop），再在 Shop 内按 Start（R-shop-8 无效）。
+        let presses = [(600u64, true, false), (700, true, false), (800, true, false), (900, true, false)];
+        let modes = run_with_presses(&mut host, 1000, &presses);
+        assert_eq!(modes, vec![Mode::Boot, Mode::Black, Mode::Title, Mode::Menu, Mode::Shop], "Shop 内 Start 无效果");
+    }
+
+    // ---------------- FrameView / spawn 摘要 ----------------
+
+    #[test]
+    fn frame_view_exposes_only_proven_fields() {
+        let mut host = Host::new();
+        host.set_auto_flow(false);
+        walk_to_combat(&mut host);
+        assert!(host.load_stg01_from_bank8(&synthetic_stg01_bank8()));
+        let mut renderer = NullRenderer::new();
+        let mut audio = RecAudio::default();
+        host.tick(&no_input(), &mut renderer, &mut audio);
+
+        let view = host.frame_view();
+        assert_eq!(view.mode, Mode::Combat);
+        assert_eq!(view.stage, 1);
+        assert_eq!(view.frame, host.frame());
+        assert_eq!(view.player, *host.player());
+        assert_eq!(view.enemy_slots.len(), 20, "槽 8..=27");
+        for (i, slot) in view.enemy_slots.iter().enumerate() {
+            assert_eq!(slot.slot as usize, 8 + i, "槽号顺序");
+            assert_eq!(slot.position, None, "坐标写者链未证 ⇒ 显式 None");
+        }
+        assert!(view.enemy_slots.iter().all(|s| s.type_code.is_none()), "合成视界无 spawn 项");
+        assert_eq!(view.live_bullets, 0);
+        assert_eq!(view.player_bullets_live, 0);
+        assert_eq!(view.hud.bomb_ammo, INITIAL_BOMB_AMMO);
+        assert_eq!(view.hud.stage, 1);
+        assert_eq!(view.hud.money_digits.len(), 7);
+        assert_eq!(host.frame_view(), view, "只读 view 幂等");
+    }
+
+    #[test]
+    fn spawn_log_records_initial_object_activation() {
+        let mut host = Host::new();
+        host.set_auto_flow(false);
+        walk_to_combat(&mut host);
+        let load_frame = host.frame();
+        assert!(host.load_stg01_from_bank8(&synthetic_stg01_bank8()));
+        let mut renderer = NullRenderer::new();
+        let mut audio = RecAudio::default();
+        host.tick(&no_input(), &mut renderer, &mut audio);
+        let log: &[SpawnEvent] = host.spawn_log();
+        assert_eq!(log.len(), 1, "仅槽0 自机对象 0→1（合成视界无 spawn 项）");
+        assert_eq!(log[0].frame, load_frame, "激活帧=装载后首个 engine tick 帧");
+        assert_eq!((log[0].slot, log[0].type_code), (0, super::PLAYER_OBJECT_TYPE));
+        host.clear_spawn_log();
+        host.tick(&no_input(), &mut renderer, &mut audio);
+        assert!(host.spawn_log().is_empty(), "已激活槽不重复计数（0→非0 判定式口径）");
+    }
+
+    #[test]
+    fn scroll_source_uses_stage_clock_and_scroll_delta() {
+        let mut host = Host::new();
+        host.set_auto_flow(false);
+        assert!(host.load_stg01_from_bank8(&synthetic_stg01_bank8()));
+        let load_frame = host.stage_load_frame();
+        assert_eq!(host.stage_abs_frame(load_frame), super::STG01_LOAD_FRAME);
+        assert_eq!(host.stage_scroll_delta(load_frame), 48, "f1193 装载 −48");
+        assert_eq!(host.stage_scroll_delta(load_frame + 10), 0, "f1194-1213 静止");
+        assert_eq!(host.stage_scroll_delta(load_frame + 22), 2, "f1214+ 每帧 −2");
+        assert_eq!(host.stage_scroll_delta(load_frame + 125), 18, "f1318 脉冲 −18");
+    }
+
+    // ---------------- 生命周期 / 资产 / 存档 / 音频 ----------------
+
     #[test]
     fn fixed_step_advance_drives_logical_frames() {
         let mut host = Host::new();
@@ -825,7 +1405,6 @@ mod tests {
         assert_eq!(host.frame(), 0);
         assert_eq!(host.advance(FRAME_NS, &no_input(), &mut renderer, &mut audio), 1);
         assert_eq!(host.frame(), 1);
-        // 一大步⇒追帧上限 4
         assert_eq!(host.advance(FRAME_NS * 100, &no_input(), &mut renderer, &mut audio), 4);
         assert_eq!(host.frame(), 5);
     }
@@ -861,8 +1440,6 @@ mod tests {
         assert!(!host.suspended(), "Suspend→Resume 后恢复");
     }
 
-    // ---------------- 资产 / 存档 ----------------
-
     #[test]
     fn asset_source_loads_rom_bytes() {
         let mut host = Host::new();
@@ -870,11 +1447,13 @@ mod tests {
         assert!(host.load_asset(&mut FixtureAssets, ROM_ASSET_PATH));
         assert_eq!(host.rom().map(|r| r.len()), Some(6), "AssetSource 字节已取得");
         assert!(!host.load_asset(&mut FixtureAssets, "rom/missing.nes"), "缺失 fail-closed");
+        assert!(!host.load_stg01(), "伪 ROM（非真实 bank8）⇒ 装载 fail-closed");
     }
 
     #[test]
     fn storage_snapshot_roundtrip_and_fail_closed() {
         let mut host = Host::new();
+        host.set_auto_flow(false);
         walk_to_combat(&mut host);
         let mut renderer = NullRenderer::new();
         let mut audio = RecAudio::default();
@@ -883,15 +1462,12 @@ mod tests {
         }
         let mut storage = SlotStorage::default();
         assert!(host.save_snapshot(0, &mut storage), "save 成功");
-        assert!(storage.slots[0].is_some());
-
         let mut restored = Host::new();
         assert!(restored.load_snapshot(0, &mut storage), "load 成功");
         assert_eq!(restored.mode(), host.mode());
         assert_eq!(restored.stage_index(), host.stage_index());
         assert_eq!(restored.player(), host.player());
         assert_eq!(restored.flow().data, host.flow().data);
-
         assert!(!restored.load_snapshot(1, &mut storage), "空槽 fail-closed");
         storage.slots[1] = Some(vec![0u8; crate::snapshot::SNAPSHOT_LEN]);
         assert!(!restored.load_snapshot(1, &mut storage), "损坏快照 fail-closed");

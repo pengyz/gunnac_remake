@@ -61,9 +61,9 @@ pub fn held_bitmap(buttons: &Buttons) -> u8 {
 
 /// `$16` 边沿位图（**方向 + A/B 子集**）：本帧按下且上帧未按。
 ///
-/// **不含 START/SELECT**（菜单域 `$16` bit4=`START`/bit5=`SELECT`，见
-/// [flow.rs `MENU_BTN_*`]）：菜单/模式派发属后续任务卡，接线时须用独立菜单位图函数，
-/// 不得误用本函数（v1 只产出、不消费——射击/投放等边沿行为同属未接线）。
+/// **不含 START/SELECT**（菜单域 `$16` bit4=`START`/bit5=`SELECT`）——菜单/标题段
+/// 使用 [`menu_pressed_bitmap`]（$18 域菜单位，含 START/SELECT）。
+/// v1 本函数只产出、不消费（射击/投放等边沿行为未接线）。
 pub fn pressed_bitmap(prev: &Buttons, now: &Buttons) -> u8 {
     let mut pressed = 0u8;
     if now.right && !prev.right {
@@ -83,6 +83,40 @@ pub fn pressed_bitmap(prev: &Buttons, now: &Buttons) -> u8 {
     }
     if now.a && !prev.a {
         pressed |= BTN_A;
+    }
+    pressed
+}
+
+// ===== 菜单域 `$18` 位（A 级：flow-response-latency.md §1/§3 逐按直读 + R-move-1 位序） =====
+
+/// 菜单域 START（`$18` bit4；A 级直读 `flow-response-latency.md` §1）。
+pub const MENU_START: u8 = 0x10;
+/// 菜单域 SELECT（`$18` bit5；flow `MENU_BTN_SELECT` 同源）。
+pub const MENU_SELECT: u8 = 0x20;
+/// 菜单域 DOWN（`$18` bit2；A 级直读）。
+pub const MENU_DOWN: u8 = 0x04;
+/// 菜单域 UP（`$18` bit3；方向位沿用 R-move-1）。
+pub const MENU_UP: u8 = 0x08;
+/// 菜单域 LEFT（`$18` bit1；方向位沿用 R-move-1）。
+pub const MENU_LEFT: u8 = 0x02;
+/// 菜单域 RIGHT（`$18` bit0；方向位沿用 R-move-1）。
+pub const MENU_RIGHT: u8 = 0x01;
+/// 菜单域 A（`$18` bit7；R-move-1 同源）。
+pub const MENU_A: u8 = 0x80;
+/// 菜单域 B（`$18` bit6；R-move-1 同源）。
+pub const MENU_B: u8 = 0x40;
+
+/// 菜单域 `$18` 按下沿位图（A/B/START/SELECT/方向全谱；喂 `engine::InputLatch`）。
+///
+/// 与 [`pressed_bitmap`] 的区别：本函数含 START/SELECT（菜单必需），供标题/菜单/商店派发；
+/// 实机 gameplay 输入仍用 `$18` 方向+A/B 子集（[`held_bitmap`]）。
+pub fn menu_pressed_bitmap(prev: &Buttons, now: &Buttons) -> u8 {
+    let mut pressed = pressed_bitmap(prev, now);
+    if now.start && !prev.start {
+        pressed |= MENU_START;
+    }
+    if now.select && !prev.select {
+        pressed |= MENU_SELECT;
     }
     pressed
 }

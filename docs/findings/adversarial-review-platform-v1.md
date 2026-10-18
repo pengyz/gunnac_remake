@@ -304,3 +304,91 @@ docs/findings/external-data-verification.md:296 → boot $180:=1 / $4C:=1（关�
   按 commit `6362895` 版本与行号。
 - 复现：命令见 §4；若在并发工作树上重跑 workspace 测试，需先确认 task-1 改动不影响
   `crates/game-platform/**`、`crates/game-shell/**`（当前 `git status` 显示这两个目录干净）。
+
+---
+
+## 复审（2026-10-18）
+
+> 复审对象：task-15 修正 commit **`b5e68b6`**（`docs(platform)`，7 files，+142/−36；
+> 目标=把本报告 `needs_revision` 的 4 条阻塞项 + 便宜项收口）。只核修正项，不全量重审。
+> 复审方：platform-verifier（原 needs_revision 出具方，保持证伪立场）。
+> 证据方式：`git show b5e68b6` 逐文件；对 `game-shell/src` 逐行分类核对"零功能逻辑"；
+> 在 **`git archive HEAD`（cce3bb1）干净副本**实跑测试/门禁（工作树当时含 task-9 WIP，不可作证据）；
+> 字符串/行号/链接逐项 grep。b5e68b6..HEAD 间**无 commit 触及这 7 个文件**，故 HEAD 内容=修正态。
+
+### 复审 VERDICT：**pass**
+
+4 条阻塞项全部落地；全部便宜项已落实且未引入错误；零功能逻辑改动经机器核对；
+最终 HEAD 的测试与门禁真绿。残留 4 条低优先项（§6）不阻塞，建议随下一次 docs 提交/下一卡清理。
+
+### 1. 零功能逻辑改动（机器核对，成立）
+
+- `git show --stat b5e68b6`：仅 7 files（3 个 src、2 个 test、2 个 doc），无 Cargo.toml/gates/阈值/data/功能代码。
+- 逐行分类：`crates/game-shell/src/{host,input,snapshot}.rs` 的所有 `+`/`-` 行**全部是注释/doc**
+  （剥离 `//` 后非注释变更行 = **0**）；`crates/game-platform/tests/{trait_contract,trait_shapes}.rs`
+  仅新增测试函数/改注释；无逻辑、无 API/行为/门禁/基线改动。
+- 测试增量如实：`trait_contract` 新增 1 个 `#[test]`（`clock_and_input_mocks_are_asserted`，
+  [trait_contract.rs:143](../../crates/game-platform/tests/trait_contract.rs#L143)），
+  测试数 326→…→当前 339（基线由 `fe8ce68` 另行上调，非本 commit）。
+
+### 2. 4 条阻塞项逐项确认（均落地）
+
+| 阻塞项 | 修正位置（HEAD） | 复审结论 |
+|---|---|---|
+| **E1** 行为等级降级 | [host.rs:534-542](../../crates/game-shell/src/host.rs#L534-L542)（`engine_tick_active` 注释：Combat=已证；DeathRespawn/StageClear=接线约定、G-S5-5 未隔离、A2/A3 未接线、**不含 StageStart**）；[plan §3.5:116-124](../../docs/findings/plan-platform-abstraction.md#L116)；[platform-shell §3:78-82](../../docs/spec/platform-shell.md#L78-L82)；[§8:206-219](../../docs/spec/platform-shell.md#L206-L219) | ✅ 旧表述「已证 gameplay 段：R-ui-6/7 stage-start/combat」已删；plan/spec/host 当前命中「已证 gameplay 段」仅剩 `Combat` 正例与 §8 的否定句（其余命中=历史复核报告留档）；`R-stage-tick`/`R-ui-6 场景锚`/`A2`/`A3` 指针均可查 |
+| **S8 + E4** | 驱动方段 [plan §3.4:103-108](../../docs/findings/plan-platform-abstraction.md#L103)、[spec §3:94-98](../../docs/spec/platform-shell.md#L94-L98)；缺口登记 [plan §6:225](../../docs/findings/plan-platform-abstraction.md#L225)、[§9:294-296](../../docs/findings/plan-platform-abstraction.md#L294)、[spec §8:211-212](../../docs/spec/platform-shell.md#L211-L212)（关始 240f intro/A3 关末细段/A2 死亡链/R-respawn 玩家侧复位=已证未接线；不得硬编码 240f/400f/265f）；E4 数字 [plan §9:284-285](../../docs/findings/plan-platform-abstraction.md#L284) | ✅ 「除 Combat→StageClear 外 ModeEvent 由平台/上层显式投递」+ 四项已证未接线均已登记；E4 口径已改为「**326 个 `#[test]`：325 passed + 1 既有 ignored**」 |
+| **S1** 时间基准/返回语义 | [host.rs:128](../../crates/game-shell/src/host.rs#L128)（`Host::new` 基准）、[host.rs:350-358](../../crates/game-shell/src/host.rs#L350-L358)（`advance`：now_ns 相对 Host 创建/首帧=0/禁绝对 uptime；返回=折算帧数、suspend/quit 不推进逻辑、实际推进=前后 `frame()` 差）；[spec §4:105](../../docs/spec/platform-shell.md#L105)、[§9 平台接入注意](../../docs/spec/platform-shell.md) | ✅ 文档级契约完整；API 未改（符合任务卡"文档/注释级即可"） |
+| **S3** AssetSource 资产根 | [host.rs:521-526](../../crates/game-shell/src/host.rs#L521-L526)（逻辑路径；PC=exe 目录/可回退 exe/../rom 与 CARGO_MANIFEST_DIR；Android=assets 根；**不得依赖 cwd**）；[spec §4:109](../../docs/spec/platform-shell.md#L109)；[spec §5 资产行](../../docs/spec/platform-shell.md)；[plan §3.8:155-157](../../docs/findings/plan-platform-abstraction.md#L155) | ✅ 「仓库工作目录」已删；PC/Android 资产根语义已定义 |
+
+### 3. 便宜项逐项确认（均落实）
+
+- **E2**：帧序指针改 `engine::FRAME_ORDER`（[plan §3.5:130-132](../../docs/findings/plan-platform-abstraction.md#L130)），并显式注明"这是 A2 findings 归纳，spec 未单列该锚"—已消除对 game-over-continue.md 的错指。
+- **E3**：重生冻结改引 `respawn-window.md §3 R-respawn-2`（[plan:123](../../docs/findings/plan-platform-abstraction.md#L123)、[host.rs:546](../../crates/game-shell/src/host.rs#L546)）。
+- **S4**：`load_rom` → `Host::load_asset`（plan §3.8/§4 全改，全库 grep `load_rom` 仅剩本复核报告历史引用）。
+- **S5**：`$16` 位图标注"方向+A/B 子集、不含 START/SELECT"（[input.rs:62-67](../../crates/game-shell/src/input.rs#L62)、[spec §3:69](../../docs/spec/platform-shell.md#L69)、plan §6）。
+- **S7**：快照语义校验缺口（[snapshot.rs:15-17](../../crates/game-shell/src/snapshot.rs#L15)、plan §6:234、spec §8）。
+- **S9**：plan §9 补 gates 实跑（[plan §9:286-287](../../docs/findings/plan-platform-abstraction.md#L286)）；**S10**：H-16 改为"不新增碰撞/命中逻辑，沿用 core 既有 stage_tick 管线、空 StageState inert"（[plan §6:218](../../docs/findings/plan-platform-abstraction.md#L218)）。
+- **S2**（双状态源前置条款）、**S6**（依赖扫描面）、**P1**（Android surface/EGL 挂接待定，[spec:177](../../docs/spec/platform-shell.md#L177)）、**P2**（Audio PCM 归平台侧，[spec:47](../../docs/spec/platform-shell.md#L47)）、**P3**（旧 FRAME_MS 不得与 FixedStep 并存，[spec:135](../../docs/spec/platform-shell.md#L135)）全部在 plan §6 / spec §8 登记。
+- **既有陈旧项**：`trait_shapes.rs:3` 196608→**245760** ✅；`trait_contract.rs` 新增 `MockClock`/`MockInput` 真断言（now_ms=960、buttons 空/A/START/B 未按）✅ —— `MockClock`/`MockInput` 不再是"从未构造"的死 mock。
+
+### 4. 复核方实跑（干净 HEAD 归档，非脏工作树）
+
+```text
+git archive HEAD -> %TEMP%/gunnac_verify_head（HEAD=cce3bb1；b5e68b6..HEAD 无 commit 触及 7 文件）
+cargo test -p game-platform   -> exit 0；11(trait_contract)+2(shapes)+2(dep)+0 = 15 passed / 0 failed
+cargo test -p game-shell      -> exit 0；34(unit)+2(contract)+3(mock_platform) = 39 passed / 0 failed
+cargo test --workspace        -> exit 0；55 个 test result 行：338 passed + 1 ignored + 0 failed
+                                 （=339 个 #[test]，ignored=game-core engine_tick 既有）
+python gates/cli.py check     -> exit 0；CHECK: PASS
+                                 PASS=11 FAIL=0 SKIP=1 TOLERATED=0
+                                 rust-tests 339（基线 339）；docs-links 310 md / 264 本地链接全有效
+                                 ratchet 7 项 OK；addr-bridge 显式 SKIP
+```
+
+> 注：工作树当时含 task-9 WIP（`crates/game-shell/**` 等未提交改动），直接在工作树跑会把 WIP 计入，
+> 不能作为本复审证据——故使用干净归档；`b5e68b6` 后另有 `fe8ce68` 把基线 338→339，与本修正的
+> 测试增量（+1）一致，gates 已 OK。
+
+### 5. 链接与纪律
+
+- **文档链接**：plan §9:299 链接到本报告（`adversarial-review-platform-v1.md`），HEAD 处文件已入库
+  （`9bb0fd9`），干净归档 `docs-links` PASS ✅。**说明**：在 `b5e68b6` 单 commit 状态下该文件尚未入库
+  （`git cat-file -e b5e68b6:...` 不存在），即该 commit 单独 checkout 时是断链；由后续 `9bb0fd9`
+  补齐，最终 HEAD 无断链——可接受，但建议后续 docs commit 顺序避免"先链后文"。
+- **写范围**：task-15 卡片写范围只列了 `crates/game-shell/src/host.rs`，但 b5e68b6 另改了
+  `input.rs`/`snapshot.rs`（**均仅注释**，对应建议项 S5/S7）。属 advisory 范围与实际改动不匹配，
+  建议 Lead 在 task-15 记录中补 scope 说明（不构成功能越界）。
+
+### 6. 剩余问题（非阻塞；建议清理）
+
+| # | 级 | 位置 | 问题 | 建议 |
+|---|---|---|---|---|
+| R1 | 低 | [plan §9:279](../../docs/findings/plan-platform-abstraction.md#L279) | 仍写「trait_contract **10** + …」，修正后应为 **11**（commit message 已写 11；实测 15=11+2+2） | 改为「trait_contract 11（修正前 10）」，或标注时点 |
+| R2 | 低 | [plan §9:287-289](../../docs/findings/plan-platform-abstraction.md#L287) | 仍写「基线**需再上调**（报 Lead）」，但 `fe8ce68` 已把 338→339 且 gates OK——回填未更新 | 改为「基线已由 fe8ce68 上调 338→339，gates rust-tests 339/339 OK」 |
+| R3 | 低 | commit 文件面 | 见 §5 写范围注（input.rs/snapshot.rs 注释级） | Lead 记录 task-15 scope 修正即可 |
+| R4 | 低 | [spec §4.1 资产行](../../docs/spec/platform-shell.md) | §4.1 诚实标注「v1=相对 cwd 定位」，与 §4 目标「exe 目录」并存——这是**已知缺口**（task-18-S1 收口），不是矛盾；platform 层 v1 文档已显式区分"目标 vs 现状" | 保持；由 task-18 落地后回填 |
+| R5 | 低 | host.rs/input.rs doc | `[flow.rs MENU_BTN_*]` 等 rustdoc 跨文件引用可能为未解析 intra-doc link（`cargo build/test` 不受影响） | 后续顺手改为纯文本/可解析链接 |
+
+**复审结论**：`b5e68b6` 已把本报告 4 条阻塞项与全部便宜项闭环，且零功能逻辑改动、测试与门禁真绿。
+**平台抽象层 v1（task-5）的 needs_revision 已解除 → 建议正式标记通过。** R1-R5 为留痕级，
+建议随下一次 docs 提交或 task-18 清理，不阻塞验收。

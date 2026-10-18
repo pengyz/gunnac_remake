@@ -22,6 +22,43 @@ const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 /// 玩家占位块颜色（**占位**：非原版图样/调色板，仅表达已证坐标）。
 pub const PLACEHOLDER_PLAYER_RGBA: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
 
+/// 敌槽视图（**型值不命名**；槽 8..=27 分配域）。
+///
+/// 字段来源（task-9 FrameView 暴露口径）：
+/// - `type_code`=`$0400+槽` 原始型值（A 级地址面，0=空槽⇒None；**不做语义命名**）；
+/// - `position`=`$04E0/$04FC+槽` 坐标；**v1=None**（spawn 定位/行为 VM 坐标写者链未接线/未证，
+///   不得把 None 当 (0,0)；见 platform-shell §8 / plan-playable-loop §6）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EnemySlotView {
+    /// 槽号（8..=27）。
+    pub slot: u8,
+    /// `$0400+槽` 型值（原始；空槽 None）。
+    pub type_code: Option<u8>,
+    /// `$04E0/$04FC+槽` 坐标（**v1 恒 None**：写者链未证）。
+    pub position: Option<(u8, u8)>,
+}
+
+impl EnemySlotView {
+    /// 空槽视图（数组初始化用）。
+    pub const EMPTY: Self = Self { slot: 0, type_code: None, position: None };
+}
+
+/// HUD 视图（只含**已证数值域**；屏幕布局/文本/图标未证 ⇒ 不在此层）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HudView {
+    /// 金钱显示位（R-money-4 已证：逐位左起、全零前缀跳位、至少显示个位；= `(digit, show)`）。
+    pub money_digits: [(u8, bool); 7],
+    /// 炸弹弹药（`$018F`，A 级；图标/文本布局未证）。
+    pub bomb_ammo: u8,
+    /// 关号（`$180`，A 级；HUD 显示布局未证）。
+    pub stage: u8,
+}
+
+impl HudView {
+    /// 零值 HUD（测试/初始化用）。
+    pub const ZERO: Self = Self { money_digits: [(0, false); 7], bomb_ammo: 0, stage: 1 };
+}
+
 /// 合成视图（平台无关；只含宿主已证/已接线状态，不含未证渲染数据）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FrameView {
@@ -33,8 +70,14 @@ pub struct FrameView {
     pub stage: u8,
     /// 玩家状态（唯一 v1 绘制源：已证 x/y 坐标面）。
     pub player: PlayerState,
-    /// 活弹数（engine 已暴露面；v1 **不画**，仅登记供后续渲染战役）。
+    /// 活弹数（全槽；engine 已暴露面；v1 **不画**）。
     pub live_bullets: u16,
+    /// 玩家子弹活弹数（`PLAYER_ONLY_SLOTS`∪`SHARED_SLOTS` 活槽；A 级槽分类；v1 **不画**）。
+    pub player_bullets_live: u16,
+    /// 敌槽视图（20 槽＝槽 8..=27；v1 **不画**，供 task-10 渲染侧消费）。
+    pub enemy_slots: [EnemySlotView; 20],
+    /// HUD 已证数值域（v1 **不画**）。
+    pub hud: HudView,
 }
 
 /// 画布 hash（FNV-1a 64，逐字节）。
@@ -88,13 +131,24 @@ pub fn compose_frame(canvas: &mut [u8], view: &FrameView) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{canvas_hash, compose_frame, FrameView, PLACEHOLDER_PLAYER_RGBA};
+    use super::{
+        canvas_hash, compose_frame, EnemySlotView, FrameView, HudView, PLACEHOLDER_PLAYER_RGBA,
+    };
     use game_core::flow::Mode;
     use game_core::player::PlayerState;
     use game_platform::CANVAS_LEN;
 
     fn view(player: PlayerState) -> FrameView {
-        FrameView { frame: 0, mode: Mode::Combat, stage: 1, player, live_bullets: 0 }
+        FrameView {
+            frame: 0,
+            mode: Mode::Combat,
+            stage: 1,
+            player,
+            live_bullets: 0,
+            player_bullets_live: 0,
+            enemy_slots: [EnemySlotView::EMPTY; 20],
+            hud: HudView::ZERO,
+        }
     }
 
     fn pixel(canvas: &[u8], x: usize, y: usize) -> [u8; 4] {

@@ -33,8 +33,8 @@ const FORBIDDEN_TOKENS: &[&str] = &[
     "tokio",
 ];
 
-/// 允许的依赖（路径依赖；仅纯逻辑/纯契约 crate）。
-const ALLOWED_DEPS: &[&str] = &["game-core", "game-platform"];
+/// 允许的依赖（路径依赖；仅纯逻辑/纯契约/纯解析 crate）。
+const ALLOWED_DEPS: &[&str] = &["game-core", "game-data", "game-platform"];
 
 fn manifest_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")
