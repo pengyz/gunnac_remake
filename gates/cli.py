@@ -259,7 +259,7 @@ def sync_state_anchors() -> None:
     for relpath in STATE_ANCHOR_FILES:
         if relpath in wanted and relpath not in seen:
             out.append(f"{wanted[relpath]}  {relpath}")
-    anchor.write_text("\n".join(out) + "\n", encoding="utf-8")
+    anchor.write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")
 
 
 def save_baseline(data: dict) -> str:
@@ -267,7 +267,7 @@ def save_baseline(data: dict) -> str:
     validate_baseline(data)
     BASELINE_DIR.mkdir(parents=True, exist_ok=True)
     payload = baseline_payload(data)
-    BASELINE_PATH.write_text(payload, encoding="utf-8")
+    BASELINE_PATH.write_text(payload, encoding="utf-8", newline="\n")
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     sync_state_anchors()
     return digest
@@ -275,7 +275,7 @@ def save_baseline(data: dict) -> str:
 
 def append_history(record: dict) -> None:
     BASELINE_DIR.mkdir(parents=True, exist_ok=True)
-    with open(HISTORY_PATH, "a", encoding="utf-8") as f:
+    with open(HISTORY_PATH, "a", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
     sync_state_anchors()
 

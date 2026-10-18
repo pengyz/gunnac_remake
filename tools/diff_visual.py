@@ -239,7 +239,7 @@ def main() -> int:
             "- 分类记录：oracle/screens/visual-report.md\n"
             "- 时序相位证据：docs/findings/linebuf-timing-wnew.md（t94）+ t96 处置\n"
             "\n## 状态\n申请中（未启用）——captain 转用户裁定前 gates/visual_whitelist.json 不建立。\n",
-            encoding="utf-8")
+            encoding="utf-8", newline="\n")
     print(f"L4 视觉：{passed} 通过 / {len(results)} 比对；分类记录 {len(classified)}；未分类 {len(unclassified)}")
     # 退出码口径（t92 ⑤）：≥1 通过帧（灰阶公共口径 0 容差）或 全部差异有显式四分类记录 ⇒ 0
     if unclassified:
