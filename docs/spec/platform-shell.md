@@ -159,7 +159,7 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 ```text
 selftest: frames=300 advanced=300 presents=300
 selftest: mode=Combat stage=1 frame=300
-selftest: host_signature=0xcde9dc99514b5f4b
+selftest: host_signature=0xf51d5a517e7458b7
 selftest: canvas_signature=0x963ac9a776a57625
 selftest: display_signature=0xf68f9ffc0607cbad
 selftest: audio_writes=2 audio_frames=300
@@ -167,13 +167,19 @@ selftest: rom_len=Some(262160)
 selftest: OK
 ```
 
+> 【2026-10-18 task-9 更新】`host_signature` 记录值由 `0xcde9dc99514b5f4b` → **`0xf51d5a517e7458b7`**：
+> 原因=`Host::signature()` 语义扩展（新增菜单锁存/门控/STG-01 装载/spawn 日志/阶段计时覆盖），
+> **非回归**；`canvas_signature`/`display_signature` 不变（渲染面未改）。shell-win selftest 用
+> `apply_event`（无转场装载挂钩）⇒ selftest 内 stage_loaded=false、引擎不 tick；GUI 主循环走
+> game-shell 菜单派发自动接线（转场帧自动装载 STG-01）。
+
 **口径**：`host_signature`/`canvas_signature`/`display_signature` 是**确定性回归锚**，
 **不声称**等价真机 trace 对拍（platform-shell.md §3/§9 同口径）；`display_signature` 含平台侧
 CHR 背景占位合成，非 L4 像素目标。GUI 视觉（缩放/黑边/CHR 背景）为手动验收项。
 
-**未证/未接（与 §8 一致）**：菜单输入门控不自动派发（主循环不投递 `ModeEvent`，窗口初始停在
-`Boot`，玩家块按已证坐标显示）、敌/弹/HUD/文本不画、音频 PCM 静音占位、关卡数据未装载、
-`shell-win→shell-pc` 更名待用户裁定。
+**未证/未接（与 §8 一致）**：菜单/模式派发已由 game-shell 接线（窗口可从 Boot 推进、Start 派发、
+转场帧装载 STG-01）；**shell-win 渲染**仍只画 CHR 背景+玩家块（敌/弹/HUD/文本/FrameView 画面=task-10）、
+音频 PCM 静音占位、spawn 坐标写者链/初生记录未接；`shell-win→shell-pc` 更名待用户裁定。
 
 ## 5. 平台矩阵（PC / Android 对照）
 
@@ -245,27 +251,39 @@ v1 复核（task-6）补充登记：
 - **game-shell 依赖**：task-9 起含 `game-data`（纯解析；ROM 只读窗口 `game_data::rom::prg_bank`），
   零平台依赖门禁同步白名单。
 
-## 9. 验收与复现命令（task-5 v1）
+## 9. 验收与复现命令（task-5 v1 + task-9 可玩闭环 A）
 
 ```sh
 # 1) trait 缝（形状锁 + 新 trait 契约 + 零外部依赖）
 cargo test -p game-platform
 
-# 2) 平台无关宿主（单元 + 零平台依赖扫描 + mock 300 帧确定性）
+# 2) ROM 只读窗口（task-9）
+cargo test -p game-data
+
+# 3) 平台无关宿主（单元 + 零平台依赖扫描 + mock 300 帧确定性 + STG-01 replay 对拍）
 cargo test -p game-shell
 cargo test -p game-shell --test mock_platform mock_platform_drives_300_frames_deterministically -- --nocapture
-#   2026-10-18 记录值：host=0xefe39a9ba5e7c5b0 canvas=0x963ac9a776a57625 advanced_frames=290 storage_len=24
-#   （连跑两次 AssertEq；签名覆盖宿主状态+画布/音频摘要，后续变更若签名变=需复核是否为预期）
+cargo test -p game-shell --test stg01_replay -- --nocapture
+#   2026-10-18 task-9 记录值：mock-300 host=0x63b5a6195287a6d8 canvas=0x963ac9a776a57625 advanced_frames=290
+#    （签名语义 task-9 扩展后；两次运行 AssertEq）
+#   STG-01 replay 记录值：host=0x521d397a6c609f34 canvas=0xdf75da247b4c3825 spawns=21 engine_frames=1807
+#   对拍：C1 滚动 1207/1207 0 失配；C6 玩家列 571/571 一致；C4 共同槽 16/16（帧列不可对拍，见 §8）
 
-# 3) 全量 + 总闸
-cargo test --workspace       # 2026-10-18 task-5 tip：exit 0；326 个 #[test]：325 passed + 1 既有 ignored
-python gates/cli.py check    # CHECK: PASS（PASS=11 FAIL=0 SKIP=1；rust-tests 326/326 OK）
+# 4) 平台侧回归（shell-win 未改；selftest 两次逐行一致）
+cargo run -p shell-win -- --selftest-frames 300
+#   2026-10-18 task-9 后 host_signature=0xf51d5a517e7458b7（语义扩展见 §3.1；canvas/display 不变）
+
+# 5) 全量 + 总闸
+cargo test --workspace
+python gates/cli.py check    # CHECK: PASS（SKIP 显式打印；rust_test_count 上升=基线由 Lead 上调）
 ```
 
 **平台接入注意**：`Host::advance(now_ns)` 的 `now_ns` 必须**相对 Host 创建时刻**（首帧=0，S1）；
 PC `AssetSource` 资产根=**可执行文件目录**、Android=`APK assets/` 根（S3）；旧 `FRAME_MS=16` 不得与
 `FixedStep` 并存（P3）。
 
-**v1 完成面**：game-platform 缝补全（AssetSource/Lifecycle·AppEvent/Renderer size·resize）+ game-shell
-平台无关宿主（固定步/输入消解/状态机/tick/合成/音频/资产/存档/生命周期端口）+ 契约门禁。
-**后续**：shell/win 窗口与设备实现（task-1）、game-data 装载接线、Android 落地（§6）、差分/视觉战役。
+**完成面**：game-platform 缝补全 + game-shell 平台无关宿主（固定步/输入消解/状态机/tick/合成/音频/
+资产/存档/生命周期端口）+ **可玩闭环 A**（菜单派发 + STG-01 装载 + 滚动源 + spawn 落地 + FrameView +
+确定性 replay 对拍）+ 契约门禁。
+**后续**：shell/win 渲染扩展（task-10：FrameView→画面）、A2/A3 细粒度时序接线、敌坐标写者链与
+初生记录 loader、Android 落地（§6）、差分/视觉战役。
