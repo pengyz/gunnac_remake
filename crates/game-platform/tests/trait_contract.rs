@@ -3,8 +3,14 @@
 //! 验收面：Renderer/Audio/Storage/Clock/GameRng/Input 六 trait 的 mock 实现 +
 //! 确定性验证（同输入序列→同 mock 态）+ 形状锁（canvas 256×240×4/流序保持/存档往返）。
 //! trait 形状=platform-shell.md §2 锁定面——形状变更须双改（trait+本框架）。
+//!
+//! v1 增补（task-5）：AssetSource/Lifecycle 契约测试 + Renderer 输出面 size/resize
+//! （默认=占位回退，平台实现覆盖）。
 
-use game_platform::{Audio, Buttons, Clock, GameRng, Input, Renderer, Storage};
+use game_platform::{
+    AppEvent, AssetSource, Audio, Buttons, Clock, GameRng, Input, Lifecycle, Renderer, Storage,
+    CANVAS_H, CANVAS_LEN, CANVAS_W,
+};
 
 // ---------------- Mock 实现（最小面——只记录不渲染） ----------------
 
@@ -173,4 +179,97 @@ fn rng_deterministic_from_seed() {
         (0..8).map(|_| r3.next_u32()).collect::<Vec<_>>(),
         "异种子→异序列（抽验）"
     );
+}
+
+// ---------------- v1 新增：AssetSource（占位契约） ----------------
+
+/// mock 资产源（内存文件表；不存在⇒None=fail-closed）。
+struct MockAssetSource {
+    files: Vec<(&'static str, Vec<u8>)>,
+}
+
+impl AssetSource for MockAssetSource {
+    fn read_all(&mut self, path: &str) -> Option<Vec<u8>> {
+        self.files.iter().find(|(p, _)| *p == path).map(|(_, b)| b.clone())
+    }
+}
+
+#[test]
+fn asset_source_read_and_missing_fail_closed() {
+    let mut src = MockAssetSource { files: vec![("rom/gunnac_cn.nes", vec![0x4E, 0x45, 0x53, 0x1A])] };
+    assert_eq!(src.read_all("rom/gunnac_cn.nes"), Some(vec![0x4E, 0x45, 0x53, 0x1A]), "present⇒字节");
+    assert_eq!(src.read_all("rom/missing.nes"), None, "缺失⇒None（不提供默认内容）");
+}
+
+// ---------------- v1 新增：Lifecycle/AppEvent（占位最小枚举） ----------------
+
+#[derive(Default)]
+struct MockLifecycle {
+    events: std::collections::VecDeque<AppEvent>,
+}
+
+impl Lifecycle for MockLifecycle {
+    fn poll_event(&mut self) -> Option<AppEvent> {
+        self.events.pop_front()
+    }
+}
+
+#[test]
+fn lifecycle_event_queue_order_and_drain() {
+    let mut lc = MockLifecycle::default();
+    assert_eq!(lc.poll_event(), None, "空队列⇒None");
+    lc.events.push_back(AppEvent::Suspend);
+    lc.events.push_back(AppEvent::Resume);
+    lc.events.push_back(AppEvent::Quit);
+    assert_eq!(lc.poll_event(), Some(AppEvent::Suspend), "事件序保持 #1");
+    assert_eq!(lc.poll_event(), Some(AppEvent::Resume), "事件序保持 #2");
+    assert_eq!(lc.poll_event(), Some(AppEvent::Quit), "事件序保持 #3");
+    assert_eq!(lc.poll_event(), None, "取尽后 None");
+}
+
+// ---------------- v1 新增：Renderer 输出面 size/resize（默认=占位回退） ----------------
+
+#[test]
+fn renderer_canvas_constants_locked() {
+    assert_eq!((CANVAS_W, CANVAS_H, CANVAS_LEN), (256, 240, 245_760), "256×240 RGBA 常量");
+    let r = MockRenderer::new();
+    assert_eq!(r.canvas.len(), CANVAS_LEN, "mock canvas 长度=逻辑画布");
+}
+
+#[test]
+fn renderer_size_resize_default_placeholder() {
+    let mut r = MockRenderer::new();
+    assert_eq!(r.size(), (256, 240), "默认 size=逻辑画布 1×（占位回退）");
+    r.resize(1920, 1080); // 默认 resize=无平台动作
+    assert_eq!(r.size(), (256, 240), "默认 resize 不改变尺寸（占位契约）");
+    assert_eq!(r.canvas_mut().len(), CANVAS_LEN, "canvas 形状不因 resize 默认实现改变");
+}
+
+/// 覆盖 size/resize 的实现（模拟平台侧输出面）。
+struct SizedRenderer {
+    canvas: Vec<u8>,
+    size: (u32, u32),
+}
+
+impl Renderer for SizedRenderer {
+    fn canvas_mut(&mut self) -> &mut [u8] {
+        &mut self.canvas
+    }
+    fn present(&mut self) {}
+    fn size(&self) -> (u32, u32) {
+        self.size
+    }
+    fn resize(&mut self, width: u32, height: u32) {
+        self.size = (width, height);
+        self.canvas = vec![0; CANVAS_LEN]; // 逻辑画布不变，仅输出面变化
+    }
+}
+
+#[test]
+fn renderer_size_resize_override() {
+    let mut r = SizedRenderer { canvas: vec![0; CANVAS_LEN], size: (512, 480) };
+    assert_eq!(r.size(), (512, 480), "平台实现覆盖 size");
+    r.resize(1024, 960);
+    assert_eq!(r.size(), (1024, 960), "平台实现覆盖 resize");
+    assert_eq!(r.canvas_mut().len(), CANVAS_LEN, "逻辑画布与输出面尺寸解耦");
 }
