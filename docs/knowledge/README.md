@@ -64,3 +64,4 @@
 | [gotcha-cpu-file-offset-conversion.md](gotcha-cpu-file-offset-conversion.md) | gotcha | CPU↔file 换算显式声明——漏 iNES 头 $10 的 off-by-16 陷阱（t149 复审活例），双偏移对账三件套 |
 | [pattern-repair-selfcheck-grep.md](pattern-repair-selfcheck-grep.md) | pattern | 修复自查纪律——grep 目标行+新引入事实复核（三轮"声称已修"教训），修复≠声称修复 |
 | [gotcha-workspace-drift-images-freeze-before-diff.md](gotcha-workspace-drift-images-freeze-before-diff.md) | gotcha | L4 比对禁读工作区漂移图——冻结 A/B 或新鲜渲染立即测（并行不可信家族第 4 员，95.32%→98.07% 活例） |
+| [gotcha-windows-crlf-sha-gate.md](gotcha-windows-crlf-sha-gate.md) | gotcha | Windows CRLF（检出转换 + Python 文本写入）会让 sha256 门禁误报"基线被手工改动"——LF 双修 + 先查字节再疑篡改 |
