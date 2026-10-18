@@ -1,0 +1,67 @@
+# 【TEST-ONLY·C4 dense overlay-100】tas-stg08-direct-dense 的 100f 二轮搜索变体（task-155 / P0-0 冻结前置①终局负证据）；输入前缀/assist poke/bot/watch/probe_mem 逐字节不变，仅 capture_every 300→100（1200 张）。目的：组 D fade-clear/ending-1/2/3 4 blob 最终 any-frame（Lead 已批准）。
+# 场景：tas-stg08-direct（战略备胎·单刀 stg08——v5 截断/卡死即启用）（第四跑·不死跑到底——用户裁定 assisted） —— 真机 bot 八关全程（通关令二线 · (c) 全程跑+逐关窗）
+# 口径：bot（tools/tas_bot.lua CFG.stages_total=8）自 stg01 起点接管，相位自推进八关
+#   （combat→clear→shop→下一关…→stg08 清 ⇒ done 结局观测窗）；**无 poke 无条件指令**。
+# 段长参照（port 段长表，run 帧域量级非跨域映射）：每关≈1755-2338f（shop 168+tr 33+
+#   start 240+combat 649-1232+clear 665）⇒ 全程≈16k f；DSL 帧域另域，预算 30000 裕度。
+# 后置窗分析（lead (c) 裁定）：trace 按段锚四连逐关验收——段锚=golden 段锚同名
+#   （stgN-shop/Transition/stgN-start/stgN-combat/stgN-clear）；OBS-1=stg08 出店段同 trace 裁。
+name tas-stg08-direct-dense100
+frames 120000
+press_len 4
+
+# ===== 输入前缀（gameplay-stage1 同源至 stg01 起点；勿改）=====
+press 240 start
+press 300 a
+press 360 start
+press 420 a
+press 600 start
+press 660 a
+press 900 start
+press 1020 a
+press 1100 b
+press 1160 b
+
+# ===== 秘籍三址（游戏自身机制——用户裁定"不死跑到底"；community-absorption-audit T13/336）=====
+# $01BE≠0 = NON DEATH（不死）；$01B6=WEAPON 行；$01B7=BOMBER 行（隐藏三行效果观测）
+assist-mode stage-select-fallback
+poke 1255 0180 08
+poke 1255 01be 01
+poke 1255 01b6 01
+poke 1255 01b7 01
+
+# ===== bot 接管（stg01-start 起；八关自推进）=====
+bot stg01-clear from 1260
+
+# ===== 采集面（段锚巡检+判定 RAM）=====
+capture_every 100 probe
+capture 27036 stg08-clear
+capture 27701 gate300-open
+capture 27731 all-clear-180
+capture 27734 all-clear-95f9
+capture 28000 ending-early
+capture 29000 ending-mid
+capture 30000 ending-late
+watch 0180 stage_no
+watch 0026 flags26
+watch 0027 flags27
+watch 002b phase2b
+watch 002f countdown2f
+watch 00ca trig_ca
+watch 0300 gate300
+watch 0400 pstate
+watch 018d lives
+watch 018e money_disp_copy
+watch 0188 intro_ctr
+watch 0189 w0189
+watch 0190 w0190
+watch 041c vec41c
+watch 0438 vec438
+watch 06a0 invuln_6a0
+watch 0018 controller_held
+watch 0401 slot1_state
+watch 064b boss_hp
+watch 01be death_flag
+watch 01b6 weapon_flag
+watch 01b7 bomb_flag
+watch 0032 sch4_flag
