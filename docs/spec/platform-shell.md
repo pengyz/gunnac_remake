@@ -130,12 +130,12 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 | 资产 | `AssetSource`=`std::fs`；**资产根=可执行文件所在目录**（`exe/rom/gunnac_cn.nes`；可回退 `exe/../rom/` 与 `CARGO_MANIFEST_DIR` 开发态），**不得依赖进程 cwd**（S3）；逻辑路径 `ROM_ASSET_PATH` 跨平台一致 |
 | 存储 | `Storage`：Windows=`%APPDATA%/gunnac/`；Linux=`~/.local/share/gunnac/` |
 | 生命周期 | 关窗→`AppEvent::Quit`；最小化/焦点可选发 Suspend/Resume（桌面可不发） |
-| 实现状态 | **v1 已落地**（task-1，2026-10-18）：六 trait PC 实现 + winit/softbuffer 主循环 + 确定性自检；逐件状态见 §4.1 |
+| 实现状态 | **v1 已落地**（task-1，2026-10-18）+ **v2 渲染覆盖层**（task-10，2026-10-18）：六 trait PC 实现 + winit/softbuffer 主循环 + FrameView 占位覆盖层 + 确定性自检；逐件状态见 §4.1 |
 
 > 命名：本 crate 当前名 `shell-win`（=PC 第一实现，Win/Linux 同源）。**是否更名 `shell-pc` 由用户裁定**；
 > 本规格与任务不改名、不移动 crate。
 
-### 4.1 实现状态（2026-10-18，task-1 回填）
+### 4.1 实现状态（2026-10-18，task-1 回填；task-10 v2 渲染/自检行回填）
 
 | 件 | 实现（文件） | 验证 |
 |---|---|---|
@@ -151,8 +151,8 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 > 此处保留历史口径以免读者把旧注当现状。
 | 存储 | `FileStorage`（`Storage` impl）：`%APPDATA%/gunnac`（Win）/`~/.local/share/gunnac`（Linux），`slot{n}.sav` | 单测：往返/空槽 fail-closed；**不自动保存**（原版存档语义未证） |
 | 生命周期 | `LifecycleQueue`：关窗→`Quit`；焦点丢失/获得→`Suspend`/`Resume`（最小平台策略）；宿主 suspend 停逻辑帧 | FIFO 单测；game-shell 门控测试 |
-| 渲染内容 | CHR 背景（`ChrBackground`：`game-data::chr` 解码字模区 tile 平铺，灰阶 `GREY4` **C 级占位**）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）；敌/弹/HUD/文本**显式不画** | 单测：短 ROM fail-closed、tile 解码、画布覆盖/清屏色保留；合成 hash 确定性 |
-| 自检 | `cargo run -p shell-win -- --selftest-frames N`：无窗口、真实 `AssetSource`、固定已证 `ModeEvent`/按钮脚本 | 300 帧连跑两次 stdout 逐行一致、退出码 0（§4.2） |
+| 渲染内容（v2，task-10） | `FrameView` 覆盖层：CHR 背景（v1 灰阶占位）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）+ **模式占位角标**（`mode_tag`→`MODE_MARKER_COLORS`；Boot/Title/Menu/Shop/Stage 可见区分；**非原版美术/文字**）+ **HUD 数值域占位编码**（`money_digits(digit,show)` 逐桁 2×2 点阵、`bomb_ammo` 8bit 位行、`stage` 4bit 位行；固定占位槽；**非原版字形/布局/文本**）+ **敌槽占位块**（仅 `position+type_code` 均 `Some`；v1 运行态 `position` 恒 None⇒不画；`type_code` 不反推坐标）+ **玩家子弹不画**（无坐标面；仅入 view 摘要） | 单测：合成保玩家块/模式占位色/HUD 编码/敌槽门/子弹计数不改像素；smoke：1100 帧按键透传→Host 内派发模式推进（Boot→…→Combat）；GUI PrintWindow：标题/CHR 背景/Title 角标/HUD 占位位行 |
+| 自检 | `cargo run -p shell-win -- --selftest-frames N`：无窗口、真实 `AssetSource`、固定已证 `ModeEvent`/按钮脚本；每帧用 `Host::frame_view()` 最新视图重合成覆盖层；新增**独立 view 摘要签名**（仅 FrameView 字段 FNV、平台无关；**不改** `Host::signature()` 语义） | 300 帧连跑两次 stdout 逐行一致、退出码 0（§4.2，含 `view_signature`） |
 
 **迁移**：旧骨架的 `FrameDriver`/`GameHost`（重复宿主逻辑）已删除，改接 `game_shell::FixedStep`/
 `Host`；`AudioSink` 改为 `PcAudio`（平台 `Audio` 实现，不是第二套宿主）。实现方案与未证域声明见
@@ -167,7 +167,8 @@ selftest: frames=300 advanced=300 presents=300
 selftest: mode=Combat stage=1 frame=300
 selftest: host_signature=0x5d7156266d6ac19d
 selftest: canvas_signature=0x963ac9a776a57625
-selftest: display_signature=0xf68f9ffc0607cbad
+selftest: display_signature=0xe99af5849b632fbd
+selftest: view_signature=0xf6603346bf818ffd
 selftest: audio_writes=2 audio_frames=300
 selftest: rom_len=Some(262160)
 selftest: OK
@@ -184,14 +185,24 @@ selftest: OK
 > 见 [plan-menuinput-fix.md](../findings/plan-menuinput-fix.md)），签名覆盖 `menu_latch/gate` 状态；
 > **非回归**，两次运行逐行一致、`canvas/display` 不变。shell-win `plan-shellwin-v1.md` 的时点值
 > 需由 shell-porter 同步（不在本卡写范围）。
+>
+> 【2026-10-18 task-10 更新】`display_signature` 由 `0xf68f9ffc0607cbad` → **`0xe99af5849b632fbd`**，
+> 并新增 `view_signature=0xf6603346bf818ffd`：原因=平台侧 v2 覆盖层（模式占位角标/HUD 数值域占位编码/
+> 敌槽占位门）进入合成；`canvas_signature` 不变（game-shell 逻辑画布未改）、`host_signature` 不变
+> （游戏逻辑未改）。**非回归**：300 帧连跑两次 stdout 逐行一致；覆盖层为**可见性占位**（非原版像素/
+> 布局/文本，L4 不适用，不声称一致性）。
 
-**口径**：`host_signature`/`canvas_signature`/`display_signature` 是**确定性回归锚**，
+**口径**：`host_signature`/`canvas_signature`/`display_signature`/`view_signature` 是**确定性回归锚**，
 **不声称**等价真机 trace 对拍（platform-shell.md §3/§9 同口径）；`display_signature` 含平台侧
-CHR 背景占位合成，非 L4 像素目标。GUI 视觉（缩放/黑边/CHR 背景）为手动验收项。
+CHR 背景+`FrameView` 覆盖层占位合成（非原版像素/布局，L4 不适用）；`view_signature` 仅覆盖 FrameView
+字段（平台无关）。GUI 视觉（缩放/黑边/CHR 背景/模式角标/HUD 占位）为手动验收项。
 
 **未证/未接（与 §8 一致）**：菜单/模式派发已由 game-shell 接线（窗口可从 Boot 推进、Start 派发、
-转场帧装载 STG-01）；**shell-win 渲染**仍只画 CHR 背景+玩家块（敌/弹/HUD/文本/FrameView 画面=task-10）、
-音频 PCM 静音占位、spawn 坐标写者链/初生记录未接；`shell-win→shell-pc` 更名待用户裁定。
+转场帧装载 STG-01）；**shell-win 渲染（v2）**=CHR 背景+玩家块+**占位覆盖层**（模式角标/HUD 数值域
+占位编码/敌槽 Some 占位门）；**敌坐标写者链/敌图样、玩家子弹坐标（H-01）、HUD 字形/布局/文本、
+原版 BG/nametable/美术一律未画/不发明**；GUI 键驱动模式推进受本机会话输入注入限制，以集成测试为
+证据、GUI 键推进列手动验收项；音频 PCM 静音占位；spawn 坐标写者链/初生记录未接；
+`shell-win→shell-pc` 更名待用户裁定。
 
 ## 5. 平台矩阵（PC / Android 对照）
 

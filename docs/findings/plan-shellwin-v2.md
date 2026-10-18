@@ -169,6 +169,9 @@ cargo run -p shell-win                             # GUI 手动：模式角标/H
 
 1. **spec §4 状态回填**：`docs/spec/platform-shell.md` 当前有 task-29 未提交改动（触发键分离行/签名值链），
    为避免再次误卷，待其入库后只补 §4.1 渲染内容/自检行 + §4.2 新值（精确 pathspec）。
+   ——【2026-10-18 已收口】task-29 提交 `1700934` 后，本卡以精确 pathspec 补 §4.1 渲染内容（v2 覆盖层）/
+   自检（view_signature）行、§4.2 新值（display `0xe99af5849b632fbd`、view `0xf6603346bf818ffd`、
+   host 值链 cde9→f51d→5d71 时点口径）与 §4 未证/未接措辞（同一 docs commit）。
 2. **独立对抗复核**（task-12）：本产出在复核 pass 前只算"待审稿"。
 3. GUI 键驱动模式推进的手动验收（环境限制已如实登记）。
 
