@@ -143,6 +143,10 @@ shell 侧不得静默硬编码 240f/400f/265f 当作已收敛行为。
 | 输入 | `KeyboardInput`+`key_name`：winit 物理键码→`Buttons`（Z/X/Enter/RShift/方向）；对向同持交 game-shell `resolve_directions` 消解 | 键位表单测 + 按下/抬起状态单测 |
 | 音频 | `PcAudio`（`Audio` impl）：真实消费 game-shell `ApuWrite` 流（写序保真登记，计数不丢）；PCM=静音占位显式（`silent()=true`） | 单测：写流保序/计数/`end_frame`/零 PCM；自检注入 2 条写流被消费（audio_writes=2） |
 | 资产 | `FsAssets`（`AssetSource` impl）：`std::fs` 读 `rom/gunnac_cn.nes`；**资产根=exe 目录优先**（`exe/rom` → `exe/../rom`；debug 回退 `CARGO_MANIFEST_DIR`），**不依赖进程 cwd**；启动（窗口/自检）始终打印实际资产根。**拒绝绝对路径/Windows 前缀（`C:foo` drive-relative）/`..`/缺失** ⇒ `None`（fail-closed，B1/S1） | 单测：exe 两布局解析/前缀拒绝；smoke：异 cwd 子进程仍定位 ROM；自检 rom_len=262160 |
+
+> **R4/S1 收口留痕（task-23）**：上表资产行为**现状**（exe 目录优先、不依赖 cwd）。
+> S1 复核时点的旧现状「v1=相对 cwd」已由 task-18（commit `ddb1558`，B1/S1 收口）修正；
+> 此处保留历史口径以免读者把旧注当现状。
 | 存储 | `FileStorage`（`Storage` impl）：`%APPDATA%/gunnac`（Win）/`~/.local/share/gunnac`（Linux），`slot{n}.sav` | 单测：往返/空槽 fail-closed；**不自动保存**（原版存档语义未证） |
 | 生命周期 | `LifecycleQueue`：关窗→`Quit`；焦点丢失/获得→`Suspend`/`Resume`（最小平台策略）；宿主 suspend 停逻辑帧 | FIFO 单测；game-shell 门控测试 |
 | 渲染内容 | CHR 背景（`ChrBackground`：`game-data::chr` 解码字模区 tile 平铺，灰阶 `GREY4` **C 级占位**）+ 玩家 8×8（game-shell 已证坐标面 `$04E0/$04FC`）；敌/弹/HUD/文本**显式不画** | 单测：短 ROM fail-closed、tile 解码、画布覆盖/清屏色保留；合成 hash 确定性 |

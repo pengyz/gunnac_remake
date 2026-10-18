@@ -238,9 +238,8 @@ Android 落地清单（后续任务卡逐项验收）：
 
 1. **`Renderer` 默认方法**：为不破坏 task-5 写范围外的 `game-desktop::Canvas` 实现而用默认值；
    若裁定"必须强制实现"，需用户/Lead 批准改 `game-desktop`（本任务不改）。
-2. **ratchet**：新增测试使 `rust_test_count` 高于基线（只升不降）；`ff5aa7c` 已由 Lead 处置
-   280→326（gates OK）。本任务复核修正 commit 追加 1 个 mock 断言测试后基线需再上调一次
-   （`data/status/` 写范围外 ⇒ 报 Lead 处置）。
+2. **ratchet**：新增测试使 `rust_test_count` 高于基线（只升不降）；已由 Lead 处置（历史链
+   `ff5aa7c` 280→326 / `16fb5b2` 326→338 / `fe8ce68` 338→339；task-9 再增测试后现测 355，Lead 统一上调）。
 3. **`Cargo.lock`**：新增 workspace 成员必产生 lockfile 变更（生成物，非手工逻辑）。
 4. **命名**：`shell-win`→`shell-pc` 由用户裁定；`game-shell` 名（平台无关宿主）本任务按卡内定名。
 5. **引擎数据装载缺口**：v1 `StageState` 为空 ⇒ `stage_clear_requested` 不会自然发生；自动接线只由
@@ -276,7 +275,7 @@ Android 落地清单（后续任务卡逐项验收）：
 
 **门禁输出摘要（本机，复现见 platform-shell.md §9）**
 
-- `cargo test -p game-platform`：trait_contract 10 + trait_shapes 2 + dependency_contract 2，全绿。
+- `cargo test -p game-platform`：trait_contract 11 + trait_shapes 2 + dependency_contract 2（共 15），全绿。
 - `cargo test -p game-shell`：单元 34 + contract 2 + mock_platform 3，全绿。
 - mock 300 帧两次运行全等；签名（2026-10-18 记录值）：
   `host=0xefe39a9ba5e7c5b0 canvas=0x963ac9a776a57625 advanced_frames=290 storage_len=24`
@@ -285,8 +284,9 @@ Android 落地清单（后续任务卡逐项验收）：
   `engine_tick` 既有用例，非本任务跳过）。
 - `python gates/cli.py check`：**CHECK: PASS**（PASS=11 FAIL=0 SKIP=1 TOLERATED=0；`rust-tests`
   326/326 OK；`docs-links` 306 md / 206 本地链接全有效）。
-- 基线处置：`ff5aa7c` 已由 Lead 把 `rust_test_count` 280→326（gates `rust-tests` OK）；本任务
-  复核修正 commit 追加 1 个 mock 断言测试，基线需再上调（`data/status/` 写范围外，报 Lead）。
+- 基线处置（Lead 执行，`data/status/` 非本任务写范围）：`ff5aa7c` `rust_test_count` 280→326、
+  `16fb5b2` 326→338、`fe8ce68` 338→339（历史链，gates `rust-tests` 均 OK）；task-9 再增测试后
+  现测 355（只升不降，由 Lead 统一上调）。
 
 **遗留缺口（与 §6 一致，未实现/未声称）**：关卡数据装载（`StageState` 仍为空，`stage_clear_requested`
 只能由门禁测试以显式已证写点触发）、音频生产侧（AUD-2/3）、玩家射击/投放接线、菜单输入派发、
@@ -301,6 +301,10 @@ E1（DeathRespawn/StageClear 行为等级降级为接线约定）、S8+E4（显�
 S1（`advance` 时间基准=相对 Host 创建）、S3（AssetSource 资产根定义）、E2/E3/S4/S5/S7/S9/S10、
 S2/S6/P1/P2/P3 登记；另修既有陈旧 `trait_shapes.rs` 字节数注释与 `trait_contract.rs`
 MockClock/MockInput 未构造断言。**实现逻辑零改动**（仅注释/文档/测试断言）。
+
+> **R3 scope 留痕（task-23 复审残留收口）**：`b5e68b6` 为落实上述复核修正，除任务卡所列
+> `crates/game-shell/src/host.rs` 外，另行修改了**同 crate** 的 `src/input.rs`/`src/snapshot.rs`
+> **注释级**内容（spawn 修正在同一 crate 内、无功能逻辑改动），非写范围越界。
 
 **风险**：`Renderer::size/resize` 采用默认方法是为不打断写范围外的 `game-desktop::Canvas`；
 若后续裁定"必须强制实现"，需改 `game-desktop`（需用户/Lead 批准，非本任务写范围）。
