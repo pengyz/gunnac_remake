@@ -736,13 +736,34 @@ def main() -> int:
             print(f"生成 {out.relative_to(ROOT)} sha256={sha}")
             return 0
         if args.cmd == "run":
-            run_scenario(args.scenario, args.timeout)
+            m = run_scenario(args.scenario, args.timeout)
+            # F90-1（task-90 复核）：run 分支不再固定 return 0——未完成（done=None / timed_out /
+            # 截断 trace）必须非零退出，供 P0-0 自动化与 CI 判失败（不能只看 timed_out：
+            # Mesen2 testRunner 100s 自停时 timed_out 仍为 false）。
+            ok = (
+                m.get("done") is not None
+                and not m.get("timed_out", False)
+                and int(m.get("trace_lines", 0)) == int(m.get("frames", -1))
+            )
+            if not ok:
+                print(
+                    "RUN: FAIL（done={} timed_out={} trace_lines={}/frames={}）".format(
+                        m.get("done") is not None,
+                        m.get("timed_out"),
+                        m.get("trace_lines"),
+                        m.get("frames"),
+                    )
+                )
+                return 1
             return 0
         if args.cmd == "run-all":
             failed = []
             for p in sorted(SCENARIO_DIR.glob("*.txt")):
                 m = run_scenario(p, args.timeout)
-                if not (m["done"] and not m["timed_out"]):
+                if not (
+                    m["done"] and not m["timed_out"]
+                    and int(m.get("trace_lines", 0)) == int(m.get("frames", -1))
+                ):
                     failed.append(m["scenario"])
             if failed:
                 print(f"RUN-ALL: 未完成 {failed}")
