@@ -6,4 +6,5 @@
 #![forbid(unsafe_code)]
 
 pub mod chr;
+pub mod rom;
 pub mod text;
