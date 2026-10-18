@@ -1,20 +1,23 @@
 //! shell-win 可执行入口：winit 0.30 窗口 + softbuffer CPU 面 + game-shell 宿主 60Hz 主循环。
 //!
 //! 主循环（每采样点，platform-shell.md §4）：
-//! 输入采样 → `game_shell::Host::advance(now_ns, …)`（固定步 60Hz）→ `Renderer::present`
-//! （软缓冲合成 + 整数倍缩放/黑边上屏）。宿主返回的宿主状态/画布/音频写流全部真实消费。
+//! 输入采样 → `game_shell::Host::advance(now_ns, …)`（固定步 60Hz）→ 平台侧呈现
+//! （软缓冲合成 + 整数倍缩放/黑边上屏）。宿主返回的状态/画布/`FrameView`/音频写流全部真实消费。
+//!
+//! v2 呈现（task-10）：`Host::frame_view()` 只读视图 → 平台侧覆盖层（模式占位角标 / HUD 数值域占位编码 /
+//! 敌槽 position+type 均 Some 时的占位块）；菜单/模式派发在 `Host::tick` 内，本层只透传按键。
 //!
 //! `--selftest-frames N`：无窗口确定性自检（见 `shell_win::run_selftest`），打印签名后正常退出。
 //!
-//! 未证域（AGENTS.md §3 / platform-shell.md §8）：菜单输入门控不自动派发（本主循环不投递
-//! `ModeEvent`；状态推进接线属后续已证战役），敌/弹/HUD/文本不画，音效合成=静音占位显式。
+//! 未证域（AGENTS.md §3 / platform-shell.md §8）：敌坐标写者链/图样、玩家子弹坐标（H-01）、
+//! HUD 字形/布局、Boss/EN-9+、音效合成等一律不画/不发明（`TODO(shell-v2)`）；音频 PCM=静音占位显式。
 
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use game_platform::{AppEvent, Renderer, CANVAS_H, CANVAS_W};
-use game_shell::{Host, FRAME_NS, ROM_ASSET_PATH};
+use game_shell::{FrameView, Host, FRAME_NS, ROM_ASSET_PATH};
 use shell_win::{
     blit_scaled, FsAssets, FrameRenderer, KeyboardInput, LifecycleQueue, PcAudio, SelftestReport,
     WINDOW_TITLE,
@@ -59,6 +62,16 @@ impl WindowRenderer {
     /// CHR 背景 ROM（尺寸不足⇒`false`，fail-closed 保持黑背景）。
     fn set_chr_rom(&mut self, chr_rom: &[u8]) -> bool {
         self.core.set_chr_rom(chr_rom)
+    }
+
+    /// 用最新 `FrameView` 重合成覆盖层并重新上屏（`advance()` 后调用；不增 present 计数）。
+    ///
+    /// 覆盖层=模式角标/HUD 占位/敌槽占位（见 `shell_win::draw_frame_view_overlay`）。
+    /// `Host::tick` 内部的 `present()` 只能看到上一帧 view；本方法用本采样点最新 view 重合成，
+    /// 避免呈现层滞后一帧（多帧追帧时按采样点收敛；见 plan-shellwin-v2 §3）。
+    fn refresh_view(&mut self, view: FrameView) {
+        self.core.set_frame_view(view);
+        self.blit();
     }
 
     /// 合成结果上屏（softbuffer blit；无窗口/零尺寸时 no-op）。
@@ -195,6 +208,8 @@ impl ApplicationHandler for App {
         self.start = Instant::now();
         self.next_frame = self.start;
         self.load_assets();
+        // 初始呈现（Boot 模式角标 + HUD 占位 + CHR 背景），避免窗口空白等待首帧。
+        self.renderer.refresh_view(self.host.frame_view());
     }
 
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
@@ -260,6 +275,8 @@ impl ApplicationHandler for App {
             .host
             .advance(now_ns, &self.input, &mut self.renderer, &mut self.audio);
         if frames > 0 {
+            // 平台侧呈现：用本采样点最新 `FrameView` 重合成覆盖层再上屏（覆盖层不滞后一帧）。
+            self.renderer.refresh_view(self.host.frame_view());
             // 宿主状态真实消费：模式/关号/帧号变化打印（排障与验收观测面；不承载游戏行为）。
             let mode = self.host.mode();
             if self.last_mode != Some(mode) {
@@ -288,6 +305,7 @@ fn print_selftest(report: &SelftestReport) {
     println!("selftest: host_signature=0x{:016x}", report.host_signature);
     println!("selftest: canvas_signature=0x{:016x}", report.canvas_signature);
     println!("selftest: display_signature=0x{:016x}", report.display_signature);
+    println!("selftest: view_signature=0x{:016x}", report.view_digest);
     println!(
         "selftest: audio_writes={} audio_frames={}",
         report.audio_writes, report.audio_frames

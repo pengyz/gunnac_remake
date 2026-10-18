@@ -1,21 +1,27 @@
-//! shell-win v1 契约测试：PC 平台 trait 实现 + 呈现语义 + 确定性自检。
+//! shell-win 契约测试：PC 平台 trait 实现 + 呈现语义 + 确定性自检。
 //!
-//! 覆盖（task-1 + task-18 findings 收口）：
+//! 覆盖（task-1 + task-18 findings 收口 + task-10 可玩闭环 B）：
 //! - 输入映射（platform-shell.md §4 键位表）；
 //! - 存储路径（Windows `%APPDATA%` / Linux `~/.local/share`）；
 //! - 整数倍缩放 + 黑边（`view_rect`/`blit_scaled`）；
 //! - `AssetSource`/`Storage`/`Audio`/`Lifecycle`/`Input` 的 PC 实现真实行为与 fail-closed
 //!   （含 Windows drive-relative 前缀拒绝 B1、exe 目录资产根解析 S1）；
 //! - CHR 背景占位合成（灰阶投影；非原版调色板）；
-//! - `--selftest-frames` 确定性（两次运行报告逐字段一致）+ 异 cwd 资产定位。
+//! - `FrameView` 覆盖层（模式占位角标/HUD 数值域占位编码/敌槽 Some 路径；子弹不画）；
+//! - 按键透传→`Host::tick` 内菜单派发→模式推进（shell 不实现派发）；
+//! - `--selftest-frames` 确定性（两次运行报告逐字段一致，含独立 view 摘要）+ 异 cwd 资产定位。
 
+use game_core::flow::Mode;
+use game_core::player::PlayerState;
 use game_platform::{
     AppEvent, AssetSource, Audio, Buttons, Input, Lifecycle, Renderer, Storage, CANVAS_LEN, CANVAS_W,
 };
+use game_shell::{EnemySlotView, FrameView, Host, HudView};
 use shell_win::{
-    asset_root, blit_scaled, compose_canvas, map_key, run_selftest, storage_dir, view_rect,
-    ChrBackground, FileStorage, FrameRenderer, FsAssets, KeyboardInput, LifecycleQueue, PcAudio,
-    CLEAR_RGBA, GREY4, WINDOW_TITLE,
+    asset_root, blit_scaled, compose_canvas, frame_view_digest, map_key, run_selftest, storage_dir,
+    view_rect, ChrBackground, FileStorage, FrameRenderer, FsAssets, KeyboardInput, LifecycleQueue,
+    PcAudio, CLEAR_RGBA, ENEMY_PLACEHOLDER_COLORS, GREY4, HUD_MONEY_SLOT_PITCH, HUD_MONEY_SLOT_X,
+    HUD_MONEY_SLOT_Y, HUD_PLACEHOLDER_RGBA, MODE_MARKER_COLORS, WINDOW_TITLE,
 };
 
 /// 测试用 CHR ROM 最小长度（`CHR_FILE_BASE + 128*CHR_BANK_SIZE` = 0x40010；
@@ -327,6 +333,8 @@ fn selftest_is_deterministic_and_drives_host() {
     assert_eq!(a.audio_writes, 2, "半程注入的 ApuWrite 流被真实消费");
     assert_eq!(a.audio_frames, 90, "每逻辑帧一次 end_frame");
     assert!(a.host_signature != 0 && a.canvas_signature != 0);
+    assert_ne!(a.view_digest, 0, "独立 FrameView 摘要非零");
+    assert_eq!(a, b, "含 view_digest 在内逐字段一致");
     assert!(
         a.rom_len.map(|n| n >= CHR_ROM_MIN).unwrap_or(false),
         "ROM 经 AssetSource 装载（覆盖 CHR 域）"
@@ -341,4 +349,128 @@ fn selftest_zero_frames_is_well_defined() {
     assert_eq!((a.frames, a.advanced, a.presents, a.frame), (0, 0, 0, 0));
     assert_eq!(format!("{:?}", a.mode), "Boot", "0 帧不推进");
     assert_eq!(a.audio_writes, 0);
+}
+
+// ===================== FrameView 覆盖层（task-10） =====================
+
+#[test]
+fn frame_view_overlay_renders_mode_hud_enemy_placeholders_only() {
+    let mut view = FrameView {
+        frame: 0,
+        mode: Mode::Menu,
+        stage: 1,
+        player: PlayerState::default(),
+        live_bullets: 0,
+        player_bullets_live: 2,
+        enemy_slots: [EnemySlotView::EMPTY; 20],
+        hud: HudView::ZERO,
+    };
+    view.hud.money_digits[0] = (3, true); // 0b0011 ⇒ 上排两 2×2 点阵
+    view.hud.bomb_ammo = 0b0000_0001;
+    view.hud.stage = 2;
+    view.enemy_slots[0] =
+        EnemySlotView { slot: 8, type_code: Some(2), position: Some((40, 60)) };
+    view.enemy_slots[1] = EnemySlotView { slot: 9, type_code: Some(2), position: None };
+
+    let mut renderer = FrameRenderer::new();
+    renderer.set_frame_view(view);
+    let c = renderer.composed_canvas();
+    assert_eq!(pixel(c, 0, 0), MODE_MARKER_COLORS[3], "Menu 模式角标（占位，非原版画面）");
+    let (mx, my) = (HUD_MONEY_SLOT_X as usize, HUD_MONEY_SLOT_Y as usize);
+    assert_eq!(pixel(c, mx, my), HUD_PLACEHOLDER_RGBA, "money digit bit0 占位块");
+    assert_eq!(
+        pixel(c, mx + 2, my),
+        HUD_PLACEHOLDER_RGBA,
+        "money digit bit1 占位块"
+    );
+    assert_eq!(pixel(c, mx, my + 2), CLEAR_RGBA, "digit=3 无 bit2");
+    assert_eq!(
+        pixel(c, 40, 60),
+        ENEMY_PLACEHOLDER_COLORS[2],
+        "position+type 均 Some⇒8×8 占位块（图样未证）"
+    );
+    assert_eq!(pixel(c, 10, 60), CLEAR_RGBA, "position=None 不画（不得当 (0,0)）");
+
+    // 玩家子弹无坐标面 ⇒ 不画：只改计数不改变像素；但 view 摘要仍登记计数。
+    let mut view_no_bullets = view;
+    view_no_bullets.player_bullets_live = 0;
+    let mut renderer0 = FrameRenderer::new();
+    renderer0.set_frame_view(view_no_bullets);
+    assert_eq!(
+        renderer0.composed_canvas(),
+        renderer.composed_canvas(),
+        "子弹不画（无坐标面；H-01 未证）"
+    );
+    assert_ne!(
+        frame_view_digest(&view),
+        frame_view_digest(&view_no_bullets),
+        "view 摘要仍登记 player_bullets_live"
+    );
+}
+
+/// 菜单/模式派发脚本：解锁帧后 START 两次（Title→Menu→Shop）、B 两次（Shop→ShopInfo→出店）。
+fn menu_script(frame: u64) -> Buttons {
+    let mut b = Buttons::default();
+    if matches!(frame, 555..=557 | 575..=577) {
+        b.start = true;
+    }
+    if matches!(frame, 600..=602 | 625..=627) {
+        b.b = true;
+    }
+    b
+}
+
+#[test]
+fn menu_dispatch_progresses_modes_with_platform_input_only() {
+    // shell 只做按键透传 + 呈现：模式派发全部在 `Host::tick` 内（task-9），本测试证明可达可玩段。
+    let mut host = Host::new();
+    let mut input = KeyboardInput::new();
+    let mut renderer = FrameRenderer::new();
+    let mut audio = PcAudio::new();
+    let mut assets = FsAssets::detect();
+    assert!(
+        host.load_asset(&mut assets, game_shell::ROM_ASSET_PATH),
+        "ROM 资产装载（转场帧 STG-01 装载前置；失败⇒engine tick fail-closed）"
+    );
+    if let Some(rom) = host.rom() {
+        renderer.set_chr_rom(rom);
+    }
+
+    let mut last_tag = game_shell::snapshot::mode_tag(host.mode());
+    let mut observed = vec![last_tag];
+    let mut gameplay_ticks = 0u32;
+    for f in 0..1100u64 {
+        input.set_buttons(menu_script(f));
+        let out = host.tick(&input, &mut renderer, &mut audio);
+        if out.gameplay_tick {
+            gameplay_ticks += 1;
+        }
+        let tag = game_shell::snapshot::mode_tag(out.mode);
+        if tag != last_tag {
+            observed.push(tag);
+            last_tag = tag;
+        }
+    }
+
+    assert_eq!(
+        observed,
+        vec![0, 1, 2, 3, 4, 5, 6, 7, 8],
+        "Boot→Black→Title→Menu→Shop→ShopInfo→Transition→StageStart→Combat（host 内派发，shell 只透传）"
+    );
+    assert!(gameplay_ticks > 0, "到达 Combat 后 engine tick 真实执行");
+    assert!(host.stage_loaded(), "转场帧 STG-01 已装载（A 级 f1193 锚）");
+    assert_eq!(format!("{:?}", host.mode()), "Combat");
+
+    // 终态 FrameView：已证字段可用；敌坐标未证⇒v1 恒 None（不画）。
+    let view = host.frame_view();
+    assert_eq!(view.mode, Mode::Combat);
+    assert_eq!(view.stage, 1);
+    assert_eq!(view.hud.stage, 1, "HUD 关号=已证 $180");
+    assert!(view.enemy_slots.iter().all(|s| s.position.is_none()), "敌坐标写者链未证⇒恒 None");
+    renderer.set_frame_view(view);
+    assert_eq!(
+        pixel(renderer.composed_canvas(), 0, 0),
+        MODE_MARKER_COLORS[8],
+        "Combat 模式角标（占位）"
+    );
 }
