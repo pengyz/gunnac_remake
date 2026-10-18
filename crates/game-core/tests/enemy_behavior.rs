@@ -811,3 +811,13 @@ fn boss_behavior_beat_step() {
     boss_behavior_step(&mut b3, 50);
     assert_eq!(b3.hp_table, 1, "重装族切换（相位 2）");
 }
+
+/// 批 4：bank5 八形机械套。
+#[test]
+fn bank5_handler_forms() {
+    use game_core::enemy::{bank5_handler_form, HandlerForm};
+    assert_eq!(bank5_handler_form(0xA10E), Some(HandlerForm::SubObjectGen), "子生成形");
+    assert_eq!(bank5_handler_form(0xA534), Some(HandlerForm::VelCompose4a8), "速度对形");
+    assert_eq!(bank5_handler_form(0xA042), Some(HandlerForm::DualIndex), "直查形");
+    assert_eq!(bank5_handler_form(0x9999), None, "未登记=unknown fail-closed");
+}

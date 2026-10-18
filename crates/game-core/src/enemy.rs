@@ -1096,3 +1096,30 @@ pub fn boss_behavior_step(b: &mut BossBehavior, hp: u8) {
         b.hp_table = 1; // 重装族（$ADE5[$4C]）——表值挂 trace
     }
 }
+
+// ===== handler 批 4（bank5 八形机械套——分类基 57dbd35）=====
+
+/// bank5 handler 形态表（八形深扫 66 段分类——子生成 11/速度对 1/直查 44/无 21）。
+/// 35 体边界=W-BOSSUNIT 表待复证（decomp 随到）；先落可证面（子生成/速度对形）。
+pub const BANK5_HANDLERS: [(u16, HandlerForm); 12] = [
+    // 子生成形（C304 族 11 命中——A10E/A245/A63A/A6D4/AD80/AE1D…）
+    (0xA10E, HandlerForm::SubObjectGen),
+    (0xA245, HandlerForm::SubObjectGen),
+    (0xA63A, HandlerForm::SubObjectGen),
+    (0xA6D4, HandlerForm::SubObjectGen),
+    (0xAD80, HandlerForm::SubObjectGen),
+    (0xAE1D, HandlerForm::SubObjectGen),
+    // 速度对形（69 00/69 FF 族）
+    (0xA534, HandlerForm::VelCompose4a8),
+    // 直查形（BD 族——代表 5 体）
+    (0xA042, HandlerForm::DualIndex),
+    (0xA059, HandlerForm::DualIndex),
+    (0xA06B, HandlerForm::DualIndex),
+    (0xA089, HandlerForm::DualIndex),
+    (0xA0BA, HandlerForm::DualIndex),
+];
+
+/// 批 4 机械套：bank5 handler 形态分发（八形谱——bank7 同族语义）。
+pub fn bank5_handler_form(addr: u16) -> Option<HandlerForm> {
+    BANK5_HANDLERS.iter().find(|(a, _)| *a == addr).map(|(_, f)| *f)
+}
