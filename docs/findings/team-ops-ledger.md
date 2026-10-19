@@ -33,3 +33,15 @@
   2) P0-1 差异族攻坚待工作区就绪后派实施（族序见 l4-zero-tolerance-attack-plan.md）。
   理由：工作区是渲染-比对迭代环唯一前置；攻坚族与重建不冲突（代码 vs 工作区）。
 - d 429：本轮未发生。
+
+
+## 【2026-10-19 23:58】派单记录（overlay 批准 + 工作区重建补卡）
+- 分派人：Lead；时间：2026-10-19 23:58
+- 任务：
+  1) gs5-anchor-render overlay（C4）已核（输入 43 行逐字节同）并提交 push（86e18d4）→
+     l4-analyst 接续：采集 5000f → phase-batch → render f3450×2 → 0 容差实测 → §7.7 安装；
+  2) task-170 渲染输入工作区重建补卡（口径确认：17 traces→phase text + rom 链接 +
+     2 对重渲 sha 自证）→ l4-analyst 执行中。
+- 理由：#14 pair Option B 需 render-ready trace（overlay）；工作区重建是 L4 迭代环前置；
+  二者不冲突（采集面 vs 工作区）。
+- 纪律：两项均走"复核 pass → commit + push"收口。
