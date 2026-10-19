@@ -10,3 +10,11 @@
 3. findings 数字表一致：f1260 after=**1,265** ✅、+337/−7 ✅；未复核面=cargo test 73 全绿（本次禁跑 cargo）与 gs5/stg03 两样本（任务限定 1 样本 1 跑），仍属 Lead 自跑自述。
 
 复核人：adversarial-review 子 agent（独立于实施方）｜2026-10-20
+
+## 闭合补证（3 项）
+
+1. `cargo test -p game-desktop`：7 个 test target 共计 **73 passed / 0 failed**（5+0+35+14+14+5+0），全部 `test result: ok`，cargo 退出码 0 ✅（全绿）。
+2. 复渲 gs5（`render-frame.exe 3450 stg02-start gs5-anchor-render`，REPO_ROOT 已补）：png sha256 = `245cbedc4398d24c…` = 预期 `245cbedc4398…` ✅。
+3. 复渲 stg03（`4600 l4_clear-inject stg03-timeline`）：png sha256 = `246dd5712608160e…` = 预期 `246dd5712608…` ✅。
+
+3/3 一致 ⇒ 上文第 3 条"未复核面"中 cargo 73 全绿与 gs5/stg03 两样本现已独立复现，闭合。复核人：adversarial-review 子 agent｜2026-10-20
