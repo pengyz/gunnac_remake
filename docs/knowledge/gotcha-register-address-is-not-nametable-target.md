@@ -49,6 +49,11 @@ L4 内容帧收敛**连续十一击**（t102..t123）在同一暗雷上绊倒：
 - 多轮收敛卡在同一层差且逐址比对不过时：优先怀疑**协议解释层**而非参数精度。
 - W36 经验补充：Mesen2 `addMemoryCallback` 对 I/O 寄存器区无效，但 **CPU trace 双轨**
   可实测 `$2006/$2007`（t127 修正）。
+  > 【2026-10-20 更正】"addMemoryCallback 对 I/O 寄存器区无效"=**误诊**（W36 作废）：真因是
+  > 字符串 "write" 参数被 Mesen2 2.1.1 静默取整为 0（read 回调），历史 probe 全是读流；
+  > 数值枚举双流注册后 `$2005/$2006/$2007` 写点已可见（gameplay 实测 4,898/25,686/47,474 条，
+  > [probe-setter-blindspot-fix.md](../findings/probe-setter-blindspot-fix.md) §3.3）——
+  > 双流 probe 取证即第一选择，CPU trace 双轨仍可作交叉验证。
 
 ## 证据指针
 

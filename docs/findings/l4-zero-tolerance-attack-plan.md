@@ -265,6 +265,12 @@
 **差什么（取证/输入）**
 1. **写流输入**：`--probe-file`（`render_frame.rs:229-518`）是唯一能吃到 `$0130-$016F`/`$2006/$2007` 写事件的通道，
    但 `analysis/traces/*.probe.jsonl` 当前不存在（F-0-C）→ **需重采**（场景 DSL 已有 `probe_mem` 指令）；
+   > 【2026-10-20 更正】"probe 重采"的补法=**数值枚举双流回调**（非 addBreakPoint，Mesen2 2.1.1
+   > 无 addBreakPoint API），**已落地**（[probe-setter-blindspot-fix.md](probe-setter-blindspot-fix.md)）：
+   > 历史 probe 缺写流的真因是 `emu.addMemoryCallback(fn,"write")` 字符串参数被静默取整为 0（read 回调），
+   > 并非插桩不可行；双流注册后 `$2005/$2006/$2007` 写点已可见（gameplay 实测 **4,898/25,686/47,474** 条，
+   > 其 §3.3），`$2006/$2007` 上传写流可逐拍重建——本条"需重采"仍成立（trace 需按双流格式重采），
+   > 但取证前提从"待定/不可插桩"改为"通道已解盲"。
 2. **逐场景 text 写集**：`crates/game-oracle/src/bin/phase_batch.rs` 只回放**文本装配子程序**（`$2F/$30` 指针）
    → 舞台 BG 写流不在其中（A 级代码事实）；需要把**全写流**（行缓冲+NMI+直写）纳入投影输入；
 3. **帧内相位**：bridge 整块扫写/读后即废/NMI 相位（R-l4-linebuf-5，W-NEW）；`nmi_flush` 模型已 A 级，可直接接线；

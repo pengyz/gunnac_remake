@@ -9,6 +9,16 @@
 > ROM 侧=`reference/seed/gunnac.asm`（冻结投影）。**只读取证：未跑 cargo/渲染/门禁/Mesen**。
 > 复现脚本（scratch）：`analysis/tmp/probe_0160_stats.py`、`probe_pc_calib.py`、`probe_frame_seq.py`、
 > `probe_context.py`、`probe_final_stats.py`、`probe_gap_check.py`、`probe_v1_runs.py`。
+>
+> 【2026-10-20 更正】本文"非变址存储写点盲区/写点不可见"定性=**误诊**（原文保留作历史）：真因是
+> `tools/scenario_capture.lua` 的 `emu.addMemoryCallback(fn,"write")` **字符串**参数被 Mesen2 2.1.1
+> **静默取整为 0（=read 回调）** ⇒ 历史 probe 日志**全是读流**（变址存储"可见"=假读 dummy read），
+> 并非"非变址 STA/STX 不触发回调"。补法=**数值枚举双流注册**（已落地，见
+> [probe-setter-blindspot-fix.md](probe-setter-blindspot-fix.md)）；双流注册后写点已可见：
+> `$2005/$2006/$2007` gameplay 实测 **4,898/25,686/47,474** 条写（其 §3.3），$0160 侧 12 写点中
+> 9 族两场景直写可见（其 §6）。**全文"写点盲区/不可见/全盲"字样（§0-2、§1、§2、§5、§6 G1/G3）均按本注理解**。
+> 另：Mesen2 2.1.1 **无 addBreakPoint API**（`emu.addBreakPoint=nil`）——§5 建议 3 / §6 G1 的
+> "addBreakPoint 重采"补法**不可用**，正确补法=双流回调（已落地）。
 
 ## 0. 判定摘要
 
@@ -45,6 +55,12 @@ STA $160`)、`EC45`(=`EC42 STA $160`)、`88A6`(=`88A3 STA $160`)、`F10C`(=`F109
 不存在，而其上游指令事件齐备（如 F109 读 $161 共 280 条 ⇒ 该路执行 280 次，`STA $2007` 0 条）。
 变址存储（`9D/99` 系）全部可见；**RMW 只出 1 条/次、值=修改前旧值**（`88A0 ORA $160` 事件 v=0
 → 随后 F0DF 读到 1，三 trace 计数严格 1:1，§3）。
+
+> 【2026-10-20 更正】上段"写点盲区（A 级）"定性**误诊**（观测现象保留、定性作废）：`F157/F14E/
+> EED1/EEE4/EC45/88A6/F10C`"零事件"真因=addMemoryCallback 字符串 "write" 被 Mesen2 2.1.1
+> 静默取整为 0（read 回调）⇒ 日志全是读流；双流注册后上述非变址写点（含 `STA $2007`）全部可见
+> （[probe-setter-blindspot-fix.md](probe-setter-blindspot-fix.md) §3.1/§3.2）；"变址存储全部可见"
+> 实为**假读（dummy read）**，非写。
 
 > ⚠️ 连带更正候选（提请 parent 转 spec-writer/kb）：
 > ① `docs/knowledge/gotcha-mesen2-ppu2006-callback-quirk.md`「$2007 事件 1292 条=写点（NMI 上传批
@@ -156,12 +172,20 @@ F0DF a=0160 v=0             ; NMI 轮询
 3. **回放驱动源必须改**：`--probe-file` 若按"写事件"重建 $0160 语义会看到 0 个 setter（盲区）；
    应改用 NMI 轮询观测（`F0DF`/`EED4` 读值）或 ROM 写点 `addBreakPoint` 插桩（gotcha 绕行法 2）。
    ⚠️ 直接冲击 `l4-zero-tolerance-attack-plan.md` §3.1「差什么①」的写流输入前提。
+   > 【2026-10-20 更正】"0 个 setter（盲区）"系字符串回调 bug 误诊（见文首注）：双流注册后写事件
+   > 流即含 setter，回放直接用 `op=w` 写流重建 $0160 语义即可；`addBreakPoint` 插桩**不可用**
+   > （Mesen2 2.1.1 无 addBreakPoint API），gotcha 绕行法 2 作废——补法=数值枚举双流回调（已落地）。
 4. v 分型路由（v=3 调色板双路 / v=1 行完成候选）保留为后续步，但 v=1/v=2 细分仍挂（G4/G5）。
 
 ## 6. 缺口清单
 
 - **G1（硬）**：非变址存储写点盲区——$0160 全部 12 写点、`STA $2007`、`STX $20` 等均不可见；
   批次计数只能靠读侧对账。补法：`emu.addBreakPoint` 于 EC42/EECE/EEE1/88A3/F14B 重采。
+  > 【2026-10-20 更正】**G1 已闭合（双流修复）**："盲区"定性系字符串回调 bug 误诊（见文首注）；
+  > 数值枚举双流注册后写点已可见——$0160 seed 15 写点中 **9 族两场景直写可见**
+  > （827D/88A6/900D/904E/ECD3/ED6B/EED1/EEE4/F14E），`STA $2007`/`STX $20` 亦可见，批次计数
+  > 置位:消费 70:70:70 严格 1:1（写侧直证，probe-setter-blindspot-fix.md §3.2）。补法=双流回调
+  > （已落地），**非** addBreakPoint（Mesen2 2.1.1 无该 API，原建议作废）。
 - **G2**：会话外 30 次 type-3 消费的 setter 路未定位（EEE1 族=B 级候选；bank05:87EB 另一候选）。
 - **G3**：填充（E8E0/85D0/83A4 族）→ 置位 → NMI 消费的逐拍链未闭合（置位写不可见）。
 - **G4**：gameplay-stage1 全程 v=1=0——type-1 生产路在该场景是否活跃未判。
@@ -169,6 +193,11 @@ F0DF a=0160 v=0             ; NMI 轮询
 - **G6**：RMW 事件值语义（=修改前值）仅由 `88A0 ORA $160` 单例定谳，建议第二例复核。
 - **G7**：gotcha 文档与 `adversarial-review-101.md`/`text-line-flag-survey.md:45`/
   `l4-signing-criteria.md:111` 的写点归属需按 §1 更正（本文件只登记，不改他人文档）。
+  > 【2026-10-20 更正（连带）】G7 部分落地：`gotcha-mesen2-ppu2006-callback-quirk.md`、
+  > `addr-phase-w33.md`、`gotcha-register-address-is-not-nametable-target.md` 已按双流根因
+  > （addMemoryCallback 字符串 bug 误诊，非盲区/非锁存 quirk）追加 dated 更正；「v=1@BBBD 写点」
+  > pc 归属误读项（`adversarial-review-101.md`/`text-line-flag-survey.md:45`/`l4-signing-criteria.md:111`）
+  > 仍按 §1/§3 更正（BBBD=读、setter=BBBF），且 BBBF 写点现可由双流 probe 直证（待重采）。
 
 ## 7. 复现命令（全部只读，python 3.12）
 
