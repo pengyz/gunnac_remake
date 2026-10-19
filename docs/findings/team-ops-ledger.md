@@ -85,3 +85,18 @@
 - d 429：未发生。
 - Follow-up 登记：AR171-2（--validate 路径口径 g-manifest-full vs v2）、AR171-3（v2 target 内
   #14 idx_sha/diff_pixels 旧值，gitignored 无碍但建议刷新）。
+
+
+## 【2026-10-20 00:25】唤醒巡查（定时器 23:53/00:03/00:13 三 occurrence 合并）
+- 0 检查行任务：AR171-1 已真修（45093dd，L68=2352 核实）；安装批 d9e90ed 已推；3acc661/b100c31
+  已推；工作树 clean、0 领先 ⇒ 无欠账。更正：00:20 条目"派单"当时只落库未实派——本轮补实派。
+- a 空闲判定：全队空闲（decomp-auditor/platform-porter/shell-porter 等）⇒ 执行 b/c。
+- b 方向判定：一致 ✓（#14 安装收口完成=基线数字定标 2352；进入 P0-1 diff 收敛主线=目标①正面
+  战场）。判定人：Lead。
+- c 派单（实派+建卡）：① task-171 b100c31 豁免收尾 → platform-porter（v2 sha 刷新/allowlist 化+
+  反例测试）；② task-172 P0-1 首族攻坚 → shell-porter（attack-plan 族序收益最大者；渲染面+
+  diff 降幅为证）；③ task-170 收口 → platform-porter（复核数据面已过，board 置 completed）。
+  理由：例外收尾与主战场不冲突（tools vs crates）；派满 2 实施 1 收口。
+- d 429：未发生。
+- 备注：退役 flash 成员又自发完成 AR171-1 修复（45093dd）——成果经证据核收（L68 实值 2352），
+  仍不向其派单；团队执行面维持 100% mimo。
