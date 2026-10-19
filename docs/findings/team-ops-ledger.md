@@ -100,3 +100,18 @@
 - d 429：未发生。
 - 备注：退役 flash 成员又自发完成 AR171-1 修复（45093dd）——成果经证据核收（L68 实值 2352），
   仍不向其派单；团队执行面维持 100% mimo。
+
+
+## 【2026-10-20 00:28】唤醒巡查（定时器 00:23）+ 操作模式切换（用户模型裁定）
+- 0 检查：f3bb1ae 已推；task-170 收口（board completed）；task-171 实现已抢在中断前完成并
+  push（f0e9be1，allowlist 化+11/11 单测）——**待复核**；工作树 clean、0 领先。
+- **重大发现**：list_agents 显示运行中 turn 的 platform-porter/shell-porter=**deepseek-flash**
+  （创建期钉死；显示随 turn 状态变化，l4-analyst 反例证明可翻转）⇒ 队友 turn 无法保证 mimo。
+  按用户裁定（"团队必须使用当前模型"）：**操作模式切换=实施/复核一律走显式 mimo 子 agent
+  （provider=mify model=xiaomi/mimo-v2.6-pro）**；队友仅保留台账/收口辅助，不再承载实施。
+- 处置：中断 shell-porter flash turn（零残留）；platform-porter flash turn 已自然完成
+  （f0e9be1 成果按证据核收）。
+- a：全队空闲 ⇒ b：方向一致 ✓（#14 定标后进 P0-1 收敛）⇒ c 派单（显式 mimo 子 agent）：
+  ① f0e9be1 对抗复核（allowlist 语义/mutation 探针/--validate）→ mimo 子 agent；
+  ② task-172 P0-1 首族攻坚实施 → mimo 子 agent（渲染面+diff 降幅为证）。
+- d 429：未发生。
