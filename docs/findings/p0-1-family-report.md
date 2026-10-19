@@ -52,3 +52,29 @@ cargo test -p game-desktop                       # 52 项全绿
 target/p0-0/build/debug/render-frame.exe 3450 stg02-start gs5-anchor-render --out-dir target/p0-0/render/p01-run1 --log-path target/p0-0/render/p01-run1/r1.log
 # MODELGEO=1 同命令另渲 → diff_visual.compare 计 len(samples)
 ```
+
+
+## 【2026-10-20 01:50 dated·族①第二迭代（变量①/①'）+ $0160 定谳改写路线】
+
+### 变量①（LUT 行基互斥：geo=legacy for $8D LUT）
+stg02 2644 / gameplay **3386** / clear-inject **58148**（vs legacy 2352/3742/58159）——gameplay、
+clear-inject 转优，stg02 回退。
+
+### 变量①'（LUT 行基=精确行址 ⇒ 模型分组但不加 +0F）
+stg02 **2476** / gameplay 3520 / clear-inject **58152**——stg02 转优，gameplay 回撤。
+四配置总和：legacy 64253 / v0 64361 / ① 64178 / **①' 64148**——①' 总和最优但**逐对仍非单调**
+⇒ 按纪律**不锁定任一配置**（默认仍=legacy；MODELGEO 保留两档 geo 供后续）。
+
+### $0160 定谳（l5-0160-batch-semantics.md 子 agent 版，已原地证伪初版）
+1. probe 日志=**读写混合**且**非变址存储全盲**：初版"149,379 条 v=3 写脉冲"实为
+   `bank15:EED1 LDA $160` 自旋**读**（pc=EED4）；$0160 写点零事件；
+2. **"帧末单快照正确"撤回**：帧 1205/1206 各 ~488 条变址填充 ≈ **15 次 32B 填充/帧**；
+   正确回放模型=**单 pending 槽 + NMI 消费点事件序**（v=1 置位:消费=1:1，B+；同帧多置位并入单槽）；
+3. **路线改写**：族①几何/基址变量是二阶项；一阶根因=**填充→置位→消费事件序回放缺失**。
+   下一步=**addBreakPoint 重采卡**（补 $0160 setter 盲区，冲击 attack-plan §3.1 差什么①），
+   之后按事件序回放实现上传，再评估几何变量。
+
+### 现状处置
+- 默认=legacy 保持（基线可比）；MODELGEO geo=1/2 两档留档（测量表如上）；
+- 取证结论以 l5-0160-batch-semantics.md（子 agent 定谳版）为准，初版两条结论已撤回；
+- 待办链：0160 文档复核 → addBreakPoint 重采卡（tools 捕获面 + Mesen）→ 事件序回放实现。
