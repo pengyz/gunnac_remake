@@ -527,6 +527,34 @@ static ROW_GOLDEN: [usize; 30] = [
 /// 2=模型 LUT 精确行基（不加 $0F）（族①迭代2 变量①/①'）。
 pub type RowSnap = ([u8; 32], [u8; 8], u8, u8, u8, u8);
 
+/// 【$0160 v 分型路由】置位快照载荷——**置位快照记 v 值**，NMI 消费按 v 分流（p0-1 vtype 迭代）：
+/// - **v=3=调色板挂起型**（l5-0160：NMI `CMP #3 → bank15:$F105` 路=调色板上传 `$3F00/$3F10`
+///   双组×7B，源=`$161-$167`；R-l4-linebuf-4/8）⇒ NMI 消费走**调色板上传路**（pal 源→渲染端
+///   调色板状态），**行快照不应用**（v=3 不刷行）；
+/// - **v≠3（含 1/其它）**：1=行完成候选（R-l4-linebuf 系）、其它未证 ⇒ **行上传**（现行为：
+///   行快照落 nametable）。
+/// 路由在置位时刻定型（变体=路由真源）：缺 op 旧 probe 不分型 ⇒ 固定 Row（旧行为回归核）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SetSnap {
+    /// v=3 调色板挂起型：置位时刻 `$161-$167` 调色板源快照（7B；上传 `$3F00/$3F10` 双组同源）。
+    Palette { v: u8, pal: [u8; 7] },
+    /// v≠3 行上传型：置位时刻行快照（32B 行缓冲 + attrs + regs + geo 档）。
+    Row { v: u8, snap: RowSnap },
+}
+
+impl SetSnap {
+    /// v 分型路由谓词（纯函数）：v=3 ⇒ 调色板路；v≠3 ⇒ 行路。
+    pub fn is_pal_type(v: u8) -> bool {
+        v == 3
+    }
+    /// 置位快照记下的 v 值（诊断/对账用；路由以变体为准）。
+    pub fn v(&self) -> u8 {
+        match *self {
+            SetSnap::Palette { v, .. } | SetSnap::Row { v, .. } => v,
+        }
+    }
+}
+
 /// 快照/放置上下文（env 派生；运行期不变）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SnapCtx {
@@ -538,9 +566,11 @@ pub struct SnapCtx {
     pub model_geo: bool,
 }
 
-/// 【族①事件序回放】行上传**单 pending 槽**（l5-0160 定谳：单槽挂起位域 + NMI 单点消费）。
-/// - 置位（`$0160` 写事件 op=w 且值非 0）时快照入槽；**多置位=覆盖单槽**（并入单槽，判定 6）；
-/// - NMI 消费点（帧边界 `consume`）上传槽内容并清空；**无置位帧槽空 ⇒ 不上传**（pending==0 无更新）。
+/// 【族①事件序回放】`$0160` **单 pending 槽**（l5-0160 定谳：单槽挂起位域 + NMI 单点消费）。
+/// - 置位（`$0160` 写事件 op=w 且值非 0）时按 **v 分型**快照入槽（`SetSnap`：v=3 调色板 /
+///   v≠3 行）；**多置位=覆盖单槽**（并入单槽，判定 6）；
+/// - NMI 消费点（帧边界 `consume`）取走槽内容并清空（v 分型分流见 `SetSnap`）；
+///   **无置位帧槽空 ⇒ 不上传**（pending==0 无更新）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingSlot<T> {
     slot: Option<T>,
@@ -663,7 +693,7 @@ pub struct EventReplay {
     pub regs: (u8, u8, u8),  // $8E/$8F/$90 行基址寄存器
     pub pal: [u8; 7],        // $161-$167 调色板源
     pub lut_flag: bool,      // $8D LUT 行基覆盖标记（geo=1/2 互斥）
-    pub slot: PendingSlot<RowSnap>,
+    pub slot: PendingSlot<SetSnap>,
     pub hud_seq: usize,
     pub ctx: SnapCtx,
     /// 整份 probe 是否旧格式（**无任何 op 字段**）⇒ 帧末快照=旧行为。
@@ -674,6 +704,8 @@ pub struct EventReplay {
     pub frame_set: bool,
     // —— 诊断计数 ——
     pub sets: usize,           // $0160 置位写数
+    pub row_sets: usize,       // v≠3 行路置位数（含缺 op 帧末回退）
+    pub pal_sets: usize,       // v=3 调色板路置位数
     pub reads_skipped: usize,  // op=r 读事件（不改状态）
     pub opless: usize,         // 缺 op 事件数（旧行为镜像）
     pub legacy_frames: usize,  // 帧末快照回退帧数（显式标注口径）
@@ -694,6 +726,8 @@ impl EventReplay {
             frame_legacy: false,
             frame_set: false,
             sets: 0,
+            row_sets: 0,
+            pal_sets: 0,
             reads_skipped: 0,
             opless: 0,
             legacy_frames: 0,
@@ -739,9 +773,18 @@ impl EventReplay {
                     _ => {}
                 }
                 if act == EventAct::ApplySet {
-                    // 【置位时刻快照】$0160 置位（op=w 且 v≠0）⇒ buf/attrs/regs 当刻快照入单槽
-                    // （多置位=覆盖单槽；快照点=置位时刻非帧末——l5-0160 §5 建议 2）
-                    let snap = self.snapshot();
+                    // 【置位时刻快照·v 分型路由】$0160 置位（op=w 且 v≠0）⇒ **记 v 值**当刻快照
+                    // 入单槽（多置位=覆盖单槽；快照点=置位时刻非帧末——l5-0160 §5 建议 2）：
+                    // v=3 ⇒ 调色板快照（$161-$167 源；**不建行快照**——行快照不应用）；
+                    // v≠3 ⇒ 行快照（现行为）。
+                    let snap = if SetSnap::is_pal_type(v) {
+                        self.pal_sets += 1;
+                        SetSnap::Palette { v, pal: self.pal }
+                    } else {
+                        self.row_sets += 1;
+                        let snap = self.snapshot();
+                        SetSnap::Row { v, snap }
+                    };
                     self.slot.set(snap);
                     self.frame_set = true;
                     self.sets += 1;
@@ -757,8 +800,12 @@ impl EventReplay {
     /// `wrote`=旧全量谓词（含读事件；LOOPABL=1 关闭填充相位时仍按旧行为判）。
     pub fn end_frame(&mut self, wrote: bool) {
         if wrote && !self.frame_set && (self.legacy_file || self.frame_legacy) {
+            // 【v 分型路由·缺 op 回退】旧 probe（读写混合无 op）**无法按 v 分型** ⇒ 固定走
+            // 行路（旧行为=帧末行快照，显式标注；stg03 等回归核逐字节不变）。v 记 $0160
+            // 镜像值仅供诊断，路由以 Row 变体为准（变体=路由真源）。
             let snap = self.snapshot();
-            self.slot.set(snap);
+            self.slot.set(SetSnap::Row { v: self.buf[0x30], snap });
+            self.row_sets += 1;
             self.legacy_frames += 1;
         }
         self.frame_legacy = false;
@@ -1332,6 +1379,11 @@ fn main() {
     let mut buf_fill = 0usize;
     let mut flag_fire = 0usize;
     let mut upload_write = 0usize;
+    // 【v 分型路由·渲染端调色板状态】v=3 NMI 消费=调色板上传 `$3F00/$3F10` 双组×7B
+    // （源=$161-$167 置位时刻快照；R-l4-linebuf-4/8）——只落上传状态（像素色选绑定未证不动）。
+    let mut pal_upload_state: [[u8; 7]; 2] = [[0; 7]; 2];
+    let mut pal_uploads = 0usize; // v=3 消费次数（调色板上传）
+    let mut row_uploads = 0usize; // v≠3 消费次数（行上传）
     let mut sx = 0u8;
     let mut sy = 0u8;
     let mut zp_prev: Vec<u8> = vec![0; 256];
@@ -1447,61 +1499,77 @@ fn main() {
         // t230 ①：条带上传（帧 N 填充→帧 N+1 NMI 落 nametable——持久化模型闭环）
         // 【互斥门】FLAGUPLOAD=1 时旧 pending_row 路关（zp 步进 64=双行对实锤——
         // per-flag 奇偶 half*32=真形；双路混杂=偶行带根因）
-        if std::env::var("FLAGUPLOAD").is_err() { if let Some((row, attrs, lo, hi, c, geo)) = replay.slot.consume() {
-            if geo != 0 {
-                // 【迭代2 变量①'】geo=1（$8E/$8F 裸基）：base=hi:lo+$0F（ROM 公式校正量）；
-                // geo=2（$8D LUT 行基=精确行址 $2000+$40n）：不加 $0F，仅 4×8 分组。
-                let add_off: u16 = if geo == 1 { 0x0F } else { 0 };
-                // 【族① A 级模型】nmi_flush 镜像（bank15:$F040-F0DA；game-core terrain.rs:307-339）：
-                // base=($8F:$8E)+$0F；4 组×8B 组间步进 $20；attr 行=(($8F|3):$90)+$0F 8B。
-                // 旧 32 连写形态（单行铺）与 A 级几何不符=族①（209,086px/74.63%）根因。
-                let base = (((hi as u16) << 8) | lo as u16).wrapping_add(add_off);
-                for grp in 0..4u16 {
-                    for j in 0..8u16 {
-                        let raw = base.wrapping_add(grp * 0x20 + j);
-                        if (0x2000..0x3000).contains(&raw) {
-                            let rel = (raw - 0x2000) as usize;
-                            let (n, o) = (rel / 0x400, rel % 0x400);
+        if std::env::var("FLAGUPLOAD").is_err() { if let Some(set) = replay.slot.consume() {
+            // 【v 分型路由·NMI 消费分流】（p0-1 vtype）：v=3 ⇒ 调色板上传路（**行快照不应用**）；
+            // v≠3（含 1/其它）与缺 op 旧行为回退 ⇒ 行上传（现行为）。
+            match set {
+                SetSnap::Palette { v: _pv, pal } => {
+                    // 【v=3 调色板上传路】l5-0160 / R-l4-linebuf-4/8：NMI `CMP #3 → bank15:$F105`
+                    // =调色板上传 `$3F00/$3F10` 双组×7B、源=`$161-$167` ⇒ pal 快照→渲染端
+                    // 调色板状态（双组同源——组内槽位映射未证，按 docs 有据语义只落上传状态）。
+                    // 【未证不发明】`$3F00`→像素索引绑定未证 ⇒ 本路**不动像素色选**（残余缺口
+                    // 见 p0-1-vtype-routing.md）；sidecar `pal_3f00/pal_3f10` + `pal_uploads` 可观测。
+                    pal_upload_state = [pal, pal];
+                    pal_uploads += 1;
+                }
+                SetSnap::Row { snap: (row, attrs, lo, hi, c, geo), .. } => {
+                    row_uploads += 1;
+                    if geo != 0 {
+                        // 【迭代2 变量①'】geo=1（$8E/$8F 裸基）：base=hi:lo+$0F（ROM 公式校正量）；
+                        // geo=2（$8D LUT 行基=精确行址 $2000+$40n）：不加 $0F，仅 4×8 分组。
+                        let add_off: u16 = if geo == 1 { 0x0F } else { 0 };
+                        // 【族① A 级模型】nmi_flush 镜像（bank15:$F040-F0DA；game-core terrain.rs:307-339）：
+                        // base=($8F:$8E)+$0F；4 组×8B 组间步进 $20；attr 行=(($8F|3):$90)+$0F 8B。
+                        // 旧 32 连写形态（单行铺）与 A 级几何不符=族①（209,086px/74.63%）根因。
+                        let base = (((hi as u16) << 8) | lo as u16).wrapping_add(add_off);
+                        for grp in 0..4u16 {
+                            for j in 0..8u16 {
+                                let raw = base.wrapping_add(grp * 0x20 + j);
+                                if (0x2000..0x3000).contains(&raw) {
+                                    let rel = (raw - 0x2000) as usize;
+                                    let (n, o) = (rel / 0x400, rel % 0x400);
+                                    if n < 4 && o < 0x3C0 {
+                                        nt.tiles[n][o] = row[(grp * 8 + j) as usize]; // ②0 码=擦写（t243）
+                                        upload_write += 1;
+                                    }
+                                }
+                            }
+                        }
+                        let attr_raw = ((((hi as u16) | 3) << 8) | (c as u16)).wrapping_add(add_off);
+                        if (0x2000..0x3000).contains(&attr_raw) {
+                            let arel = (attr_raw - 0x2000) as usize;
+                            let (an, aoff) = (arel / 0x400, arel % 0x400);
+                            if an < 4 && (0x3C0..0x400).contains(&aoff) {
+                                let idx = aoff - 0x3C0;
+                                if idx + 8 <= 64 {
+                                    nt.attrs[an][idx..idx + 8].copy_from_slice(&attrs);
+                                }
+                            }
+                        }
+                    } else {
+                    // legacy 32 连写（HUD LUT 路经验证据拟合形态；LEGACYROW A/B 对照亦走此路）
+                    let base_addr = ((hi as u16) << 8) | lo as u16;
+                    if (0x2000..0x3000).contains(&base_addr) {
+                        let rel = (base_addr - 0x2000) as usize;
+                        for i in 0..32usize {
+                            let off = rel + i;
+                            let (n, o) = (off / 0x400, off % 0x400);
                             if n < 4 && o < 0x3C0 {
-                                nt.tiles[n][o] = row[(grp * 8 + j) as usize]; // ②0 码=擦写（t243）
+                                nt.tiles[n][o] = row[i]; // ②0 码=擦写（t243）：0 写入=擦除该格
                                 upload_write += 1;
+                                // 【落位试②】ROWDBL=1 双写（t109 每行双调用注：行写 dest+dest+32）
+                                if std::env::var("ROWDBL").is_ok() {
+                                    let off2 = rel + i + 32;
+                                    let (n2, o2) = (off2 / 0x400, off2 % 0x400);
+                                    if n2 < 4 && o2 < 0x3C0 {
+                                        nt.tiles[n2][o2] = row[i];
+                                    }
+                                }
                             }
                         }
                     }
-                }
-                let attr_raw = ((((hi as u16) | 3) << 8) | (c as u16)).wrapping_add(add_off);
-                if (0x2000..0x3000).contains(&attr_raw) {
-                    let arel = (attr_raw - 0x2000) as usize;
-                    let (an, aoff) = (arel / 0x400, arel % 0x400);
-                    if an < 4 && (0x3C0..0x400).contains(&aoff) {
-                        let idx = aoff - 0x3C0;
-                        if idx + 8 <= 64 {
-                            nt.attrs[an][idx..idx + 8].copy_from_slice(&attrs);
-                        }
                     }
                 }
-            } else {
-            // legacy 32 连写（HUD LUT 路经验证据拟合形态；LEGACYROW A/B 对照亦走此路）
-            let base_addr = ((hi as u16) << 8) | lo as u16;
-            if (0x2000..0x3000).contains(&base_addr) {
-                let rel = (base_addr - 0x2000) as usize;
-                for i in 0..32usize {
-                    let off = rel + i;
-                    let (n, o) = (off / 0x400, off % 0x400);
-                    if n < 4 && o < 0x3C0 {
-                        nt.tiles[n][o] = row[i]; // ②0 码=擦写（t243）：0 写入=擦除该格
-                        upload_write += 1;
-                        // 【落位试②】ROWDBL=1 双写（t109 每行双调用注：行写 dest+dest+32）
-                        if std::env::var("ROWDBL").is_ok() {
-                            let off2 = rel + i + 32;
-                            let (n2, o2) = (off2 / 0x400, off2 % 0x400);
-                            if n2 < 4 && o2 < 0x3C0 {
-                                nt.tiles[n2][o2] = row[i];
-                            }
-                        }
-                    }
-                }
-            }
             }
         } }
         let zi = line.find("\"zp\":\"").unwrap();
@@ -1605,9 +1673,10 @@ fn main() {
         let per_nt: Vec<(usize, usize)> = nt.tiles.iter()
             .map(|t| (t.iter().filter(|&&x| x > 0 && x < 128).count(), t.iter().filter(|&&x| x >= 128).count()))
             .collect();
-        eprintln!("DBGUPLOAD buf_fill={} flag_fire={} upload_write={} nt_nz={} per_nt(lo,hi)={:?} replay(sets={} consumes={} legacy_frames={} reads_skipped={} opless={})",
+        eprintln!("DBGUPLOAD buf_fill={} flag_fire={} upload_write={} nt_nz={} per_nt(lo,hi)={:?} replay(sets={} consumes={} row_sets={} pal_sets={} row_uploads={} pal_uploads={} legacy_frames={} reads_skipped={} opless={})",
             buf_fill, flag_fire, upload_write, nt_nz, per_nt,
-            replay.sets, replay.slot.consumes, replay.legacy_frames, replay.reads_skipped, replay.opless);
+            replay.sets, replay.slot.consumes, replay.row_sets, replay.pal_sets, row_uploads, pal_uploads,
+            replay.legacy_frames, replay.reads_skipped, replay.opless);
     }
     // 渲染：nametable 32×30 + 卷轴
     let mut canvas = Canvas::new();
@@ -1785,9 +1854,13 @@ fn main() {
     let out_path = out_dir.join(format!("{name}.png"));
     canvas.export_png(std::path::Path::new(&out_path)).expect("导出");
     let idx_path = out_dir.join(format!("{name}.idx.json"));
+    // 【v=3 调色板面接入】palette_src=$161-$167 源镜像（既有语义不变）；
+    // pal_3f00/pal_3f10=v=3 NMI 消费落下的**渲染端调色板上传状态**（双组×7B 同源）。
     std::fs::write(&idx_path, format!(
-        "{{\"palette_src\":\"{}\",\"attrs\":\"{}\",\"tiles\":\"{}\"}}",
+        "{{\"palette_src\":\"{}\",\"pal_3f00\":\"{}\",\"pal_3f10\":\"{}\",\"attrs\":\"{}\",\"tiles\":\"{}\"}}",
         replay.pal.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+        pal_upload_state[0].iter().map(|b| format!("{b:02x}")).collect::<String>(),
+        pal_upload_state[1].iter().map(|b| format!("{b:02x}")).collect::<String>(),
         nt.attrs[ntr].iter().map(|b| format!("{b:02x}")).collect::<String>(),
         nt.tiles[ntr].iter().map(|b| format!("{b:02x}")).collect::<String>(),
     )).expect("侧车");
@@ -1798,6 +1871,7 @@ fn main() {
         sha256_file_hex12(Path::new(p)).unwrap_or_else(|| "-".into())
     };
     let out_sha = std::fs::read(&out_path).map(|b| sha256_hex12(&b)).unwrap_or_else(|_| "-".into());
+    let pal_state_hex = pal_upload_state.iter().flatten().map(|b| format!("{b:02x}")).collect::<String>();
     let mut log = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -1805,7 +1879,7 @@ fn main() {
         .unwrap_or_else(|e| panic!("日志 {}: {e}", log_path.display()));
     writeln!(
         log,
-        "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={} scene={scene} env={} argv={:?} in=frames:{},probe:{},text:{} out={} in_frames_read={} text_records_read={} early_exit={} text_margin={} replay_mode={} replay_sets={} legacy_snap_frames={} probe_opless={} probe_reads_skipped={}",
+        "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={} scene={scene} env={} argv={:?} in=frames:{},probe:{},text:{} out={} in_frames_read={} text_records_read={} early_exit={} text_margin={} replay_mode={} replay_sets={} legacy_snap_frames={} probe_opless={} probe_reads_skipped={} replay_row_sets={} replay_pal_sets={} row_uploads={} pal_uploads={} pal_state={}",
         nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count(),
         probe.len(),
         env_explicit_summary(),
@@ -1823,7 +1897,12 @@ fn main() {
         replay.sets,
         replay.legacy_frames,
         replay.opless,
-        replay.reads_skipped
+        replay.reads_skipped,
+        replay.row_sets,
+        replay.pal_sets,
+        row_uploads,
+        pal_uploads,
+        pal_state_hex
     )
     .unwrap();
     let _ = (SCREEN_W, SCREEN_H);
@@ -2159,7 +2238,7 @@ mod event_replay_tests {
         assert_eq!(slot.consumes, 0, "空消费不计 NMI 消费");
     }
 
-    /// 快照点=置位时刻（非帧末）：置位后 buf 继续被填充不改槽内容。
+    /// 快照点=置位时刻（非帧末）：置位后 buf 继续被填充不改槽内容（v=1 行路）。
     #[test]
     fn snapshot_taken_at_set_moment() {
         let mut rp = EventReplay::new(ctx_default(), false);
@@ -2167,17 +2246,95 @@ mod event_replay_tests {
         rp.apply(0x8E, 0x70, Some(true));
         rp.apply(0x8F, 0x21, Some(true));
         rp.apply(0x0130, 0x2A, Some(true));
-        // 置位（op=w 且 v≠0）⇒ 当刻快照入单槽
-        rp.apply(0x0160, 3, Some(true));
+        // 置位（op=w 且 v≠0）⇒ 当刻快照入单槽（v=1 ⇒ 行路）
+        rp.apply(0x0160, 1, Some(true));
         // 置位后帧内继续填充（同帧第二次 32B 填充）
         rp.apply(0x0130, 0x99, Some(true));
-        let out = rp.slot.peek().expect("置位后槽应非空");
+        let SetSnap::Row { v, snap: out } = rp.slot.peek().expect("置位后槽应非空") else {
+            panic!("v=1 置位应入行路快照");
+        };
+        assert_eq!(*v, 1, "置位快照记 v 值");
         assert_eq!(out.0[0], 0x2A, "快照点=置位时刻（后续填充不改槽）");
         assert_eq!((out.2, out.3), (0x70, 0x21), "regs=置位时刻值");
         // NMI 消费点（帧边界）：上传槽内容并清空
-        let out = rp.slot.consume().expect("NMI 消费点应上传");
+        let SetSnap::Row { snap: out, .. } = rp.slot.consume().expect("NMI 消费点应上传") else {
+            panic!("v=1 消费应走行路");
+        };
         assert_eq!(out.0[0], 0x2A);
         assert!(rp.slot.consume().is_none(), "清空后不再上传");
+    }
+
+    /// 【v 分型路由】v=3 置位**只走调色板路**：pal=$161-$167 置位时刻快照入槽、行快照不应用。
+    #[test]
+    fn v3_set_routes_palette_only() {
+        assert!(SetSnap::is_pal_type(3), "v=3=调色板挂起型");
+        let mut rp = EventReplay::new(ctx_default(), false);
+        // 行缓冲有内容 + regs 行基齐备（若误走行路会被抓到）
+        rp.apply(0x8E, 0x70, Some(true));
+        rp.apply(0x8F, 0x21, Some(true));
+        rp.apply(0x0130, 0x2A, Some(true));
+        // $161-$167 调色板源填充（置位时刻应快照这 7B）
+        for (i, b) in [0x0F, 0x16, 0x36, 0x30, 0x26, 0x36, 0x30].iter().enumerate() {
+            rp.apply(0x0161 + i as u16, *b, Some(true));
+        }
+        rp.apply(0x0160, 3, Some(true));
+        let SetSnap::Palette { v, pal } = rp.slot.peek().expect("v=3 置位后槽应非空") else {
+            panic!("v=3 置位必须入调色板路（不得建行快照）");
+        };
+        assert_eq!(*v, 3);
+        assert_eq!(*pal, [0x0F, 0x16, 0x36, 0x30, 0x26, 0x36, 0x30], "pal 源=$161-$167 置位时刻快照");
+        assert_eq!(rp.pal_sets, 1);
+        assert_eq!(rp.row_sets, 0, "v=3 不计行路置位");
+        // NMI 消费：走调色板上传路（SetSnap::Palette）——行快照不应用
+        let SetSnap::Palette { pal, .. } = rp.slot.consume().expect("NMI 消费") else {
+            panic!("v=3 消费必须走调色板路");
+        };
+        assert_eq!(pal, [0x0F, 0x16, 0x36, 0x30, 0x26, 0x36, 0x30]);
+    }
+
+    /// 【v 分型路由】v=1 置位走行路（行完成候选=现行为行上传）。
+    #[test]
+    fn v1_set_routes_row() {
+        assert!(!SetSnap::is_pal_type(1) && !SetSnap::is_pal_type(2), "v≠3 一律行路");
+        let mut rp = EventReplay::new(ctx_default(), false);
+        rp.apply(0x8E, 0x70, Some(true));
+        rp.apply(0x8F, 0x21, Some(true));
+        rp.apply(0x0130, 0x2A, Some(true));
+        rp.apply(0x0160, 1, Some(true));
+        assert_eq!(rp.row_sets, 1);
+        assert_eq!(rp.pal_sets, 0);
+        let SetSnap::Row { v, .. } = rp.slot.consume().expect("NMI 消费") else {
+            panic!("v=1 消费必须走行路");
+        };
+        assert_eq!(v, 1);
+    }
+
+    /// 【v 分型路由】混型帧正确分流：v=3 与 v=1 置位在不同帧消费各自走路；
+    /// 同帧后置位覆盖（单槽语义）以最后 v 定型。
+    #[test]
+    fn mixed_vtype_frames_route_separately() {
+        let mut rp = EventReplay::new(ctx_default(), false);
+        // 帧 A：v=3 置位 ⇒ 调色板路
+        rp.apply(0x0161, 0x11, Some(true));
+        rp.apply(0x0160, 3, Some(true));
+        rp.end_frame(true);
+        assert!(matches!(rp.slot.consume(), Some(SetSnap::Palette { .. })), "帧 A：v=3 ⇒ 调色板路");
+        // 帧 B：v=1 置位 ⇒ 行路
+        rp.apply(0x0130, 0x2A, Some(true));
+        rp.apply(0x0160, 1, Some(true));
+        rp.end_frame(true);
+        assert!(matches!(rp.slot.consume(), Some(SetSnap::Row { .. })), "帧 B：v=1 ⇒ 行路");
+        // 帧 C：同帧混型置位（v=1 后 v=3）⇒ 单槽覆盖，以最后 v=3 定型
+        rp.apply(0x0160, 1, Some(true));
+        rp.apply(0x0160, 3, Some(true));
+        rp.end_frame(true);
+        let Some(snap) = rp.slot.consume() else { panic!("帧 C 应有槽内容") };
+        assert_eq!(snap.v(), 3, "同帧混型=后置位覆盖（单槽语义）");
+        assert!(matches!(snap, SetSnap::Palette { .. }), "后置位 v=3 ⇒ 调色板路");
+        // 计数对账：3 置位=1 行 + 2 调色板（帧 C 覆盖仍计数）
+        assert_eq!(rp.sets, 4);
+        assert_eq!(rp.pal_sets, 2);
+        assert_eq!(rp.row_sets, 2, "含帧 B 行置位 + 帧 C 首个 v=1 置位");
     }
 
     /// 事件分类：op=r 读事件不改状态/不置位；$0160 清零写不置位；缺 op=旧行为。
@@ -2220,7 +2377,10 @@ mod event_replay_tests {
         rp.apply(0x0130, 0x33, None);
         rp.end_frame(true); // wrote=true（旧行为谓词）
         assert_eq!(rp.legacy_frames, 1, "缺 op ⇒ 帧末单快照回退（旧行为，显式标注）");
-        let out = rp.slot.consume().expect("旧 probe 帧末快照可上传");
+        // 【v 分型路由·缺 op 回退】旧 probe 不分型 ⇒ 固定行路（stg03 回归核逐字节不变）
+        let SetSnap::Row { snap: out, .. } = rp.slot.consume().expect("旧 probe 帧末快照可上传") else {
+            panic!("缺 op 回退必须走行路（旧行为）");
+        };
         assert_eq!(out.0[0], 0x33);
     }
 

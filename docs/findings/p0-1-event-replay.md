@@ -181,3 +181,12 @@ python target\p0-1\set_v_stats.py    # 目标帧内置位 v 分型构成（70/94
 - F5：diff 行数头更正 +480/−76（复核实测）；
 - F1（latent hud_seq 快照计数）/F2（ptr_writes 吞 op=r）/F3（空 probe 口径）→ 后续小卡；
   F6（MODELGEO=1 列复渲）→ v=3 分型路由迭代时一并复测。
+
+
+## 【2026-10-20 05:00 dated 原地更正（task v=3 复核 F3）】
+- §3（L105 附近）「94 快照疑全走 HUD LUT 回退」**误诊更正**：置位时刻 regs 全 ≥$2000
+  （set_moment_state.py 独立复跑：gs5 94 次=00:20:lut1×65/00:21×19/c0:22×10；gameplay 70 次=
+  00:20:lut1×65/c0:22×5）；legacy≡geo 真因=gs5 draws=0（BG 面不绘，nametable 差不传导 PNG）。
+- §6-6/§10（L32/L155 附近）**B 假设「v=3 误刷行=回退主因」已证伪**（v 分型路由实测：剔除后
+  gameplay 5202→5292 恰 +90px 且全为 before 偶然修对）——真因悬空（候选=帧末快照撤回后行更新
+  缺失面，见 p0-1-vtype-routing.md §7-1）；原文主张保留为历史，以本 dated 注为准。
