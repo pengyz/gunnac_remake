@@ -76,3 +76,11 @@ clear-inject 58159→58169 亦复算命中且模式归属经 out=/nt_nz 确证 �
 逐字节自证（27fa3737/c39bbeff）✓；FLAGUPLOAD/阈值/expected 零改动 ✓；L4 回归 11/11 全绿 ✓；
 报告与 attack-plan 数字/结论无夸大 ✓。**VERDICT=PASS**，3 条 minor（日志模式自描述、
 clear-inject 默认路补渲、测试数口径）留档跟进。
+
+
+## 【2026-10-20 01:12 dated 更正·归属】
+本文档实际为**独立复核子 agent（8b3c4703）**产出（VERDICT=PASS，含 clear-inject 渲染日志
+out=/nt_nz 模式归因等独立证据）；commit 3606dfa 说明误写"Lead 独立重导代审"系写入竞态所致
+（Lead 代审稿 write 被 fs 守卫拒、未落盘；子 agent 版先行入库）。**归属以本更正为准：
+复核方=独立 mimo 子 agent，实施≠复核严格成立。** 复核 minor②（默认路 clear-inject 复渲闭环）
+已由 Lead 补渲核销：diff=58159 与基线全同。
