@@ -244,11 +244,11 @@ pub fn ensure_real_within(repo_root: &Path, p: &Path, flag: &str) -> Result<(), 
 
 /// 记录用 env 白名单（render_frame 显式 knobs；不含 REPO_ROOT=输入定位不属渲染参数）。
 pub const ENV_KNOBS: &[&str] = &[
-    "BOTH", "COLOFF", "COMP", "DBGPROBE", "DBGSTREAM", "FAMMAP", "FAMROW", "FLAGUPLOAD",
+    "BOTH", "COLOFF", "COMP", "DBGPROBE", "DBGSTREAM", "F09AROW", "FAMMAP", "FAMROW", "FLAGUPLOAD",
     "FLIPOFF", "FUSE", "FUSE2", "GOLDPAL", "GPFMODE", "GRPSEL", "LOOPABL", "MODELGEO", "NOHUDLUT", "NOOWF",
     "PALROW", "PROJ2007", "QBASE", "QUAD", "R4B", "R4BOFF", "R4BREV", "RECP3", "RECPAL",
     "RENDER_NT", "REVORD", "ROWDBL", "ROWGOLD", "ROWMAP", "ROWOFF", "ROWWIN", "SLOTEND",
-    "SPRABL", "TBLDRV", "TEXTABL", "TEXTFALLBACK", "TRIHOP", "WHITE13",
+    "SPRABL", "TBLDRV", "TEXZERO", "TEXTABL", "TEXTFALLBACK", "TRIHOP", "WHITE13",
 ];
 
 /// 显式设置的 env 摘要（`K=V` 按 K 排序；空⇒`{}`）。
@@ -845,6 +845,155 @@ impl EventReplay {
     }
 }
 
+// ===== F09A 行体流接入 + 0 码 preserve 分治（p0-1-f09a；G3 定谳结构）=====
+// 语义输入：docs/findings/p0-1-gameplay-regression-forensics.md——
+// §2-1（探头重叠注册去重）、§2-2（上传体四族：rowbody(F09A)=`$F08B-$F0DA` 行体）、
+// §2-3（行体几何更正=2 行×16 列：16B@base + 16B@base+$20）、
+// §4（双机制定量：143 格=F09A 行体行更新/擦写流整条缺失 / 117 格=0 码 preserve 拦合法擦除）、
+// §6-2（preserve 按来源/时序分治；以 probe `$2007` 流为对齐基准）、
+// F3 口径注（117 格中 44 格=有拦截实证；73 格 preserve 无本地作用）。
+
+/// probe `$2007` 写事件（去重+地址锁存重建后）：(帧, PPU 地址, 值, pc)。
+pub type PpuWrite = (u64, u16, u8, u16);
+
+/// 行体族归属：`$2007` 写点 pc∈`$F0A0-$F0CA`（rowbody(F09A)；seed `bank15:$F08B-$F0DA`
+/// 行体的内联写点——G3 §2-2 族表，`target/p0-1-verify/probe_verify.py` 同口径）。
+pub fn is_rowbody_pc(pc: u16) -> bool {
+    (0xF0A0..=0xF0CA).contains(&pc)
+}
+
+/// NT tile 区落位换算（`$2000-$2FFF` 且 tile 区；attr 区/表外=None——attr 面未证不动，
+/// 见 p0-1-gameplay-regression-forensics.md §7-3）。
+pub fn nt_tile_cell(addr: u16) -> Option<(usize, usize)> {
+    if !(0x2000..0x3000).contains(&addr) {
+        return None;
+    }
+    let rel = (addr - 0x2000) as usize;
+    let (n, o) = (rel / 0x400, rel % 0x400);
+    if n < 4 && o < 0x3C0 {
+        Some((n, o))
+    } else {
+        None
+    }
+}
+
+/// 【F09A 行体流落位】行体行更新/擦写直落 nametable——**0=擦写必须生效**（来源分治：
+/// 行体流=真机 `$2007` 上传流，0=真机擦除语义，不走 0 码 preserve）。返回是否落位。
+pub fn rowbody_write_cell(nt: &mut Nametable, addr: u16, v: u8) -> bool {
+    if let Some((n, o)) = nt_tile_cell(addr) {
+        nt.tiles[n][o] = v;
+        true
+    } else {
+        false
+    }
+}
+
+/// 【G3 流提取口径】probe `$2006/$2007` 写流 → `(帧, 地址, 值, pc)` 序列（时间序）：
+/// - **重叠注册去重**：probe 对同一访问触发 k 个回调（**连续全同记录**）⇒ 坍缩为 1 条。
+///   去重键=(f,pc,a,v,op,x,y,ar) 相邻塌缩——`target/p0-1-verify/probe_verify.py` **法B**
+///   同键（法A k 抽 1 与法B 逐条相等实证：21,247 事件）；本口径与其**逐字节同解**
+///   （82 run×16B 全零、41/41 burst=(16B,16B,+$20)）；k 表是场景注册数（gameplay=
+///   `$2006`×3/`$2007`×2、gs5=`$2006`×2/`$2007`×1，k 表失配会错相锁存出 `$0000/$002B`
+///   类假址）⇒ 坍缩口径场景无关；
+/// - **地址锁存**：`$2006` 写 hi/lo 成对（hi 先）→ `$2007` 写目的址，写后地址自增；
+/// - `$2007` 读不入流（G3 口径）；**缺 op 旧 probe 全部跳过**（fail-closed：读写不可分，
+///   旧 op-less 场景维持旧行为回归核逐字节不变）；
+/// - `f > limit` 早退（probe 按帧序输出——同 `read_text_writes` 的生产者前提）。
+pub fn ppu_stream_writes(probe_text: &str, limit: u64) -> Vec<PpuWrite> {
+    let mut out: Vec<PpuWrite> = Vec::new();
+    let mut prev: Option<(u64, u16, u8, u16, char, u32, u32, u32)> = None;
+    let mut pair: Vec<u8> = Vec::with_capacity(2);
+    let mut addr: Option<u16> = None;
+    for l in probe_text.lines() {
+        if !l.contains("\"a\":\"") {
+            continue;
+        }
+        let f = match l.split("\"f\":").nth(1).and_then(|s| s.split(',').next()).and_then(|s| s.parse::<u64>().ok()) {
+            Some(v) => v,
+            None => continue,
+        };
+        if f > limit {
+            break;
+        }
+        let a = match l.split("\"a\":\"").nth(1).and_then(|s| s.split('"').next()).and_then(|s| u16::from_str_radix(s, 16).ok()) {
+            Some(v) => v,
+            None => continue,
+        };
+        if a != 0x2005 && a != 0x2006 && a != 0x2007 {
+            continue;
+        }
+        let v = match l.split("\"v\":").nth(1).and_then(|s| s.split(&[',', '}'][..]).next()).and_then(|s| s.parse::<u8>().ok()) {
+            Some(v) => v,
+            None => continue,
+        };
+        let pc = l.split("\"pc\":\"").nth(1).and_then(|s| s.split('"').next()).and_then(|s| u16::from_str_radix(s, 16).ok()).unwrap_or(0);
+        let x = l.split("\"x\":").nth(1).and_then(|s| s.split(&[',', '}'][..]).next()).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        let y = l.split("\"y\":").nth(1).and_then(|s| s.split(&[',', '}'][..]).next()).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        let ar = l.split("\"ar\":").nth(1).and_then(|s| s.split(&[',', '}'][..]).next()).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        let op_ch = l.split("\"op\":\"").nth(1).and_then(|s| s.chars().next()).unwrap_or('?');
+        // 法B 全键=(f,pc,a,v,op,x,y,ar)（缺 op 旧 probe 键含 '?'——同全键塌缩口径）
+        let ident = (f, a, v, pc, op_ch, x, y, ar);
+        if prev == Some(ident) {
+            continue; // 重叠注册 k 个回调（连续全同）⇒ 坍缩 1 条
+        }
+        prev = Some(ident);
+        if op_ch != 'w' {
+            continue; // 读不入流；缺 op 旧 probe 跳过（fail-closed）
+        }
+        match a {
+            0x2006 => {
+                pair.push(v);
+                if pair.len() == 2 {
+                    addr = Some(((pair[0] as u16) << 8) | pair[1] as u16); // hi 先（G3 口径）
+                    pair.clear();
+                }
+            }
+            0x2007 => {
+                if let Some(a0) = addr {
+                    out.push((f, a0, v, pc));
+                    addr = Some(a0.wrapping_add(1));
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// 【0 码 preserve 分治·对齐基准】probe `$2007` 真值流逐格**末次写**（f≤limit）为显式 0
+/// 的格集合（真机擦除语义确认面）。
+pub fn truth_zero_cells(writes: &[PpuWrite]) -> std::collections::HashSet<(usize, usize)> {
+    let mut last: std::collections::HashMap<(usize, usize), u8> = std::collections::HashMap::new();
+    for &(_f, addr, v, _pc) in writes {
+        if let Some(c) = nt_tile_cell(addr) {
+            last.insert(c, v);
+        }
+    }
+    last.into_iter().filter(|&(_, v)| v == 0).map(|(c, _)| c).collect()
+}
+
+/// 【0 码 preserve 分治】text 写集 0 写处置（按来源分治；G3 §7 口径注：44 格实证=合法擦除
+/// 被整拦，356,379 零写性质未逐条定性 ⇒ **未证面保持 fail-closed**）：
+/// - `mode=0` 旧行为：全 preserve（0 写不覆非 0——杀点修二语义）；
+/// - `mode=1`（缺省）**真值确认放行**：probe `$2007` 真值流同格末次写=显式 0 ⇒ 合法擦除
+///   放行（G3 §6-2「以 probe `$2007` 流为对齐基准」；44 格实证面=真值 0 + 写集零写被拦）；
+///   无真值写/真值非 0 ⇒ 保持 preserve（core 噪声零写不覆非 0）；
+/// - `mode=2` 真值确认 + 仅清 text 自写陈旧码（再要求非 0 内容来自 text 写集自身）；
+/// - `mode=3` 全放行（取证对照）。
+pub fn text_zero_erase_ok(
+    mode: u8,
+    truth_zero: &std::collections::HashSet<(usize, usize)>,
+    text_owned: &std::collections::HashSet<(usize, usize)>,
+    cell: (usize, usize),
+) -> bool {
+    match mode {
+        1 => truth_zero.contains(&cell),
+        2 => truth_zero.contains(&cell) && text_owned.contains(&cell),
+        3 => true,
+        _ => false,
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if wants_help(&args) {
@@ -1417,8 +1566,10 @@ fn main() {
     let probe_path = repo_root.join(format!("analysis/traces/{scene}.probe.jsonl")).to_string_lossy().into_owned();
     // 【probe 双流格式】事件行 `f/pc/a/v/x/y/ar` + **`"op":"w"|"r"`**（probe-setter-blindspot-fix §2）；
     // 缺 op=旧 probe（纯读流）⇒ None（按旧行为：全事件镜像+帧末单快照回退）。
-    let probe: Vec<(u64, u16, u8, Option<bool>)> = std::fs::read_to_string(&probe_path).map(|t| {
-        t.lines().filter_map(|l| {
+    // 【F09A 接线】原文保留（`probe_text`）：$2006/$2007 写流真值重建（ppu_stream_writes）用。
+    let probe_text: String = std::fs::read_to_string(&probe_path).unwrap_or_default();
+    let probe: Vec<(u64, u16, u8, Option<bool>)> = probe_text
+        .lines().filter_map(|l| {
             let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
             let a = l.split("\"a\":\"").nth(1)?;
             let a = u16::from_str_radix(a.split('"').next()?, 16).ok()?;
@@ -1429,8 +1580,7 @@ fn main() {
                 _ => None,
             });
             Some((f, a, v, op))
-        }).collect()
-    }).unwrap_or_default();
+        }).collect();
     // 旧 probe（全事件无 op）⇒ 显式标注：事件序回放不启用，按旧行为帧末单快照。
     let probe_legacy_file = !probe.is_empty() && probe.iter().all(|e| e.3.is_none());
     if probe_legacy_file {
@@ -1442,6 +1592,20 @@ fn main() {
     let mut replay = EventReplay::new(snap_ctx, probe_legacy_file);
     // 【GPFMODE 取证开关】快照纪律三形态（缺省 1=现行为；见 EventReplay::gpf_mode 注）
     replay.gpf_mode = std::env::var("GPFMODE").ok().and_then(|v| v.parse::<u8>().ok()).unwrap_or(1);
+    // ===== F09A 行体流接入 + 0 码 preserve 分治（p0-1-f09a；缺省=新行为，逃生阀 env）=====
+    // - F09AROW=0 ⇒ 关行体流直落（缺省=开）；
+    // - TEXZERO=<mode> ⇒ text 写集 0 码处置档（缺省 1=真值确认放行；0=旧行为全 preserve；
+    //   2=真值确认+仅放行 text 自写陈旧码；3=全放行取证对照）。
+    // 流口径=ppu_stream_writes（G3 去重+地址锁存）；行体族=pc∈$F0A0-$F0CA（is_rowbody_pc）；
+    // 0 码 preserve 分治对齐基准=probe `$2007` 真值流逐格末次写（truth_zero_cells）。
+    let f09a_on = std::env::var("F09AROW").map(|v| v != "0").unwrap_or(true);
+    let texzero_mode: u8 = std::env::var("TEXZERO").ok().and_then(|v| v.parse::<u8>().ok()).unwrap_or(1);
+    let stream_writes = ppu_stream_writes(&probe_text, frame);
+    let rowbody_writes: Vec<PpuWrite> = stream_writes.iter().copied()
+        .filter(|&(_, _, _, pc)| is_rowbody_pc(pc)).collect();
+    let truth_zero = truth_zero_cells(&stream_writes);
+    let mut text_owned: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+    let mut rb_i = 0usize;
     let mut probe_i = 0usize;
     let mut ptr_writes: std::collections::HashMap<u64, (u8, u8)> = std::collections::HashMap::new();
     // 归属轴（AR3-A 修正）：按段起点址匹配 t130 §2 七段（$2006 对计数段序号）——
@@ -1662,8 +1826,19 @@ fn main() {
                         let (n, off) = (rel / 0x400, rel % 0x400);
                         if n < 4 {
                             if off < 0x3C0 {
-                                if std::env::var("TBLDRV").is_err() && !(val == 0 && nt.tiles[n][off] != 0) {
+                                // 【0 码 preserve 分治（F09A）】旧行为=0 写恒拦非 0（杀点修二）；
+                                // 新缺省 mode=1：probe `$2007` 真值流同格末次写=显式 0 ⇒ 合法擦除
+                                // 放行（44 格实证面；G3 §7 口径注——117 格=「去 preserve 即=真值」
+                                // 分类口径，其中 73 格 preserve 无本地作用）；无真值写/真值非 0 ⇒
+                                // 保持 preserve（356,379 条零写中 core 噪声面 fail-closed，§7-1）。
+                                let zero_ok = val != 0
+                                    || nt.tiles[n][off] == 0
+                                    || text_zero_erase_ok(texzero_mode, &truth_zero, &text_owned, (n, off));
+                                if std::env::var("TBLDRV").is_err() && zero_ok {
                                     nt.tiles[n][off] = val; // 【杀点修二】零码 preserve（637 行实锤）
+                                    if val != 0 {
+                                        text_owned.insert((n, off)); // mode=2 自写陈旧码账
+                                    }
                                 }
                                 // t157 ② 切换时机：装载帧 <f1207（首切换帧）=字模族
                                 tile_page[n][off / 32] = if f < 1207 { 1 } else { 2 };
@@ -1675,6 +1850,17 @@ fn main() {
                     ppu_addr = ppu_addr.wrapping_add(1);
                 }
                 _ => {}
+            }
+        }
+        // 【F09A 行体流接入】真机 `$2007` 上传流（行体族 pc∈$F0A0-$F0CA；2 行×16 列@$20
+        // 步进）直落 nametable——**0=擦写必须生效**（真机擦除语义，不走 0 码 preserve）：
+        // f1204-1260 清屏扫掠=41 burst×(16B,+020)=1,312 全零写（p0-1-gameplay-regression-
+        // forensics.md §2-3/§2-4）。写序=帧内 text 写集之后（同帧两流后写胜；跨帧严格时序）。
+        while f09a_on && rb_i < rowbody_writes.len() && rowbody_writes[rb_i].0 <= f {
+            let (_f, rb_addr, rb_v, rb_pc) = rowbody_writes[rb_i];
+            rb_i += 1;
+            if is_rowbody_pc(rb_pc) {
+                rowbody_write_cell(&mut nt, rb_addr, rb_v);
             }
         }
         // （帧末快照已由 replay.end_frame(wrote) 承担：置位时刻快照=主路；缺 op 旧 probe=帧末回退）
@@ -2506,5 +2692,149 @@ mod event_replay_tests {
         );
         assert_eq!(s.5, 0, "HUD LUT fallback=legacy 形态");
         assert_eq!(hud, 1, "HUD 行序推进");
+    }
+}
+
+/// 【F09A 行体流接入 + 0 码 preserve 分治】单测（行体流解析/擦写语义/分治档位）。
+#[cfg(test)]
+mod f09a_rowbody_tests {
+    use super::*;
+
+    /// 合成 probe 记录行（真实双流 probe 行形：f/pc/a/v/x/y/ar/op）。
+    fn pl(f: u64, pc: &str, a: &str, v: u8, x: u32, y: u32, op: &str) -> String {
+        format!(
+            "{{\"f\":{f},\"pc\":\"{pc}\",\"a\":\"{a}\",\"v\":{v},\"x\":{x},\"y\":{y},\"ar\":{v},\"op\":\"{op}\"}}"
+        )
+    }
+
+    /// k 副本重叠注册（同访问 k 个回调=连续全同记录）。
+    fn plk(f: u64, pc: &str, a: &str, v: u8, x: u32, y: u32, op: &str, k: usize) -> Vec<String> {
+        (0..k).map(|_| pl(f, pc, a, v, x, y, op)).collect()
+    }
+
+    /// NT tile 区落位换算：tile 区 4×960、attr 区（o≥$3C0）与表外=None（attr 面未证不动）。
+    #[test]
+    fn nt_tile_cell_mapping_and_attr_excluded() {
+        assert_eq!(nt_tile_cell(0x2000), Some((0, 0)));
+        assert_eq!(nt_tile_cell(0x201F), Some((0, 31)), "行 0 尾格");
+        assert_eq!(nt_tile_cell(0x23BF), Some((0, 959)), "nt0 tile 区末格（行 29 尾）");
+        assert_eq!(nt_tile_cell(0x2400), Some((1, 0)), "nt1 基址");
+        assert_eq!(nt_tile_cell(0x2C00), Some((3, 0)), "nt3 基址");
+        assert_eq!(nt_tile_cell(0x23C0), None, "attr 区不落 tile 面");
+        assert_eq!(nt_tile_cell(0x2FFC), None, "$2FFC-$2FFF attr 区尾");
+        assert_eq!(nt_tile_cell(0x1FFF), None, "表外（CHR 域）");
+        assert_eq!(nt_tile_cell(0x3000), None, "表外（镜像域）");
+        assert_eq!(nt_tile_cell(0x3F00), None, "调色板域不落 tile 面");
+    }
+
+    /// 行体族归属=写点 pc∈$F0A0-$F0CA（G3 §2-2 族表；seed 体 $F08B-$F0DA 的内联写点）。
+    #[test]
+    fn rowbody_pc_family_bounds() {
+        assert!(is_rowbody_pc(0xF0A0), "族界左含");
+        assert!(is_rowbody_pc(0xF0CA), "族界右含");
+        assert!(is_rowbody_pc(0xF0B5), "族中");
+        assert!(!is_rowbody_pc(0xF09F), "族界左外（$F08B-$F099 前导非写点）");
+        assert!(!is_rowbody_pc(0xF0CB), "族界右外");
+        assert!(!is_rowbody_pc(0xF1FF), "cmdstream(F1EB) 写点不属行体");
+        assert!(!is_rowbody_pc(0xF05C), "attrbody(F04B) 写点不属行体");
+        assert!(!is_rowbody_pc(0xF120), "palbody(F105) 写点不属行体");
+    }
+
+    /// 【G3 §2-1 去重 + §2-3 几何】k 副本重叠注册坍缩 1 条；地址锁存 hi 先、写后自增；
+    /// 行体 burst 形态=16 连写 + `+$20` 起 16 连写（2 行×16 列@$20 步进）。
+    #[test]
+    fn rowbody_stream_dedup_latch_and_burst_geometry() {
+        let mut lines: Vec<String> = Vec::new();
+        // 两段 burst：base=$2280 与 base=$22A0（+$20）；$2006 写 k=3 副本、$2007 写 k=2 副本
+        for (base_hi, base_lo) in [(0x22u8, 0x80u8), (0x22, 0xA0)] {
+            lines.extend(plk(1244, "F0A2", "2006", base_hi, 0, 0, "w", 3));
+            lines.extend(plk(1244, "F0A9", "2006", base_lo, 1, 0, "w", 3));
+            for j in 0..16u8 {
+                lines.extend(plk(1244, "F0B0", "2007", 0, 2 + j as u32, 0, "w", 2));
+            }
+        }
+        let ws = ppu_stream_writes(&lines.join("\n"), 1260);
+        assert_eq!(ws.len(), 32, "41 burst 口径：32 连写全保留（去重只坍 k 副本）");
+        for j in 0..16usize {
+            assert_eq!(ws[j], (1244, 0x2280 + j as u16, 0, 0xF0B0), "第 1 行 16 列@$2280");
+            assert_eq!(ws[16 + j], (1244, 0x22A0 + j as u16, 0, 0xF0B0), "第 2 行 16 列@$22A0（+$20）");
+        }
+        let rb: Vec<PpuWrite> = ws.iter().copied().filter(|&(_, _, _, pc)| is_rowbody_pc(pc)).collect();
+        assert_eq!(rb.len(), 32, "行体族过滤=全部命中");
+    }
+
+    /// 读事件不入流、缺 op 旧 probe 全跳过（fail-closed：stg03 回归核逐字节不变的前提）。
+    #[test]
+    fn rowbody_stream_skips_reads_and_opless() {
+        // op=r 读流（地址锁存也不建——读不改流）
+        let reads = [
+            pl(5, "F0A2", "2006", 0x22, 0, 0, "r"),
+            pl(5, "F0A9", "2006", 0x80, 1, 0, "r"),
+            pl(5, "F0B0", "2007", 0, 2, 0, "r"),
+        ];
+        assert!(ppu_stream_writes(&reads.join("\n"), 1260).is_empty(), "读不入流");
+        // 缺 op 旧 probe（stg03 形）：读写不可分 ⇒ 全跳过
+        let opless: Vec<String> = (0..3)
+            .map(|j| format!("{{\"f\":4600,\"pc\":\"F0B0\",\"a\":\"2007\",\"v\":0,\"x\":{j},\"y\":0,\"ar\":0}}"))
+            .collect();
+        assert!(ppu_stream_writes(&opless.join("\n"), 4600).is_empty(), "缺 op 全跳过（fail-closed）");
+        // f>limit 早退（生产者按帧序输出）
+        let late = pl(1261, "F0B0", "2007", 0, 0, 0, "w");
+        assert!(ppu_stream_writes(&late, 1260).is_empty(), "f>limit 不消费");
+    }
+
+    /// 【0=擦写必须生效】行体流 0 写直落 tile 格（真机擦除语义，不走 preserve）；attr/表外不落。
+    #[test]
+    fn rowbody_zero_write_erases_cell() {
+        let mut nt = Nametable::default();
+        assert!(rowbody_write_cell(&mut nt, 0x2280, 74), "tile 区落位");
+        assert_eq!(nt.tiles[0][0x280], 74);
+        assert!(rowbody_write_cell(&mut nt, 0x2280, 0), "0 写=擦写必须生效");
+        assert_eq!(nt.tiles[0][0x280], 0, "0 码擦除不被 preserve 拦");
+        assert!(!rowbody_write_cell(&mut nt, 0x23C0, 0x55), "attr 区不落 tile 面");
+        assert!(!rowbody_write_cell(&mut nt, 0x3F00, 0x55), "调色板域不落");
+    }
+
+    /// 【对齐基准】真值流逐格末次写=显式 0 的格集合（后写胜；非 0 末写不入）。
+    #[test]
+    fn truth_zero_last_write_wins() {
+        let writes: Vec<PpuWrite> = vec![
+            (10, 0x2280, 0, 0xF0B0),
+            (20, 0x2280, 5, 0xF1FF), // 末写非 0 ⇒ 不算真值 0 格
+            (10, 0x2281, 5, 0xF1FF),
+            (20, 0x2281, 0, 0xF0B0), // 末写 0 ⇒ 真值 0 格
+        ];
+        let z = truth_zero_cells(&writes);
+        assert!(!z.contains(&(0, 0x280)), "末写非 0 不入真值 0 集");
+        assert!(z.contains(&(0, 0x281)), "末写显式 0 入真值 0 集");
+        assert_eq!(z.len(), 1);
+    }
+
+    /// 【0 码 preserve 分治】档位语义：0=全 preserve（旧行为）/1=真值确认放行/
+    /// 2=真值确认+text 自写陈旧码/3=全放行（取证）。
+    #[test]
+    fn text_zero_erase_mode_division() {
+        let mut truth: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+        truth.insert((0, 100));
+        let mut owned: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+        owned.insert((0, 100));
+        assert!(!text_zero_erase_ok(0, &truth, &owned, (0, 100)), "mode0=旧行为全 preserve");
+        assert!(text_zero_erase_ok(1, &truth, &owned, (0, 100)), "mode1=真值确认放行");
+        assert!(!text_zero_erase_ok(1, &truth, &owned, (0, 101)), "mode1=无真值 0 ⇒ 保持 preserve（fail-closed）");
+        assert!(text_zero_erase_ok(2, &truth, &owned, (0, 100)), "mode2=真值确认+自写陈旧码");
+        assert!(!text_zero_erase_ok(2, &truth, &std::collections::HashSet::new(), (0, 100)), "mode2=非 text 自写不放行");
+        assert!(text_zero_erase_ok(3, &truth, &std::collections::HashSet::new(), (0, 999)), "mode3=全放行（取证）");
+    }
+
+    /// 【G3 §2-1 陷阱回归】不去重会错相锁存出假址——k 副本被当独立写时地址步进错位；
+    /// 本口径去重后 hi/lo 成对、首址=$2006 对所锁。
+    #[test]
+    fn rowbody_stream_no_phantom_addr_from_dup_regs() {
+        let mut lines: Vec<String> = Vec::new();
+        lines.extend(plk(5, "F0A2", "2006", 0x21, 0, 0, "w", 3)); // hi×3 副本
+        lines.extend(plk(5, "F0A9", "2006", 0xC0, 1, 0, "w", 3)); // lo×3 副本
+        lines.extend(plk(5, "F0B0", "2007", 0, 2, 0, "w", 2)); // 数据×2 副本
+        let ws = ppu_stream_writes(&lines.join("\n"), 1260);
+        assert_eq!(ws, vec![(5, 0x21C0, 0, 0xF0B0)], "去重后锁存=$21C0（错相会得 $0000/$002B 类假址）");
     }
 }
