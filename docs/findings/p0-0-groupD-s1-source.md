@@ -179,3 +179,12 @@
 - [x] 对 §8.2 冻结门槛影响如实（§5：不触发冻结）；
 - [x] 300f 两跑确定性 PASS + 100f 单遍 1204 张；4 blob **双网格零命中**；7 锚点双版本同 sha 已核（§1.1/§1.2）；`dense100` 场景待 Lead commit；
 - [ ] 场景 commit（C4，Lead）+ 独立复核 pass；docs-links 提交前复核。
+
+## 8. 安装执行记录（2026-10-20 · task-165 Option B；dated）
+
+- 来源裁定已落地：四联/#17/#18 bytes 不变、登记 `expected_source=stg08-timeline:<f>:<tag>`、trigger=**injected**（更正）、status ok/documented-duplicate；
+- #14：旧 expected `788d6984…`(258B, frame-mismatch 黑屏) 归档 `oracle/screens/expected/.archive/20261020-000358/`；新 expected **`44e7800d…`(1411B 真「地区-2」屏)**；pair 重指向 `gs5-anchor-render:3450`（overlay commit `86e18d4`）；
+  actual=overlay trace f3450 重渲两跑（`27fa3737…`/`436120b6…`，确定性 PASS），**diff=2352 px（ratio 0.038281）**；
+- 安装后：expected full unique **18**（原 17）/rendered expected_unique **14**（原 13）/actual_unique 14；replaced-invalid-asset **5→0**；blocked **4 不变**（本报告 §1.1/§1.2 双网格负证据终态）；
+- 工具验证：`MANIFEST pairs=22 rendered=18 blocked=4 replaced=0 documented_duplicate=5; TWO-RUN PASS 18/18; DEDUPE expected 14=18-4 actual 14=18-4 registry_ok=True PASS; VALIDATION PASS`；
+- 执行细节/证据表见 `p0-0-expected-install-plan.md` §8；4 blocked 不安装；strict/visual 由 §8.1 冻结卡统一。

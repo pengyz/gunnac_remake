@@ -195,3 +195,37 @@ python tools/l4_render_all.py --validate target/p0-0/render/g-manifest-full.json
 - [x] 工具 PAIR_SPEC 同步依赖已列出（platform-porter）；
 - [ ] **Lead 批准 §2.1 render-ready overlay 设计/owner** → 采集+重渲 → 执行阶段：改 expected（单独 commit+Evidence）+ mapping/manifest + dated 更新 + 独立复核；
 - [ ] docs-links PASS（提交前复核）。
+
+## 8. 执行记录（2026-10-19/20 完成；dated）
+
+> 本 section 为**已执行事实**，覆盖上文 §2/§3/§4 中"待执行/TBD"表述（历史方案文本保留）。
+
+**前置 overlay（C4，commit `86e18d4`）**：`oracle/scenarios/gs5-anchor-render.txt`（Lead 批准/commit；输入/poke/原 watch 43 行逐字节同）。
+- GUI 采集：`gs5-anchor-render` 5000f @speed=1000 → **valid**（`done.frames_actual=5000`、`frame_errors=0`、held=1094、trace_lines=5000）；
+  trace sha `b628ad3ef6be16813c630184c561dfbf485e66d5d2d4ffe8f60c96debffc73bd`（**与旧 gs5-anchor trace `afd2fc1f…` 不同=观测面新增的预期差异**，非行为差异：输入行/assist 不变）；
+  probe `7db8a474628f…`（23,606,517B）、frames `b628ad3ef6be…`（15,000,838B）。
+- phase-batch：`gs5-anchor-render-text.jsonl` 81,322,458B sha `fbe7c209279d97f9…`。
+- render f3450 ×2（g_run1/g_run2）：png **`27fa373733534632…`**、idx **`436120b680f7c3c2…`**，**两跑确定性 PASS**（wall 27.0/27.2s；`early_exit=false`、in_frames_read=3080、text_records_read=1588037）。
+- **新 actual vs expected `44e7800d`：diff=2352 px，ratio=0.038281，bbox=(4,9,249,239)**（0 容差口径；actual 仍白底条纹/文字可见，属 P0-1 渲染缺陷族，非 expected 问题）。
+  历史：旧 expected `788d` vs 旧 actual=2495；Option A 的 3943 已否决、不作验收。
+
+**安装（§7.7 执行）**：
+- old expected 归档：`oracle/screens/expected/.archive/20261020-000358/l4_stg02-start.png`（258B `788d6984…`，frame-mismatch 原件保留）；
+- 新 expected 安装：`oracle/screens/expected/l4_stg02-start.png` = **1411B `44e7800dac894205…`**（字节级复制自 `analysis/expected-new/l4_stg02-start.png`，staging 校验同 sha）；
+- pair 重指向：`scene=gs5-anchor-render, frame=3450`；manifest/mapping 由 `tools/l4_render_all.py` 重生成；
+- **g-manifest-v2.json #14 entry 已更新**（pair 重指向后旧 run1 sha 交叉核对会误报；备份 `g-manifest-v2.json.pre-task165.bak`；target/ gitignored），其余 21 entry 未动。
+
+**核验结果（工具真实输出）**：
+```
+MANIFEST pairs=22 rendered=18 blocked=4 replaced=0 documented_duplicate=5
+TWO-RUN: PASS (18/18 png+idx)
+DEDUPE: expected 14=18-4 actual 14=18-4 registry_ok=True documented_ok=True -> PASS
+MAPPING: analysis/repro/mapping.tsv
+VALIDATION: PASS
+```
+- `expected_sha256` 全等：present 18 / mismatch **NONE**（expected_file 经 v2 映射）；expected full 22 files → **unique 18**；rendered expected_unique **14**、actual_unique **14**。
+- mapping 22 行：`ok=13`、`documented-duplicate=5`、`blocked:no-source=4`；#14 row=`scene=gs5-anchor-render, frame=3450, trigger=injected, expected_source=gs5-anchor-render:3450:stg02-start, status=ok, reuse=independent, duplicate_of=""`。
+- 四联/#17/#18：bytes 不变；`trigger natural→injected`；四联主帧 `l4_stg06-late` status=ok、其余 3=documented-duplicate；#17/#18 status=ok；ending-4/5 tag=`probe`、assisted、documented-duplicate。
+- 4 blocked 不安装（expected_sha256 空）；`expected_matches` 仍 0/18（L4 0 容差未达成，本卡只解决 expected 来源/可复现性）。
+
+**遗留**：独立对抗复核 pass → tracked expected 变更 commit（含 `.archive/` 旧件）+ push；4 blocked 终态；strict/visual 由 §8.1 冻结卡统一采集记录。

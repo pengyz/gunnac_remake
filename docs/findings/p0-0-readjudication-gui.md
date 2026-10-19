@@ -126,3 +126,14 @@ PY
 - [x] **明确 L4 0 容差未达成 / 不得宣称 L4 通过 / P0-0 不得全绿**（§0/§4/§6）；
 - [x] 手册 §7.3/§7.4/§7.5/§8.2 已 dated 更新（§5 行号）；same-blob 文档 §9 dated 注（GUI 版 6-group 作废）；
 - [ ] docs-links PASS（提交前复核）；独立复核 pass（task-142 之后派）。
+
+## 9. 安装后 dated 更新（2026-10-20 · task-165 Option B 执行）
+
+> 本 section 覆盖下文行级历史值（§2 row9 等保留原样）：以本节为**安装后现状**。
+
+- **#14 `l4_stg02-start`**：定性由「invalid/invalid-asset」更正为 **frame-mismatch（错帧覆盖，非伪造）**——f3404 在原作/重采均为过场黑屏 `788d6984…`；Lead 裁定 **Option B**：pair 重指向 **`gs5-anchor-render:3450`**（overlay commit `86e18d4`），expected 替换为 **`44e7800d…`（1411B 真「地区-2」屏）**，actual 用 overlay trace **重渲两跑 `27fa3737…`/`436120b6…`（确定性 PASS）**；**diff=2352 px（ratio 0.038281）**；旧 2495 为旧 expected/旧 actual 历史值，Option A 的 3943 已否决。
+- **四联 #16/#19/#20/#21 + #17/#18**：expected **bytes 不变**，仅登记来源：`expected_source=stg08-timeline:<22000/16600/18000/28000/14600/16000>:<tag>`；status：主帧 `l4_stg06-late`=ok、其余 3=documented-duplicate（duplicate_of=l4_stg06-late）、#17/#18=ok；**trigger natural→injected**（stg08-timeline 含 `poke 2400 $26/$0400`，原 natural 为错标，已更正）。
+- **ending-4/5**：bytes 不变；expected_source tag 更正为 `tas-stg08b2-direct:34500/36000:probe`；trigger=assisted、documented-duplicate。
+- **数量（安装后）**：expected full 22 **unique 18**（原 17；stg02↔title 组拆开）；rendered expected_unique **14**（原 13）、actual_unique **14**；`replaced-invalid-asset` **5→0**；`blocked:no-source` **4 不变**（组 D 终态）；registry `expected 14=18−4 / actual 14=18−4`、`registry_ok=true`；manifest `--validate` **PASS**、two-run **18/18 PASS**；`expected_matches` 仍 0/18（L4 0 容差未达成）。
+- **旧 expected 归档**：`oracle/screens/expected/.archive/20261020-000358/l4_stg02-start.png`（`788d6984…`/258B，历史保留）。
+- **未做**：strict/visual（写 tracked；由 §8.1 冻结卡统一）；4 blocked 不安装；diff>0 依旧（P0-1 渲染缺陷）。

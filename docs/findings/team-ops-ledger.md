@@ -69,3 +69,19 @@
 - 派单：task-171 合并独立复核 → decomp-auditor（mimo）四项重导（两跑 sha/0 容差 diff 复算/
   --validate 复算/工作区自证）；pass 后 Lead 分组 commit+push。
 - 429：未发生。
+
+
+## 【2026-10-20 00:20】唤醒巡查×2（定时器 00:13/00:23 批量）+ 安装批收口
+- 0 检查行任务：task-171 复核 verdict=needs_revision（AR171-1 ledger 一行数字）→ 已修（2076→2352）
+  → 安装批 commit+push（本条随批）；无其它欠账（3acc661/b100c31 已推）。
+- a 空闲判定：decomp-auditor 完成 task-171 后空闲；platform-porter 空闲（task-170 待复核收口）；
+  其余空闲 ⇒ 执行 b/c。
+- b 方向判定：与目标一致 ✓（L4 收敛=#14 安装收口 + 2352 基线数字入账 = P0-1 修复目标第 14 对
+  已定标；下一步=P0-1 差异族攻坚）。判定人：Lead。
+- c 派单：① b100c31 例外收尾卡（刷新 v2 #14 run1 sha 或切 g-manifest-full 基线后移除例外/改
+  allowlist）→ platform-porter；② P0-1 差异族攻坚首族（调色板 W-C1 9px+族映射，按 attack-plan
+  族序）→ platform-porter；③ task-170 复核收口 → decomp-auditor 补一项（见下）。
+  理由：安装批已定标，进入 diff 收敛主线；b100c31 收尾与攻坚不冲突（工具 vs 渲染代码）。
+- d 429：未发生。
+- Follow-up 登记：AR171-2（--validate 路径口径 g-manifest-full vs v2）、AR171-3（v2 target 内
+  #14 idx_sha/diff_pixels 旧值，gitignored 无碍但建议刷新）。

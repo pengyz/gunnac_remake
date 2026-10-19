@@ -1534,11 +1534,26 @@ manifest `dedupe.documented_duplicates` 找到同 name 集**（expected 重复�
 >   单测 `tools/test_l4_render_all.py` 9/9（含 registry 反例：四联孩子去掉 duplicate_of ⇒ registry_ok=False）。
 > - 与旧 headless 口径（expected 17/actual 11、6-group）的关系：superseded，不得再用于 GUI manifest。
 
+> **【2026-10-20 task-165 Option B 安装执行·最新】** #14 pair 重指向 **`gs5-anchor-render:3450`**（overlay commit `86e18d4`；Lead 裁定），
+> expected 由 `788d6984…`(258B, frame-mismatch 黑屏) 替换为 **`44e7800d…`(1411B 真「地区-2」屏)**，old 件归档
+> `oracle/screens/expected/.archive/20261020-000358/`；actual=overlay trace f3450 重渲两跑（`27fa3737…`/`436120b6…`，确定性 PASS），
+> **diff=2352 px（ratio 0.038281）**（历史 2495 为旧 expected/旧 actual；Option A 3943 已否决）。
+> 四联/#17/#18：bytes 不变、登记 `expected_source=stg08-timeline:<f>:<tag>`、status 主帧 ok/3 子帧 documented-duplicate、**trigger natural→injected 更正**；
+> ending-4/5 tag→`probe`/assisted。安装后：**expected full unique 18（原 17）、rendered expected_unique=14（原 13）、actual_unique=14、
+> replaced-invalid-asset 5→0、blocked=4 不变**；工具输出 `MANIFEST pairs=22 rendered=18 blocked=4 replaced=0 documented_duplicate=5;
+> TWO-RUN PASS 18/18; DEDUPE expected 14=18-4 actual 14=18-4 registry_ok=True PASS; VALIDATION PASS`。
+> `g-manifest-v2.json` #14 entry 更新（pair 重指向；备份 `.pre-task165.bak`，target/ gitignored）；其余 21 entry 未动。
+> strict/visual 未跑（§8.1 冻结卡统一）；4 blocked 终态；L4 0 容差仍未达成（expected_matches 0/18）。
+
 ### 7.6 trigger 标注纪律
 
 - 自然场景（title-menu/gameplay-stage1/stg03-timeline/stg08-timeline 无 poke）→ `trigger=natural`；
 - v5 overlay（含 `poke 1255 01be/01b6/01b7 01` = assist）→ `trigger=assisted`（等价 injected 族，不得冒充自然）；
 - 选关/注入帧（若用 `poke 0180`）→ `trigger=injected`。
+
+> **【2026-10-20 task-165 更正】** `stg08-timeline` 场景含 `poke 2400 0026 10`/`poke 2400 0400 01`（assist 注入）⇒ 其 expect 来源四联/#17/#18 的
+> **trigger 应为 `injected`（原 mapping/PAIR_SPEC 标 natural 属错标）**，已随 task-166/165 更正；ending-4/5（tas-stg08b2-direct）仍 assisted。
+> 其余 trigger 枚举与场景事实不变（title-menu/gameplay-stage1/stg03-timeline=natural；v5 assist=assisted）。
 
 ### 7.7 expected 唯一安装流程（B1/B3/M6：**只在 §7a 执行一次**，必须先于 §5）
 
