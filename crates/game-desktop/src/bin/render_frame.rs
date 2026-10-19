@@ -245,7 +245,7 @@ pub fn ensure_real_within(repo_root: &Path, p: &Path, flag: &str) -> Result<(), 
 /// 记录用 env 白名单（render_frame 显式 knobs；不含 REPO_ROOT=输入定位不属渲染参数）。
 pub const ENV_KNOBS: &[&str] = &[
     "BOTH", "COLOFF", "COMP", "DBGPROBE", "DBGSTREAM", "FAMMAP", "FAMROW", "FLAGUPLOAD",
-    "FLIPOFF", "FUSE", "FUSE2", "GOLDPAL", "GRPSEL", "LOOPABL", "MODELGEO", "NOHUDLUT", "NOOWF",
+    "FLIPOFF", "FUSE", "FUSE2", "GOLDPAL", "GPFMODE", "GRPSEL", "LOOPABL", "MODELGEO", "NOHUDLUT", "NOOWF",
     "PALROW", "PROJ2007", "QBASE", "QUAD", "R4B", "R4BOFF", "R4BREV", "RECP3", "RECPAL",
     "RENDER_NT", "REVORD", "ROWDBL", "ROWGOLD", "ROWMAP", "ROWOFF", "ROWWIN", "SLOTEND",
     "SPRABL", "TBLDRV", "TEXTABL", "TEXTFALLBACK", "TRIHOP", "WHITE13",
@@ -702,6 +702,15 @@ pub struct EventReplay {
     pub frame_legacy: bool,
     /// 本帧出现 `$0160` 置位写（帧末不再快照）。
     pub frame_set: bool,
+    /// 本帧出现 op=w 行填充写（$0130-$0160，$0160 需 v≠0）——取证补漏谓词（写流口径）。
+    pub frame_fill: bool,
+    /// 【取证开关 GPFMODE（env 门控；缺省=1 现行为）】快照纪律三形态（gameplay f1260 回退取证，
+    /// docs/findings/p0-1-gameplay-regression-forensics.md）：
+    /// - **1（缺省=现行为）**：置位时刻快照（v 分型）；op 齐全帧无帧末快照；
+    /// - **2（置位快照+帧末补漏）**：无置位但有写填充的帧 ⇒ 帧末行快照补漏；
+    /// - **3（纯旧帧末）**：置位不建快照；凡写填充帧一律帧末行快照（旧行为快照纪律）。
+    /// 仅影响快照纪律实验；**默认 1 不变**（未验证形态不得设默认）。
+    pub gpf_mode: u8,
     // —— 诊断计数 ——
     pub sets: usize,           // $0160 置位写数
     pub row_sets: usize,       // v≠3 行路置位数（含缺 op 帧末回退）
@@ -725,6 +734,8 @@ impl EventReplay {
             legacy_file,
             frame_legacy: false,
             frame_set: false,
+            frame_fill: false,
+            gpf_mode: 1,
             sets: 0,
             row_sets: 0,
             pal_sets: 0,
@@ -744,6 +755,10 @@ impl EventReplay {
             act => {
                 if op.is_none() {
                     self.opless += 1;
+                }
+                // 【GPFMODE】写填充帧标记（写流口径：op=w 且 $0130-$0160（$0160 需 v≠0））
+                if op == Some(true) && (0x0130..=0x0160).contains(&a) && (a != 0x0160 || v != 0) {
+                    self.frame_fill = true;
                 }
                 match a {
                     0x0130..=0x0160 => self.buf[(a - 0x0130) as usize] = v,
@@ -777,15 +792,18 @@ impl EventReplay {
                     // 入单槽（多置位=覆盖单槽；快照点=置位时刻非帧末——l5-0160 §5 建议 2）：
                     // v=3 ⇒ 调色板快照（$161-$167 源；**不建行快照**——行快照不应用）；
                     // v≠3 ⇒ 行快照（现行为）。
-                    let snap = if SetSnap::is_pal_type(v) {
-                        self.pal_sets += 1;
-                        SetSnap::Palette { v, pal: self.pal }
-                    } else {
-                        self.row_sets += 1;
-                        let snap = self.snapshot();
-                        SetSnap::Row { v, snap }
-                    };
-                    self.slot.set(snap);
+                    // 【GPFMODE=3】纯旧帧末形态：置位不建快照（快照纪律=帧末，end_frame 补）。
+                    if self.gpf_mode != 3 {
+                        let snap = if SetSnap::is_pal_type(v) {
+                            self.pal_sets += 1;
+                            SetSnap::Palette { v, pal: self.pal }
+                        } else {
+                            self.row_sets += 1;
+                            let snap = self.snapshot();
+                            SetSnap::Row { v, snap }
+                        };
+                        self.slot.set(snap);
+                    }
                     self.frame_set = true;
                     self.sets += 1;
                 }
@@ -799,7 +817,14 @@ impl EventReplay {
     /// 帧末：缺 op 旧 probe 回退（旧行为=帧末单快照，显式标注）；op 齐全的帧不走帧末快照。
     /// `wrote`=旧全量谓词（含读事件；LOOPABL=1 关闭填充相位时仍按旧行为判）。
     pub fn end_frame(&mut self, wrote: bool) {
-        if wrote && !self.frame_set && (self.legacy_file || self.frame_legacy) {
+        // 【GPFMODE 取证形态】快照纪律实验（缺省 1=现行为不变）：
+        // 2=无置位但有写填充的帧帧末补漏；3=凡写填充帧一律帧末快照（纯旧行为）。
+        let patch = match self.gpf_mode {
+            2 => self.frame_fill && !self.frame_set,
+            3 => self.frame_fill,
+            _ => false,
+        };
+        if (wrote && !self.frame_set && (self.legacy_file || self.frame_legacy)) || patch {
             // 【v 分型路由·缺 op 回退】旧 probe（读写混合无 op）**无法按 v 分型** ⇒ 固定走
             // 行路（旧行为=帧末行快照，显式标注；stg03 等回归核逐字节不变）。v 记 $0160
             // 镜像值仅供诊断，路由以 Row 变体为准（变体=路由真源）。
@@ -810,6 +835,7 @@ impl EventReplay {
         }
         self.frame_legacy = false;
         self.frame_set = false;
+        self.frame_fill = false;
     }
 
     /// 当刻快照（置位时刻/帧末回退共用）。
@@ -1414,6 +1440,8 @@ fn main() {
         );
     }
     let mut replay = EventReplay::new(snap_ctx, probe_legacy_file);
+    // 【GPFMODE 取证开关】快照纪律三形态（缺省 1=现行为；见 EventReplay::gpf_mode 注）
+    replay.gpf_mode = std::env::var("GPFMODE").ok().and_then(|v| v.parse::<u8>().ok()).unwrap_or(1);
     let mut probe_i = 0usize;
     let mut ptr_writes: std::collections::HashMap<u64, (u8, u8)> = std::collections::HashMap::new();
     // 归属轴（AR3-A 修正）：按段起点址匹配 t130 §2 七段（$2006 对计数段序号）——
@@ -2399,6 +2427,41 @@ mod event_replay_tests {
     fn modelgeo_knob_is_recorded() {
         assert!(ENV_KNOBS.contains(&"MODELGEO"), "MODELGEO=几何档开关须进 ENV_KNOBS 记录");
         assert!(!ENV_KNOBS.contains(&"REPO_ROOT"));
+    }
+
+    /// 【GPFMODE 取证开关】快照纪律三形态：缺省=1（现行为不变）；2=无置位填充帧帧末补漏；
+    /// 3=纯旧帧末（置位不建快照、凡填充帧帧末快照）。未验证形态不得设默认。
+    #[test]
+    fn gpfmode_snapshot_discipline_forms() {
+        // 缺省=1：现行为（填充无置位 ⇒ 不上传）
+        let mut rp = EventReplay::new(ctx_default(), false);
+        assert_eq!(rp.gpf_mode, 1, "缺省=现行为（置位时刻快照）");
+        rp.apply(0x0130, 0x44, Some(true));
+        rp.end_frame(true);
+        assert!(rp.slot.consume().is_none(), "mode=1 无置位帧不上传（现行为）");
+
+        // mode=2：无置位填充帧 ⇒ 帧末补漏；有置位帧不补
+        let mut rp = EventReplay::new(ctx_default(), false);
+        rp.gpf_mode = 2;
+        rp.apply(0x0130, 0x44, Some(true));
+        rp.end_frame(true);
+        assert!(matches!(rp.slot.consume(), Some(SetSnap::Row { .. })), "mode=2 无置位填充帧补漏");
+        rp.apply(0x0160, 1, Some(true)); // 置位帧（v=1 行路）
+        rp.apply(0x0130, 0x55, Some(true));
+        rp.end_frame(true);
+        assert_eq!(rp.legacy_frames, 1, "mode=2 置位帧走置位快照不走帧末补漏");
+        assert!(matches!(rp.slot.consume(), Some(SetSnap::Row { .. })));
+
+        // mode=3：置位不建快照；填充帧一律帧末快照
+        let mut rp = EventReplay::new(ctx_default(), false);
+        rp.gpf_mode = 3;
+        rp.apply(0x0160, 1, Some(true)); // 置位：mode=3 不建快照
+        rp.apply(0x0130, 0x66, Some(true));
+        assert!(!rp.slot.is_pending(), "mode=3 置位不建快照");
+        rp.end_frame(true);
+        assert_eq!(rp.legacy_frames, 1, "mode=3 填充帧帧末快照");
+        assert!(matches!(rp.slot.consume(), Some(SetSnap::Row { .. })));
+        assert!(ENV_KNOBS.contains(&"GPFMODE"), "GPFMODE 取证开关须进 ENV_KNOBS 记录");
     }
 
     /// 几何档选择（MODELGEO 门 + $8D LUT 互斥 + HUD LUT 回退）——p0-1 迭代2 变量①/①'。
