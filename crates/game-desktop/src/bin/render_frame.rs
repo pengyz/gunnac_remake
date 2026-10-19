@@ -1067,8 +1067,9 @@ fn main() {
     let mut buf = [0u8; 0x31]; // $0130-$015F + $0160
     let mut attrs = [0u8; 8];
     let mut addr_regs = (0u8, 0u8, 0u8); // $8E/$8F/$90（t99：probe 写点追踪，解相位陷阱）
+    let mut regs_from_lut = false; // 【族①迭代2 变量①】$8D LUT 行基覆盖标记（模型 +0x0F 互斥用）
     let mut palette_src = [0u8; 7]; // $161-$167 调色板源（t99 ①）
-    let mut pending_row: Option<([u8; 32], [u8; 8], u8, u8, u8, bool)> = None; // bool=模型几何（族①）
+    let mut pending_row: Option<([u8; 32], [u8; 8], u8, u8, u8, u8)> = None; // u8=几何模式 0=legacy/1=model+0F/2=model 无0F（族①迭代2）
     let mut buf_fill = 0usize;
     let mut flag_fire = 0usize;
     let mut upload_write = 0usize;
@@ -1164,15 +1165,15 @@ fn main() {
     let mut trace_oam: Option<String> = None;
     let apply_frame_writes = |buf: &mut [u8; 0x31], attrs: &mut [u8; 8],
                                   regs: &mut (u8, u8, u8), pal: &mut [u8; 7],
-                                  f: u64, pi: &mut usize| {
+                                  f: u64, pi: &mut usize, lut_flag: &mut bool| {
         while *pi < probe.len() && probe[*pi].0 == f {
             let (_f, a, v) = probe[*pi];
             *pi += 1;
             match a {
                 0x0130..=0x0160 => buf[(a - 0x0130) as usize] = v,
                 0x00D3..=0x00DA => attrs[(a - 0x00D3) as usize] = v,
-                0x8E => regs.0 = v,
-                0x8F => regs.1 = v,
+                0x8E => { regs.0 = v; *lut_flag = false; }
+                0x8F => { regs.1 = v; *lut_flag = false; }
                 0x90 => regs.2 = v,
                 0x8D => {
                     // t100 行地址 LUT 通道：$8D 行索引 → $EBF4 项 = 行基址（$2000+$40n）
@@ -1183,6 +1184,7 @@ fn main() {
                     if let Some(&base) = lut.get(v as usize) {
                         regs.0 = base as u8;
                         regs.1 = (base >> 8) as u8;
+                        *lut_flag = true; // 【族①迭代2 变量①】$8D LUT 行基覆盖 regs（t93 取证 §3 嫌疑①）
                     }
                 }
                 0x0161..=0x0167 => pal[(a - 0x0161) as usize] = v,
@@ -1199,12 +1201,15 @@ fn main() {
         // t230 ①：条带上传（帧 N 填充→帧 N+1 NMI 落 nametable——持久化模型闭环）
         // 【互斥门】FLAGUPLOAD=1 时旧 pending_row 路关（zp 步进 64=双行对实锤——
         // per-flag 奇偶 half*32=真形；双路混杂=偶行带根因）
-        if std::env::var("FLAGUPLOAD").is_err() { if let Some((row, attrs, lo, hi, c, model_geo)) = pending_row.take() {
-            if model_geo {
+        if std::env::var("FLAGUPLOAD").is_err() { if let Some((row, attrs, lo, hi, c, geo)) = pending_row.take() {
+            if geo != 0 {
+                // 【迭代2 变量①'】geo=1（$8E/$8F 裸基）：base=hi:lo+$0F（ROM 公式校正量）；
+                // geo=2（$8D LUT 行基=精确行址 $2000+$40n）：不加 $0F，仅 4×8 分组。
+                let add_off: u16 = if geo == 1 { 0x0F } else { 0 };
                 // 【族① A 级模型】nmi_flush 镜像（bank15:$F040-F0DA；game-core terrain.rs:307-339）：
                 // base=($8F:$8E)+$0F；4 组×8B 组间步进 $20；attr 行=(($8F|3):$90)+$0F 8B。
                 // 旧 32 连写形态（单行铺）与 A 级几何不符=族①（209,086px/74.63%）根因。
-                let base = (((hi as u16) << 8) | lo as u16).wrapping_add(0x0F);
+                let base = (((hi as u16) << 8) | lo as u16).wrapping_add(add_off);
                 for grp in 0..4u16 {
                     for j in 0..8u16 {
                         let raw = base.wrapping_add(grp * 0x20 + j);
@@ -1218,7 +1223,7 @@ fn main() {
                         }
                     }
                 }
-                let attr_raw = ((((hi as u16) | 3) << 8) | (c as u16)).wrapping_add(0x0F);
+                let attr_raw = ((((hi as u16) | 3) << 8) | (c as u16)).wrapping_add(add_off);
                 if (0x2000..0x3000).contains(&attr_raw) {
                     let arel = (attr_raw - 0x2000) as usize;
                     let (an, aoff) = (arel / 0x400, arel % 0x400);
@@ -1257,7 +1262,7 @@ fn main() {
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
         // —— 主循环相位：probe 写事件填充缓冲 ——
         if std::env::var("LOOPABL").is_err() {
-            apply_frame_writes(&mut buf, &mut attrs, &mut addr_regs, &mut palette_src, f, &mut probe_i);
+            apply_frame_writes(&mut buf, &mut attrs, &mut addr_regs, &mut palette_src, f, &mut probe_i, &mut regs_from_lut);
         }
         // 帧末挂起：行缓冲若本帧被写过（扫写）→ 排队下帧 NMI 上传（地址取当帧 zp）
         // 【l4 修】上传触发域=全缓冲（$0130-$0160 含 flag $0160——旧域 $0130-$0150
@@ -1333,11 +1338,14 @@ fn main() {
                 let lut = [0x21C0u16, 0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380];
                 let idx = 7usize.saturating_sub(hud_row_seq / 2 % 8);
                 let base = lut[idx];
-                pending_row = Some((row, attrs, base as u8, (base >> 8) as u8, 0xC0, false)); // HUD=LUT 路（legacy 几何）
+                pending_row = Some((row, attrs, base as u8, (base >> 8) as u8, 0xC0, 0)); // HUD fallback=legacy
                 hud_row_seq += 1;
             } else {
-                pending_row = Some((row, attrs, addr_regs.0, addr_regs.1, addr_regs.2,
-                    std::env::var("MODELGEO").is_ok())); // 族① 模型几何（默认关：A/B 实验混合未胜出，见 p0-1-family-report）
+                // 【迭代2 变量①'】LUT 行基（$8D 覆盖）= 精确行址 ⇒ 模型分组但不加 $0F（geo=2）；
+                // 直写 regs（$8E/$8F 裸基）⇒ 模型分组 + $0F 校正（geo=1）；MODELGEO 关=legacy（0）
+                let geo = if !std::env::var("MODELGEO").is_ok() { 0u8 }
+                          else if regs_from_lut { 2u8 } else { 1u8 };
+                pending_row = Some((row, attrs, addr_regs.0, addr_regs.1, addr_regs.2, geo));
             }
         }
         let _ = &zp_prev;
