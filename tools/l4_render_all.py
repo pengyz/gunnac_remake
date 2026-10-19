@@ -111,12 +111,14 @@ PAIR_SPEC: list[dict] = [
      "status": STATUS_OK, "reuse": "independent", "duplicate_of": ""},
     # task-166 / task-165 §1 #8：Option B（Lead 裁定）——pair 重指向 gs5-anchor-render:3450（render-ready overlay；2026-10-19 Lead 单点收口），
     # expected 由 task-165 安装为 44e7800d…（1411B，真实"地区-2"开始屏；安装后由 expected 文件 sha 动态取）。
-    # 注：g_run1 现成 actual 仍是旧 pair（stg03-timeline:3404）渲染产物；Option B 重渲不在本卡范围。
+    # re_render=true：g_run1/g_run2 的 l4_stg02-start 已由 task-165 step0 用本 overlay f3450 重渲
+    # （png 27fa3737…/idx 436120b6…），因此 g-manifest-v2 里的旧 run1 sha **不作否决**（仅历史对照）。
     {"name": "l4_stg02-start", "scene": "gs5-anchor-render", "frame": 3450,
      "capture_tag": "stg02-start", "trigger": "injected",
      "expected_file": "l4_stg02-start.png",
      "status": STATUS_OK, "reuse": "independent", "duplicate_of": "",
-     "note": "Option B（Lead 裁定 task-166）：pair=gs5-anchor-render:3450；expected=44e7800d…（task-165 安装）；actual 仍为旧 pair 渲染产物，重渲待后续"},
+     "re_render": True,
+     "note": "Option B（Lead 裁定 task-166）：pair=gs5-anchor-render:3450；expected=44e7800d…（task-165 安装）；g_run1/g_run2 actual 已由 task-165 step0 重渲（27fa3737…），g-manifest-v2 run1 sha 为历史值不作否决"},
     {"name": "l4_stg03-start", "scene": "stg03-timeline", "frame": 5700,
      "capture_tag": "stg03-start-approx", "trigger": "injected",
      "expected_file": "l4_stg03-start.png",
@@ -343,8 +345,11 @@ def build_manifest(render_dir: pathlib.Path, expected_dir: pathlib.Path,
             if not parsed.get("argv"):
                 issues.append(f"{name}: render_argv 缺失（日志不可解析）")
         if rec is not None:
-            # g-manifest-v2 交叉核对（run shas/expected_file；只报警不覆盖）
-            if rec.get("actual_run1_sha256") and a1 and rec["actual_run1_sha256"] != a1:
+            # g-manifest-v2 交叉核对（run shas/expected_file；只报警不覆盖）。
+            # re_render=true（#14 Option B，task-165 step0 已重渲 g_run1/g_run2）⇒ 旧 run1 sha 仅历史对照，不作否决。
+            if (not spec.get("re_render")
+                    and rec.get("actual_run1_sha256") and a1
+                    and rec["actual_run1_sha256"] != a1):
                 issues.append(f"{name}: g-manifest-v2 run1 sha 与磁盘不符")
             if rec.get("expected_file") and rec["expected_file"] != spec["expected_file"]:
                 issues.append(f"{name}: expected_file 与 g-manifest-v2 不符")

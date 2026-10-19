@@ -74,6 +74,8 @@ def test_spec_22_rows_schema_and_counts():
     assert p14["capture_tag"] == "stg02-start" and p14["trigger"] == "injected"
     assert p14["status"] == L.STATUS_OK and p14["reuse"] == "independent"
     assert p14["duplicate_of"] == ""
+    # task-165 step0 已重渲 g_run1/g_run2 的 #14 actual ⇒ v2 旧 run1 sha 仅历史对照（不作否决）
+    assert p14.get("re_render") is True
     # task-166 四联/#17/#18：trigger natural→injected 更正
     for n in ("l4_stg06-late", "l4_stg08-combat", "l4_stg08-late", "l4_stg08-start",
               "l4_stg07-combat", "l4_stg07-start"):
