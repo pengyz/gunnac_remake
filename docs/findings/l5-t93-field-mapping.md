@@ -5,7 +5,7 @@
 
 ## 1. 原始证据（A 级，seed 实读）
 
-`reference/seed/gunnac.asm` L785-798（bank00:$85CE-$85EA，桥接"8 输出/帧"核心段）：
+`reference/seed/gunnac.asm` L784-798（bank00:$85CE-$85EA，桥接"8 输出/帧"核心段）：
 
 ```
 bank00:85CE  B1 04   LDA (4),Y      ; 记录指针 (zp $04:$05) 顺序取字段
@@ -22,7 +22,7 @@ bank00:85E2  9D 41 01 STA $141,X    ; 字段4 → $0141+X
 bank00:85E5  C8      INY
 bank00:85E6  B1 04   LDA (4),Y
 bank00:85E8  29 07   AND #7
-bank00:85EA  85 07   STA $07        ; 字段5=标志（低3位）
+bank00:85EA  85 07   STA 7          ; 字段5=标志（低3位）（seed 原文记法；行文 $07=零页规范化）
 ```
 
 前置：`bank00:85CA LDX $13`（X=记录列偏移，帧内 8 记录/帧（enemy-final-bridge.md L30 A 级：
