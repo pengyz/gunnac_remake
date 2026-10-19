@@ -110,6 +110,9 @@ probe loader 三修（83bcae4）/上传触发语义（8c79e4c）/per-flag 事件
    > 原表述留档不删。复现命令见 §1 K1 更正注。
 2. **trace/ROM 对账差**：$0160 v=1（trace BBBD 族）vs v=2 完成型（ROM 语义）——挂账
    "证后切 v=2 判定"（#101 段A 显式挂账）。
+   > 【2026-10-20 更正】"trace BBBD 族"为 **pc 归属误读**：BBBD 非写点，实为 `bank3:BBBA LDA $160`
+   > 读的**后取指 PC**（读点）；写点=其后的 `BBBF STA $0160`（见 l5-0160-batch-semantics.md §1/§3）。
+   > 挂账本身（v=1 vs v=2 对账差）不变；原文保留不删。
 3. **族映射缺**：tile_page 三族一般规则待证（FAMROW=1 逃生口显式标名，#103 段B）。
 4. **3B 表语义残余**：$BEFB 窗真表结构已修（F-A103），动态基 $7A:$7B 重推挂账。
 5. **stg02-start 902 回归**：fallback 修不适用域（394996e 签署终判 NOT READY 三件的后续——

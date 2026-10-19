@@ -277,3 +277,8 @@ ScriptTimeout=1、AllowIoOsAccess=true），符合"用完恢复 speed=100/timeou
   EED4 r v=0×40 行；§5 gs5-anchor-render 占位回填。
 - 风险登记：probeN 上限 3M，双流后 gameplay 已 1.95M/3M——后续采集需提上限或分窗。
 - 文档 219 行不裁剪（含重采统计=证据）。
+
+> 【2026-10-20 更正】`tools/scenario_capture.lua` probeN 上限已由 3,000,000 提为 **10,000,000**
+> （probeLog 首行 `if probeN > 10000000 then return end`）：双流（w+r）注册后事件量翻倍，
+> gameplay-stage1 已 1.95M/3M 逼近静默截断点，长场景（如 tas-stg08b2 40,000f 重采）必触顶——
+> 取"改上限常量"这一简者而非分段落盘；上文"probe 上限未动/风险登记 3M"两条为历史口径，不再适用。

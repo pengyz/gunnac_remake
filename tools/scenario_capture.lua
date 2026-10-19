@@ -160,7 +160,7 @@ if PLAN.probe_mem and #PLAN.probe_mem > 0 then
   local probeF = io.open(probePath, "w")
   local probeN = 0
   local function probeLog(addr, val, op)
-    if probeN > 3000000 then return end
+    if probeN > 10000000 then return end
     probeN = probeN + 1
     local ok, st = pcall(emu.getState)
     -- 2026-10-14 修复：Mesen2 getState 为扁平键（st["cpu.pc"]），旧代码读 st.cpu.pc 恒得 "????"；
