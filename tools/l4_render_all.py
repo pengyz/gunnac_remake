@@ -90,11 +90,11 @@ PAIR_SPEC: list[dict] = [
      "expected_file": "l4_ending-3.png",
      "status": STATUS_BLOCKED, "reuse": "reuse", "duplicate_of": ""},
     {"name": "l4_ending-4", "scene": "tas-stg08b2-direct", "frame": 34500,
-     "capture_tag": "l4f34500", "trigger": "assisted",
+     "capture_tag": "probe", "trigger": "assisted",
      "expected_file": "l4_ending-4.png",
      "status": STATUS_DUPLICATE, "reuse": "reuse", "duplicate_of": "l4_ending-5"},
     {"name": "l4_ending-5", "scene": "tas-stg08b2-direct", "frame": 36000,
-     "capture_tag": "l4f36000", "trigger": "assisted",
+     "capture_tag": "probe", "trigger": "assisted",
      "expected_file": "l4_ending-5.png",
      "status": STATUS_DUPLICATE, "reuse": "reuse", "duplicate_of": ""},
     {"name": "l4_fade-clear", "scene": "", "frame": 28500,
@@ -109,39 +109,44 @@ PAIR_SPEC: list[dict] = [
      "capture_tag": "probe", "trigger": "injected",
      "expected_file": "l4_shop-window.png",
      "status": STATUS_OK, "reuse": "independent", "duplicate_of": ""},
-    {"name": "l4_stg02-start", "scene": "stg03-timeline", "frame": 3404,
+    # task-166 / task-165 §1 #8：Option B（Lead 裁定）——pair 重指向 gs5-anchor-render:3450（render-ready overlay；2026-10-19 Lead 单点收口），
+    # expected 由 task-165 安装为 44e7800d…（1411B，真实"地区-2"开始屏；安装后由 expected 文件 sha 动态取）。
+    # 注：g_run1 现成 actual 仍是旧 pair（stg03-timeline:3404）渲染产物；Option B 重渲不在本卡范围。
+    {"name": "l4_stg02-start", "scene": "gs5-anchor-render", "frame": 3450,
      "capture_tag": "stg02-start", "trigger": "injected",
      "expected_file": "l4_stg02-start.png",
-     "status": STATUS_REPLACED, "reuse": "reuse",
-     "duplicate_of": "title-menu_f00180_boot-black"},
+     "status": STATUS_OK, "reuse": "independent", "duplicate_of": "",
+     "note": "Option B（Lead 裁定 task-166）：pair=gs5-anchor-render:3450；expected=44e7800d…（task-165 安装）；actual 仍为旧 pair 渲染产物，重渲待后续"},
     {"name": "l4_stg03-start", "scene": "stg03-timeline", "frame": 5700,
      "capture_tag": "stg03-start-approx", "trigger": "injected",
      "expected_file": "l4_stg03-start.png",
      "status": STATUS_OK, "reuse": "independent", "duplicate_of": ""},
+    # 四联 #16/#19/#20/#21：task-165 §1 #10/#13/#14/#15 —— bytes 不重写、登记来源；
+    # trigger 由 natural 更正为 injected（stg08-timeline 含 poke $26/$0400）；主帧 ok + 3 documented-duplicate。
     {"name": "l4_stg06-late", "scene": "stg08-timeline", "frame": 22000,
-     "capture_tag": "l4f22000", "trigger": "natural",
+     "capture_tag": "stg06-late", "trigger": "injected",
      "expected_file": "l4_stg06-late.png",
-     "status": STATUS_REPLACED, "reuse": "reuse", "duplicate_of": ""},
+     "status": STATUS_OK, "reuse": "independent", "duplicate_of": ""},
     {"name": "l4_stg07-combat", "scene": "stg08-timeline", "frame": 16000,
-     "capture_tag": "stg07-combat", "trigger": "natural",
+     "capture_tag": "stg07-combat", "trigger": "injected",
      "expected_file": "l4_stg07-combat.png",
      "status": STATUS_OK, "reuse": "independent", "duplicate_of": ""},
     {"name": "l4_stg07-start", "scene": "stg08-timeline", "frame": 14600,
-     "capture_tag": "stg07-start-approx", "trigger": "natural",
+     "capture_tag": "stg07-start-approx", "trigger": "injected",
      "expected_file": "l4_stg07-start.png",
      "status": STATUS_OK, "reuse": "independent", "duplicate_of": ""},
     {"name": "l4_stg08-combat", "scene": "stg08-timeline", "frame": 18000,
-     "capture_tag": "l4f18000", "trigger": "natural",
+     "capture_tag": "stg08-combat", "trigger": "injected",
      "expected_file": "l4_stg08-combat.png",
-     "status": STATUS_REPLACED, "reuse": "reuse", "duplicate_of": "l4_stg06-late"},
+     "status": STATUS_DUPLICATE, "reuse": "reuse", "duplicate_of": "l4_stg06-late"},
     {"name": "l4_stg08-late", "scene": "stg08-timeline", "frame": 28000,
-     "capture_tag": "l4f28000", "trigger": "natural",
+     "capture_tag": "stg08-late", "trigger": "injected",
      "expected_file": "l4_stg08-late.png",
-     "status": STATUS_REPLACED, "reuse": "reuse", "duplicate_of": "l4_stg06-late"},
+     "status": STATUS_DUPLICATE, "reuse": "reuse", "duplicate_of": "l4_stg06-late"},
     {"name": "l4_stg08-start", "scene": "stg08-timeline", "frame": 16600,
-     "capture_tag": "l4f16600", "trigger": "natural",
+     "capture_tag": "stg08-start-approx", "trigger": "injected",
      "expected_file": "l4_stg08-start.png",
-     "status": STATUS_REPLACED, "reuse": "reuse", "duplicate_of": "l4_stg06-late"},
+     "status": STATUS_DUPLICATE, "reuse": "reuse", "duplicate_of": "l4_stg06-late"},
     {"name": "title-menu_f00180_boot-black", "scene": "title-menu", "frame": 180,
      "capture_tag": "boot-black", "trigger": "natural",
      "expected_file": "title-menu_f00180_boot-black.png",
@@ -183,15 +188,44 @@ def spec_issues(spec: list[dict] | None = None) -> list[str]:
             issues.append(f"{name}: duplicate_of 指向不存在的 {r['duplicate_of']}")
         if r.get("duplicate_of") == name:
             issues.append(f"{name}: duplicate_of 不能指向自身")
-    # status 计数口径（task-155：4 blocked / 5 replaced / 2 documented duplicate）
+    # status 计数口径（task-166 安装后：4 blocked / 0 replaced / 5 documented-duplicate（ending2+四联3）/ 13 ok）
     counts = {s: sum(1 for r in rows if r.get("status") == s) for s in
               (STATUS_OK, STATUS_BLOCKED, STATUS_REPLACED, STATUS_DUPLICATE)}
     if counts[STATUS_BLOCKED] != 4:
         issues.append(f"blocked:no-source 应=4，实际 {counts[STATUS_BLOCKED]}")
-    if counts[STATUS_REPLACED] != 5:
-        issues.append(f"replaced-invalid-asset 应=5，实际 {counts[STATUS_REPLACED]}")
-    if counts[STATUS_DUPLICATE] != 2:
-        issues.append(f"documented-duplicate 应=2（ending-4/5），实际 {counts[STATUS_DUPLICATE]}")
+    if counts[STATUS_REPLACED] != 0:
+        issues.append(f"replaced-invalid-asset 应=0（task-165 安装后全部登记），实际 {counts[STATUS_REPLACED]}")
+    if counts[STATUS_DUPLICATE] != 5:
+        issues.append(f"documented-duplicate 应=5（ending-4/5 + 四联非主帧 3），实际 {counts[STATUS_DUPLICATE]}")
+    if counts[STATUS_OK] != 13:
+        issues.append(f"ok 应=13，实际 {counts[STATUS_OK]}")
+    # task-166 关键来源/tag/trigger 抽检（防再次手改漂移）
+    by = {r.get("name"): r for r in rows}
+    checks = [
+        ("l4_stg02-start", "scene", "gs5-anchor-render"),
+        ("l4_stg02-start", "frame", 3450),
+        ("l4_stg02-start", "capture_tag", "stg02-start"),
+        ("l4_stg02-start", "trigger", "injected"),
+        ("l4_stg02-start", "reuse", "independent"),
+        ("l4_stg02-start", "duplicate_of", ""),
+        ("l4_stg06-late", "capture_tag", "stg06-late"),
+        ("l4_stg06-late", "trigger", "injected"),
+        ("l4_stg06-late", "status", STATUS_OK),
+        ("l4_stg08-combat", "capture_tag", "stg08-combat"),
+        ("l4_stg08-late", "capture_tag", "stg08-late"),
+        ("l4_stg08-start", "capture_tag", "stg08-start-approx"),
+        ("l4_stg07-combat", "capture_tag", "stg07-combat"),
+        ("l4_stg07-start", "capture_tag", "stg07-start-approx"),
+        ("l4_ending-4", "capture_tag", "probe"),
+        ("l4_ending-5", "capture_tag", "probe"),
+    ]
+    for name, key, want in checks:
+        got = (by.get(name) or {}).get(key)
+        if got != want:
+            issues.append(f"{name}.{key} 应={want!r}（task-166），实际 {got!r}")
+    for name in ("l4_stg08-combat", "l4_stg08-late", "l4_stg08-start"):
+        if (by.get(name) or {}).get("duplicate_of") != "l4_stg06-late":
+            issues.append(f"{name}.duplicate_of 应=l4_stg06-late（task-166）")
     return issues
 
 
@@ -288,12 +322,11 @@ def build_manifest(render_dir: pathlib.Path, expected_dir: pathlib.Path,
             "reuse": spec["reuse"],
             "duplicate_of": spec["duplicate_of"],
             "deterministic": deterministic,
-            "notes": ("no-source（dense 全扫零命中，见 p0-0-recapture-gui-run §5.2）"
-                      if spec["status"] == STATUS_BLOCKED else
-                      ("expected-invalid 待 §7.2 重采（expected_sha256=旧件 sha，A 级证据）"
-                       if spec["status"] == STATUS_REPLACED else
-                       ("expected/actual 两侧同图，已登记 documented_duplicates"
-                        if spec["status"] == STATUS_DUPLICATE else ""))),
+            "notes": spec.get("note") or (
+                "no-source（dense 全扫零命中，见 p0-0-recapture-gui-run §5.2）"
+                if spec["status"] == STATUS_BLOCKED else
+                ("expected/actual 两侧同图，已登记 documented_duplicates"
+                 if spec["status"] == STATUS_DUPLICATE else "")),
         })
         if blocked:
             if exp_sha or a1 or deterministic:
@@ -367,8 +400,8 @@ def build_manifest(render_dir: pathlib.Path, expected_dir: pathlib.Path,
         "registry_ok": dedupe.get("registry_ok", False),
         "two_run_ok": summary["two_run_deterministic"] == summary["rendered"],
         "counts_ok": (summary["rendered"] == 18 and summary["blocked_no_source"] == 4
-                      and summary["replaced_invalid_asset"] == 5
-                      and summary["documented_duplicate"] == 2),
+                      and summary["replaced_invalid_asset"] == 0
+                      and summary["documented_duplicate"] == 5),
     }
     manifest["validation"]["ok"] = (not issues and dedupe_ok and manifest["validation"]["registry_ok"]
                                     and manifest["validation"]["two_run_ok"]
@@ -490,6 +523,8 @@ def validate_manifest(manifest: dict) -> list[str]:
             issues.append(f"{name}: status 非法 {p['status']!r}")
         if p["reuse"] not in ALLOWED_REUSE:
             issues.append(f"{name}: reuse 非法 {p['reuse']!r}")
+        if p["trigger"] not in ALLOWED_TRIGGER:
+            issues.append(f"{name}: trigger 非法 {p['trigger']!r}")
         if p["status"] == STATUS_BLOCKED:
             if p["expected_sha256"] or p["actual_sha256"] or p["deterministic"]:
                 issues.append(f"{name}: blocked 行应 expected/actual 空、deterministic=false")
