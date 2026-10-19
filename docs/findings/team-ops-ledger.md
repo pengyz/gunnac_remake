@@ -65,7 +65,7 @@
   此后不再向其派单（团队 100% mimo 执行不变）。
 - 交付要点：#14 expected 安装（788d6984→44e7800d，旧件归档）、pair 重指向 gs5-anchor-render:3450、
   manifest/mapping 重生成（--validate 声称 PASS/registry_ok=True）、f3450 两跑确定性、
-  0 容差 diff=2076px；task-170 工作区 17/17 重建（三大户 text sha 前后全同、2 对重渲逐字节同）。
+  0 容差 diff=2352px（AR171-1 更正：2076 为旧 expected `788d` 历史值）；task-170 工作区 17/17 重建（三大户 text sha 前后全同、2 对重渲逐字节同）。
 - 派单：task-171 合并独立复核 → decomp-auditor（mimo）四项重导（两跑 sha/0 容差 diff 复算/
   --validate 复算/工作区自证）；pass 后 Lead 分组 commit+push。
 - 429：未发生。
