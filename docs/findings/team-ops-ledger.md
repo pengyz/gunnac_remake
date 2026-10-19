@@ -57,3 +57,15 @@
   → decomp-auditor（mimo）。此后团队工作 100% 由 mimo 模型承担。
 - 中断残留现场已交接：rom 链接完成、phase-batch 后台进程存活（由 platform-porter 收编）。
 - 429：未发生。
+
+
+## 【2026-10-20 00:05】#14 安装+工作区重建交付验收（执行方=退役成员，验收转 mimo 复核）
+- 事实披露：task-165 安装 + task-170 重建最终由**已退役的 flash 成员 l4-analyst** 抢跑交付
+  （中断后其 turn 续跑完成）。按纪律**成果验收以证据+独立复核为准**，与执行方模型无关；
+  此后不再向其派单（团队 100% mimo 执行不变）。
+- 交付要点：#14 expected 安装（788d6984→44e7800d，旧件归档）、pair 重指向 gs5-anchor-render:3450、
+  manifest/mapping 重生成（--validate 声称 PASS/registry_ok=True）、f3450 两跑确定性、
+  0 容差 diff=2076px；task-170 工作区 17/17 重建（三大户 text sha 前后全同、2 对重渲逐字节同）。
+- 派单：task-171 合并独立复核 → decomp-auditor（mimo）四项重导（两跑 sha/0 容差 diff 复算/
+  --validate 复算/工作区自证）；pass 后 Lead 分组 commit+push。
+- 429：未发生。
