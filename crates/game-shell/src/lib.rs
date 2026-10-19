@@ -32,8 +32,9 @@ pub mod snapshot;
 
 pub use audio::AudioPipe;
 pub use enemy_coords::{
-    init_proven_coords, has_proven_coords, ENEMY_FAIL_CLOSED_COORDS, ENEMY_LEADER_POSITION,
-    ENEMY_LEADER_TYPE,
+    enemy_2b_target, has_proven_coords, has_proven_motion, reset_for_spawn, step_proven_coords,
+    ENEMY_4E_SPAWN_TABLE, ENEMY_LEADER_POSITION, ENEMY_LEADER_TYPE, ENEMY_MEMBER_2B,
+    ENEMY_MEMBER_4E, ENEMY_RENDER_TYPES,
 };
 pub use fire::{
     BulletView, EnemyHitEvent, MAX_ACTIVE_TYPES, PLAYER_SLOT_ORDER, SHOT_TIMER_RELOAD,

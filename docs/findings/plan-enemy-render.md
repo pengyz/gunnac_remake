@@ -1,8 +1,9 @@
 # 敌槽可见化：已证坐标列渲染 + 命中事件呈现（plan-enemy-render）
 
-> 任务卡：task-45（前置 task-38 敌坐标取证 / task-37 弹丸·命中接线，均已复核 pass）。
-> 状态：**实施完成**；task-111 复核 needs_revision 的 **F1 已按方案 (b) 显式登记收窄**（task-118：
-> 只承诺 `$2F` 坐标列；spec §4.2 步骤 2/6 类型集合相等断言未实现、差异登记），待复核点验。
+> 任务卡：task-45（前置 task-38 敌坐标取证 / task-37 弹丸·命中接线，均复核 pass）+
+> **task-164（C3 实现：`$2B` 全接线 + `$4E` 初始位置 + §4.2 正式对拍；前置
+> [enemy-coords-c3-audit.md](enemy-coords-c3-audit.md) task-157/161/162/163 pass）**。
+> 状态：**实施完成**（task-45 C2 → task-118 F1 收窄登记 → **task-164 C3 扩容**），待复核点验。
 > 按卡要求**不 git add/commit**（改动留工作树）。
 > 纪律依据：AGENTS.md §3（未证不发明）+
 > [enemy-coords-impl-spec.md](enemy-coords-impl-spec.md)（task-71/75/77/79 复核 pass，C1-C5 拆分）。
@@ -11,12 +12,12 @@
 
 | # | 项 | v1 落地 |
 |---|---|---|
-| 1 | 可渲染已证坐标列 | **仅 `$2F` leader 的 x/y 双列**：trace 全采样恒 `(128,8)`（A 观测）+ handler `bank02:$899B` 字面量写值（A：`$89D5 A9 80`→`$89D7 9D E0 04` `STA $04E0,X`；`$89DA A9 08`→`$89DC 9D FC 04` `STA $04FC,X`） |
-| 2 | fail-closed（position=None） | `$2B`/`$4E` 成员型（handler init x/y 与速度对写值未逐值审计）、`$12/$1A/$1C/$2A`（**无坐标写者证据**：wave/EN 生成源未解码 W32；oracle trace 实见 154/207/46/34 样本）、低槽 `$05/$07` |
-| 3 | 渲染 | 敌槽 `position=Some` ⇒ **4×4 纯色占位块**（尺寸/图样/颜色未证 ⇒ `TODO(shell-v2)`，不发明精灵视觉） |
+| 1 | 可渲染已证坐标列 | **V1_TYPES={$2F,$2B,$4E}（task-164/C3）**：`$2F` 恒 `(128,8)`（字面量 A）；`$2B` init（y=8/vy pair/x=param 或 `$18/$E8` 按 `$2D` 奇偶）+ tick（`$5F8` 目标 ±#$20 + 积分）全接线；`$4E` **仅初始位置**（`$C8A7[16]`→脚本 `[x,y]` + dir 翻转） |
+| 2 | fail-closed（position=None） | `$4E` **运动**（`$C64D` 脚本命令集/时序未解 C，`TODO(c3-vm)`）；`$12/$1A/$1C/$2A`（**无坐标写者证据**：wave/EN 生成源未解码 W32；oracle trace 实见 154/207/46/34 样本）、低槽 `$05/$07`、ctrl1 家族 |
+| 3 | 渲染 | V1 型 `position=Some` ⇒ **4×4 纯色占位块**（尺寸/图样/颜色未证 ⇒ `TODO(shell-v2)`，不发明精灵视觉） |
 | 4 | 命中事件呈现 | `hits_this_frame`（task-37 事件面）保持暴露/入摘要；**闪烁/消失视觉未证**（`$D616` 死亡/回收门未证、HP0 不回收敌槽）⇒ **不改敌像素、不发明命中特效** |
-| 5 | oracle 对拍 | 共同 (帧,型) 采样点 **N=28（≥20，已钉死 `assert_eq!(total,28)`）**、≤1px 达成率 **28/28=100%（≥90%）**；$2F 已证坐标暴露 318 槽帧；两次 replay 全等 |
-| 6 | selftest | `--selftest-frames 300` ×2 逐行一致；**四签名不变**（selftest 无关卡装载⇒无 spawn，理由见 §5） |
+| 5 | oracle 对拍（C3 正式） | **N=199（≥20；98+96+5 冻结）**：x ≤1px **199/199=100%**、y 0 容差 **199/199=100%**；`$2B` 配对 12 spawn 段（含 **reuse 段 7-12**）；两次 replay 全等 |
+| 6 | selftest | `--selftest-frames 300` ×2 逐行一致；**四签名不变**（selftest 无关卡装载⇒无 spawn，理由见 §5/§9.4） |
 
 ## 1. 证据映射（哪些列能画、为什么）
 
@@ -111,19 +112,24 @@ cargo test -p game-shell --test enemy_coords_replay -- --nocapture
 
 ## 7. 未证 / fail-closed 清单（与 spec §5 一致）
 
-1. `$2B/$4E` 成员型坐标（handler init x/y + 速度对写值/节奏未逐值审计）⇒ **不画**（position=None）。
+1. **`$4E` 运动**（`$C64D` 脚本命令集/时序/param 域未全解，C）⇒ 仅初始位置可见、**不积分**
+   （`TODO(c3-vm)`；对拍运动列不入分母）。
 2. `$12/$1A/$1C/$2A` + 低槽 `$05/$07` 生成源未解码（W32）⇒ 不 spawn/不画。
 3. ctrl1 家族（`$2E`+`$40-$50`）trace 零实例 ⇒ 不接。
 4. 敌精灵图样/尺寸/调色板/优先级、命中闪烁/消失、受击动画 ⇒ 未证，占位块/不画（`TODO(shell-v2)`）。
 5. H-16 精确判定盒残项（W15/W15′/W18 等）不在本卡；命中链沿用 task-37/67/42 口径。
 6. 逐帧运动/trace 8f 采样间的插值 ⇒ 不对拍、不声称。
+7. **敌人死亡/释放语义未证**（`$D616` 门）⇒ game-shell 网格不释放（约 f1750 饱和）；
+   oracle 复用段 13-24 无 Rust 对应段（§9.3 不可对拍清单，fail-closed 边界）。
+8. `$2B` param=0 字面量 `$18/$E8` 的 `$2D` 全局奇偶（audit §7-4 B 级模型，首值 $E8）——
+   非逐值 ROM 级证据，已在对拍中体现（96/96 通过）。
 
 ## 8. 待办 / 需 Lead 裁定
 
 1. 独立对抗复核（Lead 派 shell-verifier）：重点核「只渲染已证列」、fail-closed 型 position None、
    对拍口径**收窄登记**（见 §4）、selftest 不变原因、命中视觉未发明。
-2. C3（`$2B/$4E` 坐标真值）需 raw 区 handler init/速度逐段审计（decomp-analyst 后续卡）；
-   本卡把其间坐标 fail-closed，不以占位/预测冒充。
+2. **C3 已实施（task-164，§9）**：`$2B` 全接线 + `$4E` 初始位置 + §4.2 正式对拍（N=199/199）。
+   剩余：`$4E` 运动（脚本 VM 解码卡，`TODO(c3-vm)`）、敌人释放语义（H-16 门，另一域）。
 3. 若 Lead 要求 selftest 覆盖敌槽：需另卡把 selftest 切换为"装载+replay"口径（会改变已记录四签名，
    须同步更新 spec §4.2 时点值链）——本卡按"不改既有签名语义"原则未做。
 4. **【task-118 F1/Info 收口记录（2026-10-18）】** 按 task-111 复核 needs_revision 的方案 (b)：
@@ -138,6 +144,85 @@ cargo test -p game-shell --test enemy_coords_replay -- --nocapture
      154/207/46/34 样本）"；
    - **Info-5**：登记实现方式变更（spec C2 独立工具+JSONL 未采用，改 replay 内联测试；见 §4）。
    平台 `docs/spec/platform-shell.md` 的敌坐标可见化行同步收窄口径说明。
+
+### 9. C3 实现与 §4.2 正式对拍（task-164，2026-10-19 回填）
+
+#### 9.1 实现（`crates/game-shell/src/enemy_coords.rs` + `host.rs`）
+
+**`$2B` 全接线（audit §3 A）**
+
+| 面 | 实现 | 证据 |
+|---|---|---|
+| init x | `param=$0470`≠0 ⇒ x=param（`$C599`）；param=0 ⇒ `$18/$E8` 按 `$2D` 奇偶（`$90EE-$90F7`） | A（ROM 指令）+ B（`$2D` 全局奇偶模型，首值 `$E8` 与 trace 复用段 x=231≈232 相容） |
+| init y/vy | y=8（`$90CB`）；`$588=$90/$5A4=0`（`$90D0/$90BA`）⇒ 0.5625 px/f | A |
+| 目标 `$5F8` | 偶 x⇒`$80`；奇 x⇒`(x&$FE)`，`<$80`⇒`+$30` 否则 `−$2F`（`$90DA-$90E9`） | A 逐指令 |
+| tick | `$CD63` 每帧 vx ±`#$20` 向目标（`$9120`）→ 有符号定点积分（`$CD08` x / `$CCD3` y，高字节二补码符号分支）→ 相位 `$CD9D`（`$5C0+=#$30`，进位 `INC $5DC`，4 回卷） | A |
+| **reuse 重置（F1）** | 每次落地（`land_pair` 内部落地 ⇒ 槽型 0→非0 检测；leader 走 `StageEffects` 落地事件）**延迟一帧**（真实 handler init 在落地次帧由引擎 dispatch 先执行）后显式复位：y=8、vy pair、x/y 子像素（`$0470/$048C`）、相位（`$05DC/$05C0`）、目标；随后**立即积分 1 tick**（采样口径"首帧=init 后 1 tick"，y-subpix=0x90） | audit §3.4/§7-1（B：ROM init 未显式清子像素，但 trace 24/24 段以 subpix 0x90 起仿 0 mismatch ⇒ 显式复位是保真做法） |
+| leader `$0470` | `$2F` 的 `$0470`=成员 drip param（`drip_step` 消费）⇒ 复位**保留不清零**（单测守卫） | B（否则成员 param 丢失 → 全部 x=24，已由 diag 发现） |
+
+**`$4E` 仅初始位置（audit §4 A/B）**：`param&0x7F` → `$C8A7[16]` 偏移 → `$C8B7` 脚本首 `[x,y]`
+（表已从 ROM 静态解出，见 `ENEMY_4E_SPAWN_TABLE`）；dir=`param&0x80` 翻转 x（x=0&dir⇒`$FF`）；
+param 越界（idx>15）fail-closed（C 级参数域）。**运动不实现**（`$C64D` 命令集未解 C）→
+位置静态可见、`TODO(c3-vm)`。
+
+**渲染面（shell-win）**：V1 型 `position=Some` ⇒ 4×4 纯色占位（沿用 task-45/task-164 同一路径，
+`ENEMY_VISIBLE_PLACEHOLDER_RGBA`）；不发明图样/尺寸/颜色。
+
+#### 9.2 正式对拍（`crates/game-shell/tests/enemy_coords_replay.rs`）
+
+spec [enemy-coords-impl-spec.md](enemy-coords-impl-spec.md) §4.2 口径 + **spawn 分段对齐**（显式登记：
+"精确 spawn 帧不可比"——本实现无敌人释放⇒网格约 f1750 饱和、spawn 绝对帧与 oracle 不同；
+按 audit §3.4 GUI spawn 段表（A 证据，tracked）对齐，段内相对帧比较；含 **reuse 段 7-12**）。
+
+```
+cargo test -p game-shell --test enemy_coords_replay -- --nocapture
+C3 共同采样点 N=199；x≤1px=199/199 (100.0%)；y 0容差=199/199 (100.0%)；$2B 配对段=12（含 reuse 段 7-12）
+test result: ok. 2 passed; 0 failed; 0 ignored
+```
+
+| 项 | 值 | 阈值/口径 |
+|---|---|---|
+| `$2F` 采样帧 | **98**（恒 (128,8) 全等） | 冻结分母（`EXPECTED_2F_SAMPLES`） |
+| `$2B` 采样点 | **96**（y 0 容差 **96/96**、x ≤1px **96/96**） | 冻结分母；y 0 容差优先 |
+| `$2B` 配对 spawn 段 | **12**（GUI 段 1-12；**段 7-12=槽 8-13 复用段**） | 冻结（`EXPECTED_2B_MATCHED_SEGMENTS`） |
+| `$4E` 初始位置 | **5** 段 x 全等（16/240/232…表值；运动列不入分母） | 冻结 |
+| 总共同点 | **199**（≥20） | 分母先冻结 + `assert_eq!` 守卫 |
+| 不可对拍清单（不判 FAIL） | oracle 额外型 `$12/$1A/$1C/$2A`；GUI `$2B` 段 13-24、`$4E` 槽 #5+（无释放语义） | 显式打印（spec §4.2 步骤 2/6 的"未实现清单"语义） |
+
+**类型集合断言**：Rust 暴露坐标的型集合 == V1_TYPES；oracle 按 V1 过滤后相等（spec 步骤 2 已实现，
+task-118 F1 收窄登记由 task-164 正式对拍取代——但仍是"V1 三型可达部分"，非全集合）。
+
+#### 9.3 复用/边界（复核重点）
+
+- **leader 复用**：`$2F` 槽经 `alloc_c2c6` Recycle/Reassign 复用（如 slot27 f1438→2038→2221），
+  每次落地事件触发显式复位（position 恒 (128,8) 单测+对拍覆盖）。
+- **成员复用不可达**：Rust 无敌人释放（H-16 死亡门未证 fail-closed）⇒ 成员槽不被回收；
+  oracle GUI 复用段 13-24 无 Rust 对应段（§9.2 不可对拍清单）。**不发明释放语义**。
+- 网格饱和：20 槽约 f1750 满 ⇒ 之后成员 spawn 停止（engine `alloc_c304` 只找空槽）；
+  对拍分母只含双方均可见段（先冻结），不以此放宽阈值。
+
+#### 9.4 selftest 与签名（如实记录）
+
+`--selftest-frames 300` ×2：stdout 逐行一致、exit 0；**四签名不变**：
+`host=0x68547665bf1ab396` / `canvas=0x963ac9a776a57625` / `display=0xe99af5849b632fbd` /
+`view=0x15dbc2c7b0ba0a5d`。
+
+原因：selftest 用 `apply_event` 走已证边集、**不经转场装载**（`stage_loaded=false`）⇒ 无 spawn
+⇒ FrameView 敌槽坐标全 None、`Host::signature()` 也未含坐标模型状态（只哈希槽型值）。C3 确定性证据
+= replay 两次全等 + 对拍数字；**不声称** selftest 覆盖敌槽（口径同 §5）。
+
+#### 9.5 改动文件（本卡，未 commit）
+
+```
+crates/game-shell/src/enemy_coords.rs   （C3：V1 三型模型/$2B 全接线/$4E 初值表/reuse 复位/有符号积分/单测）
+crates/game-shell/src/host.rs           （pending/deferred 落地检测、enemy_coord_target、update 重写）
+crates/game-shell/src/lib.rs            （导出 C3 常量/函数）
+crates/game-shell/src/render.rs         （EnemySlotView.position 文档：V1 三型）
+crates/game-shell/tests/enemy_coords_replay.rs（§4.2 正式对拍 + spawn 段对齐 + 冻结分母）
+crates/shell-win/tests/smoke.rs         （V1 三型渲染/可见性断言）
+docs/findings/plan-enemy-render.md      （本节 + §0/§1/§7/§8）
+docs/spec/platform-shell.md             （§3.1/§4.1/§4.2/§4 未证/§8 回填）
+```
 
 ## 附录 A：复现命令与关键输出（交付时点工作树；2026-10-18 本机 Windows）
 

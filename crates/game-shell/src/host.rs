@@ -192,11 +192,23 @@ pub struct Host {
     hit_overflow: u16,
     enemy_hit_log: Vec<EnemyHitEvent>,
     shape_data_shapes: usize,
-    // ===== task-45：敌槽坐标可见化（只暴露已证坐标列）=====
-    /// 槽 8..=27 的已证坐标是否已初始化（仅 `enemy_coords::has_proven_coords` 的型；其余恒 false）。
+    // ===== task-45/164：敌槽坐标可见化（只暴露已证坐标列；C3 扩容）=====
+    /// 槽 8..=27 的已证坐标是否已初始化（`enemy_coords::has_proven_coords` 的型；其余恒 false）。
     enemy_coord_ready: [bool; 28],
     /// 坐标槽是否仍在上屏域（出屏=A 级运动判定；v1 仅停止暴露坐标，不发明回收语义）。
     enemy_coord_onscreen: [bool; 28],
+    /// `$2B` 每槽目标 `$5F8`（A 级 `$90DA-$90E9`；`ObjectSlot` 无该字段 ⇒ 宿主侧表）。
+    enemy_coord_target: [u8; 28],
+    /// 本帧 spawn 落地事件 `(slot,type,param)`——复用/重发的显式复位触发源（F1）。
+    enemy_coord_pending: Vec<(u8, u8, u8)>,
+    /// 成员型（`$2B/$4E`）落地后**延迟一帧**初始化：真实 handler init（`$90AB/$AE44`）在落地
+    /// 次帧由引擎 dispatch 执行（其副作用先发生），故坐标 init 同帧随后执行、再积分 1 tick
+    /// （采样口径"首帧=init 后 1 tick"，audit §3.4）。
+    enemy_coord_deferred: Vec<(u8, u8, u8)>,
+    /// 上帧各槽型值快照（成员型 0→非0 落地检测；leader 复用由落地事件覆盖）。
+    enemy_prev_member_types: [u8; 28],
+    /// `$2B` param=0 路径 `$2D` 奇偶模型（B 级；每次 param=0 init 翻转，见 `enemy_coords` 文档）。
+    enemy_param_zero_toggle: u8,
 }
 
 impl Host {
@@ -246,6 +258,11 @@ impl Host {
             shape_data_shapes: 0,
             enemy_coord_ready: [false; 28],
             enemy_coord_onscreen: [false; 28],
+            enemy_coord_target: [0; 28],
+            enemy_coord_pending: Vec::new(),
+            enemy_coord_deferred: Vec::new(),
+            enemy_prev_member_types: [0; 28],
+            enemy_param_zero_toggle: 0,
         }
     }
 
@@ -528,6 +545,11 @@ impl Host {
         self.shape_data_shapes = 0;
         self.enemy_coord_ready = [false; 28];
         self.enemy_coord_onscreen = [false; 28];
+        self.enemy_coord_target = [0; 28];
+        self.enemy_coord_pending.clear();
+        self.enemy_coord_deferred.clear();
+        self.enemy_prev_member_types = [0; 28];
+        self.enemy_param_zero_toggle = 0;
         true
     }
 
@@ -756,14 +778,24 @@ impl Host {
     /// 其余 item（Jump/SetType/Reg/Unknown）不落地=fail-closed（SetType 语义未接线）。
     ///
     /// 口径：落地发生在 `stage_tick` 返回后的同逻辑帧内（1 帧滴灌延迟已知偏差，见 crate 文档）。
+    /// task-164：落地成功即登记 `(slot,type,param)` 到 [`Host::enemy_coord_pending`]——**槽复用/
+    /// 重发**由此触发坐标显式复位（F1；仅落地事件可区分"同一槽同型再 spawn"，`scan_spawns`
+    /// 的 0→非0 判定看不到复用）。
     fn apply_stage_effects(&mut self, fx: &StageEffects) {
         for item in fx.spawn_events.iter().chain(fx.drip_events.iter()) {
             match *item {
                 SchedItem::Pair { type_, param } => {
-                    let _ = engine::land_pair(&mut self.stage_state.grid, type_, param);
+                    if let Some(slot) = engine::land_pair(&mut self.stage_state.grid, type_, param) {
+                        self.enemy_coord_pending.push((slot, type_, param));
+                    }
                 }
                 SchedItem::Spawn { type_, args, .. } => {
-                    let _ = engine::land_leader(&mut self.stage_state.grid, type_, args, None);
+                    if let Some(land) =
+                        engine::land_leader(&mut self.stage_state.grid, type_, args, None)
+                    {
+                        // args[3]=$0470（leader 参数；$2F 忽略、$2B 成员由 leader drip 走 Pair）
+                        self.enemy_coord_pending.push((land.slot, type_, args[3]));
+                    }
                 }
                 _ => {} // fail-closed：不发明未接线 item 的落地语义
             }
@@ -781,32 +813,137 @@ impl Host {
         }
     }
 
-    /// 敌槽坐标可见化（task-45）：**只对已证坐标列**初始化/步进（v1 仅 `$2F` leader，x/y 双列）。
+    /// 敌槽坐标可见化（task-45/164）：**只对已证坐标列**初始化/步进（`V1_TYPES={$2F,$2B,$4E}`）。
     ///
-    /// - 新激活的 `$2F` 槽：置 trace 已证恒定坐标 `(128,8)` + 速度四元组 0（静止）；
-    /// - 已初始化槽：跑已证 `motion_update`（速度=0 ⇒ 位置不变）；出屏 ⇒ 停止暴露坐标；
-    /// - `$2B`/`$4E` 成员型（坐标写者未审计）与其他未接型：**不初始化、不暴露坐标**（fail-closed），
-    ///   `FrameView.enemy_slots[].position` 保持 `None`，不得用 type_code 反推/预测位置。
+    /// 顺序（每逻辑帧，spawn 落地之后）：
+    /// 1. **成员延迟 init**：`$2B/$4E` 由 `engine::drip_step` 内部 `land_pair` 落地（不产生
+    ///    `StageEffects` 事件）⇒ 本卡用槽型值 0→非0 检测，**下一帧** init（真实 handler init
+    ///    `$90AB/$AE44` 在落地次帧由引擎 dispatch 先执行，本层复位随后；采样口径"首帧=init 后
+    ///    1 tick（y-subpix=0x90）"）。
+    /// 2. **leader 落地复位**：`$2F` 经 `StageEffects` 落地事件立即 init（无引擎 init 副作用）。
+    /// 3. **已初始化槽步进**：`$2F` 静止、`$2B` 全接线（`$CD63` 目标趋近 + `$CD08/$CCD3` 积分）、
+    ///    `$4E` 静态初始位置（运动 fail-closed，`TODO(c3-vm)`）；出屏 ⇒ 停止暴露坐标（不发明回收）。
+    /// 4. **兜底**：无落地事件但型已可见时，仅 `$2F` 按 A 级字面量初始化；其余型不猜坐标。
     ///
-    /// 槽复用（型值变化/清 0）⇒ 重置该槽坐标可见状态（不沿用旧坐标）。
+    /// 槽清 0 / 型变化 ⇒ 重置该槽可见状态（不沿用旧坐标）。**禁止** type_code 反推/预测坐标。
     fn update_enemy_coords(&mut self) {
-        for slot in 8..28usize {
-            let type_ = self.stage_state.grid.slots[slot].type_;
-            let proven = enemy_coords::has_proven_coords(type_);
-            if !proven {
+        let mut stepped = [false; 28];
+        // ① 上一帧成员落地的延迟 init（引擎 init dispatch 副作用已在本帧 stage_tick 先发生）。
+        let deferred = core::mem::take(&mut self.enemy_coord_deferred);
+        for (slot_u8, type_, param) in deferred {
+            let slot = slot_u8 as usize;
+            stepped[slot] = true;
+            if self.stage_state.grid.slots[slot].type_ != type_ {
                 self.enemy_coord_ready[slot] = false;
                 self.enemy_coord_onscreen[slot] = false;
                 continue;
             }
-            if !self.enemy_coord_ready[slot] {
-                if enemy_coords::init_proven_coords(&mut self.stage_state.grid.slots[slot]) {
+            let target = enemy_coords::reset_for_spawn(
+                &mut self.stage_state.grid.slots[slot],
+                type_,
+                param,
+                &mut self.enemy_param_zero_toggle,
+            );
+            match target {
+                Some(target) => {
+                    self.enemy_coord_target[slot] = target;
                     self.enemy_coord_ready[slot] = true;
-                    self.enemy_coord_onscreen[slot] = true;
+                    let onscreen = enemy_coords::step_proven_coords(
+                        &mut self.stage_state.grid.slots[slot],
+                        type_,
+                        target,
+                    );
+                    self.enemy_coord_onscreen[slot] = onscreen;
                 }
-            } else if self.enemy_coord_onscreen[slot] {
-                if !enemy_coords::step_proven_coords(&mut self.stage_state.grid.slots[slot]) {
+                None => {
+                    self.enemy_coord_ready[slot] = false;
                     self.enemy_coord_onscreen[slot] = false;
                 }
+            }
+        }
+        // ② 本帧 `StageEffects` 落地（leader；立即 init+首 tick，无引擎 init 副作用）。
+        let pending = core::mem::take(&mut self.enemy_coord_pending);
+        for (slot_u8, type_, param) in pending {
+            let slot = slot_u8 as usize;
+            stepped[slot] = true;
+            if !enemy_coords::has_proven_coords(type_) {
+                self.enemy_coord_ready[slot] = false;
+                self.enemy_coord_onscreen[slot] = false;
+                continue;
+            }
+            let target = enemy_coords::reset_for_spawn(
+                &mut self.stage_state.grid.slots[slot],
+                type_,
+                param,
+                &mut self.enemy_param_zero_toggle,
+            );
+            match target {
+                Some(target) => {
+                    self.enemy_coord_target[slot] = target;
+                    self.enemy_coord_ready[slot] = true;
+                    let onscreen = enemy_coords::step_proven_coords(
+                        &mut self.stage_state.grid.slots[slot],
+                        type_,
+                        target,
+                    );
+                    self.enemy_coord_onscreen[slot] = onscreen;
+                }
+                None => {
+                    self.enemy_coord_ready[slot] = false;
+                    self.enemy_coord_onscreen[slot] = false;
+                }
+            }
+        }
+        // ③ 成员落地检测（0→非0；`$2B/$4E` 只登记延迟 init，不本帧猜坐标）。
+        for slot in 8..28usize {
+            let type_ = self.stage_state.grid.slots[slot].type_;
+            if self.enemy_prev_member_types[slot] == 0
+                && type_ != 0
+                && type_ != enemy_coords::ENEMY_LEADER_TYPE
+                && enemy_coords::has_proven_coords(type_)
+            {
+                let param = self.stage_state.grid.slots[slot].f470;
+                self.enemy_coord_deferred.push((slot as u8, type_, param));
+                self.enemy_coord_ready[slot] = false;
+                self.enemy_coord_onscreen[slot] = false;
+            }
+            self.enemy_prev_member_types[slot] = type_;
+        }
+        // ④ 已初始化槽步进（本帧 init 过的槽已含首 tick，跳过）。
+        for slot in 8..28usize {
+            let type_ = self.stage_state.grid.slots[slot].type_;
+            if !enemy_coords::has_proven_coords(type_) {
+                self.enemy_coord_ready[slot] = false;
+                self.enemy_coord_onscreen[slot] = false;
+                continue;
+            }
+            if stepped[slot] {
+                continue;
+            }
+            if !self.enemy_coord_ready[slot] {
+                if type_ == enemy_coords::ENEMY_LEADER_TYPE
+                    && enemy_coords::reset_for_spawn(
+                        &mut self.stage_state.grid.slots[slot],
+                        type_,
+                        0,
+                        &mut self.enemy_param_zero_toggle,
+                    )
+                    .is_some()
+                {
+                    self.enemy_coord_ready[slot] = true;
+                    self.enemy_coord_onscreen[slot] = true;
+                    self.enemy_coord_target[slot] = 0;
+                }
+                continue;
+            }
+            if self.enemy_coord_onscreen[slot] {
+                let target = self.enemy_coord_target[slot];
+                let onscreen = enemy_coords::step_proven_coords(
+                    &mut self.stage_state.grid.slots[slot],
+                    type_,
+                    target,
+                );
+                self.enemy_coord_onscreen[slot] = onscreen;
             }
         }
     }
@@ -1009,9 +1146,11 @@ impl Host {
             *view = EnemySlotView {
                 slot: slot as u8,
                 type_code: if s.type_ == 0 { None } else { Some(s.type_) },
-                // task-45：只暴露**已证坐标列**——v1 仅 `$2F` leader（trace 恒 (128,8)；
-                // x/y 双列可对拍，见 `tests/enemy_coords_replay.rs`）。`$2B`/`$4E` 成员型
-                // 坐标写者未审计 ⇒ None（不得把 None 当 (0,0)、不得 type_code 反推/预测位置）。
+                // task-45/164：只暴露**已证坐标列**——V1_TYPES={$2F,$2B,$4E}：
+                // `$2F` 恒 (128,8)；`$2B` 全接线（init+目标趋近积分，含 reuse 复位）；
+                // `$4E` 仅初始位置（运动 fail-closed）。其余型/未初始化/出屏 ⇒ None
+                // （不得把 None 当 (0,0)、不得 type_code 反推/预测位置）。
+                // 对拍口径见 `tests/enemy_coords_replay.rs`（y 0 容差优先）。
                 position: if self.enemy_coord_ready[slot] && self.enemy_coord_onscreen[slot] {
                     Some((s.x, s.y))
                 } else {

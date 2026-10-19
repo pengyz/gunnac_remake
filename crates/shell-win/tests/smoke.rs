@@ -576,8 +576,8 @@ fn menu_dispatch_progresses_modes_with_platform_input_only() {
     assert!(host.stage_loaded(), "转场帧 STG-01 已装载（A 级 f1193 锚）");
     assert_eq!(format!("{:?}", host.mode()), "Combat");
 
-    // 终态 FrameView：已证字段可用；敌槽只暴露**已证坐标列**（v1 仅 $2F leader）；
-    // 其余敌型 position=None（fail-closed）；Combat 后按住 B ⇒ 玩家弹出现。
+    // 终态 FrameView：已证字段可用；敌槽只暴露**已证坐标列**（C3=V1_TYPES {$2F,$2B,$4E}）；
+    // 非 V1 型/未初始化 position=None（fail-closed）；Combat 后按住 B ⇒ 玩家弹出现。
     let view = host.frame_view();
     assert_eq!(view.mode, Mode::Combat);
     assert_eq!(view.stage, 1);
@@ -593,12 +593,27 @@ fn menu_dispatch_progresses_modes_with_platform_input_only() {
         leader_positions.iter().all(|p| *p == (128, 8)),
         "$2F 已证坐标恒 (128,8)，实得 {leader_positions:?}"
     );
+    // C3：$2B（全接线）/ $4E（仅初始位置）也应出现已证坐标；$4E 初始 x ∈ {16,240,232,...表值}。
+    let member_positions: Vec<(u8, (u8, u8))> = view
+        .enemy_slots
+        .iter()
+        .filter(|s| matches!(s.type_code, Some(0x2B) | Some(0x4E)))
+        .filter_map(|s| s.position.map(|p| (s.type_code.unwrap(), p)))
+        .collect();
+    assert!(
+        member_positions.iter().any(|(t, _)| *t == 0x2B),
+        "C3：$2B 已证坐标应出现（全接线）"
+    );
+    assert!(
+        member_positions.iter().any(|(t, _)| *t == 0x4E),
+        "C3：$4E 初始位置应出现（运动 fail-closed）"
+    );
     assert!(
         view.enemy_slots
             .iter()
-            .filter(|s| s.type_code.is_some() && s.type_code != Some(0x2F))
+            .filter(|s| matches!(s.type_code, Some(t) if !matches!(t, 0x2F | 0x2B | 0x4E)))
             .all(|s| s.position.is_none()),
-        "非 $2F 敌型坐标写者未证⇒position 必须 None（fail-closed）"
+        "非 V1_TYPES 敌型坐标写者未接⇒position 必须 None（fail-closed）"
     );
     assert!(
         view.player_bullets.iter().flatten().count() > 0,
