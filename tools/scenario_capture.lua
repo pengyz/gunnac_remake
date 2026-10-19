@@ -142,12 +142,24 @@ end
 local traceF = assert(io.open(tracePath, "w"))
 local capF = assert(io.open(capPath, "w"))
 
--- W-NEW 行缓冲 NMI 级插桩（t94）：probe_mem 写点 PC 轨迹（观察性，不改行为）
+-- W-NEW 行缓冲 NMI 级插桩（t94）：probe_mem 访存 PC 轨迹（观察性，不改行为）
+-- 【2026-10-20 修复·probe 非变址存储写点盲区（l5-0160 G1）】旧实现
+-- `emu.addMemoryCallback(fn, "write", lo, hi)` 传**字符串**"write"：Mesen2 2.1.1 把它静默
+-- 转成整数 0 = emu.callbackType.read ⇒ 实际注册的是**读回调**（且兜底 `emu.memCallbackType`
+-- 在 2.1.1 根本不存在，恒落回同一个字符串）。后果：非变址存储（STA/STX abs/zp）写循环
+-- 永不触发（$0160 全部 ROM 写点零事件）；"变址写"事件实为存储指令的**假读**（dummy read，
+-- 如 STA $161,Y 假读落在未进位的 $0160）；RMW 只出读相位旧值。
+-- 诊断证据：analysis/tmp/probe_cb_diag.jsonl（str_write≡str_read≡enum_read≡num_0；
+-- callbackType 实测={read=0,write=1,exec=2}；enum_write 抓到 STA $7FE/$7FF/$E9/$180 直写族）。
+-- 现按实测枚举**双流注册**（写流=新增 setter/清零可见面，读流=保留读侧 1:1 对账口径），
+-- 事件行新增 "op":"r"/"w" 字段。**只改捕获面，不改输入/行为**。
+-- 注：Mesen2 2.1.1 Lua 无 addBreakPoint API（emu.addBreakPoint=nil），l5-0160 §6 G1 建议的
+-- "addBreakPoint 写断点"绕行法不可用 ⇒ 本修复是唯一可用补法（详见 probe-setter-blindspot-fix.md）。
 if PLAN.probe_mem and #PLAN.probe_mem > 0 then
   local probePath = PLAN.out_dir .. "/" .. name .. ".probe.jsonl"
   local probeF = io.open(probePath, "w")
   local probeN = 0
-  local function probeLog(addr, val)
+  local function probeLog(addr, val, op)
     if probeN > 3000000 then return end
     probeN = probeN + 1
     local ok, st = pcall(emu.getState)
@@ -159,21 +171,26 @@ if PLAN.probe_mem and #PLAN.probe_mem > 0 then
     local yr = cpu["cpu.y"] or -1
     local ar = cpu["cpu.a"] or -1
     local fc = (ok and st) and (st.frameCount or 0) or 0
-    probeF:write(string.format('{"f":%d,"pc":"%s","a":"%04X","v":%d,"x":%d,"y":%d,"ar":%d}\n', fc, pc, addr, val, xr, yr, ar))
+    probeF:write(string.format('{"f":%d,"pc":"%s","a":"%04X","v":%d,"x":%d,"y":%d,"ar":%d,"op":"%s"}\n',
+      fc, pc, addr, val, xr, yr, ar, op))
     if probeN % 512 == 0 then probeF:flush() end
   end
+  -- Mesen2 2.1.1 实测枚举 emu.callbackType={read=0,write=1,exec=2}；表缺失时用实测数值兜底。
+  -- **禁止**用字符串类型参数（"write" 会被静默当 read=0，即本次修的坑）。
+  local CB = emu.callbackType or {}
+  local WTYPE = CB.write or 1
+  local RTYPE = CB.read or 0
   for _, r in ipairs(PLAN.probe_mem) do
     local lo, hi = tonumber(r[1], 16), tonumber(r[2], 16)
-    local ok = pcall(emu.addMemoryCallback, function(address, value)
-      probeLog(address, value)
-    end, "write", lo, hi)
-    if not ok then
-      ok = pcall(emu.addMemoryCallback, function(address, value)
-        probeLog(address, value)
-      end, emu.memCallbackType and emu.memCallbackType.write or "write", lo, hi)
+    for _, s in ipairs({{"w", WTYPE}, {"r", RTYPE}}) do
+      local op, ctype = s[1], s[2]
+      local ok = pcall(emu.addMemoryCallback, function(address, value)
+        probeLog(address, value, op)
+      end, ctype, lo, hi)
+      probeF:write(string.format('{"probe":"%04X-%04X","op":"%s","ctype":%d,"cb":%s}\n',
+        lo, hi, op, ctype, tostring(ok)))
+      probeF:flush()
     end
-    probeF:write(string.format('{"probe":"%04X-%04X","cb":%s}\n', lo, hi, tostring(ok)))
-    probeF:flush()
   end
   emu.addEventCallback(function() probeF:flush() end, "endFrame")
 end
