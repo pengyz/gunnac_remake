@@ -1068,7 +1068,7 @@ fn main() {
     let mut attrs = [0u8; 8];
     let mut addr_regs = (0u8, 0u8, 0u8); // $8E/$8F/$90（t99：probe 写点追踪，解相位陷阱）
     let mut palette_src = [0u8; 7]; // $161-$167 调色板源（t99 ①）
-    let mut pending_row: Option<([u8; 32], [u8; 8], u8, u8, u8)> = None;
+    let mut pending_row: Option<([u8; 32], [u8; 8], u8, u8, u8, bool)> = None; // bool=模型几何（族①）
     let mut buf_fill = 0usize;
     let mut flag_fire = 0usize;
     let mut upload_write = 0usize;
@@ -1199,7 +1199,38 @@ fn main() {
         // t230 ①：条带上传（帧 N 填充→帧 N+1 NMI 落 nametable——持久化模型闭环）
         // 【互斥门】FLAGUPLOAD=1 时旧 pending_row 路关（zp 步进 64=双行对实锤——
         // per-flag 奇偶 half*32=真形；双路混杂=偶行带根因）
-        if std::env::var("FLAGUPLOAD").is_err() { if let Some((row, _attrs, lo, hi, _c)) = pending_row.take() {
+        if std::env::var("FLAGUPLOAD").is_err() { if let Some((row, attrs, lo, hi, c, model_geo)) = pending_row.take() {
+            if model_geo {
+                // 【族① A 级模型】nmi_flush 镜像（bank15:$F040-F0DA；game-core terrain.rs:307-339）：
+                // base=($8F:$8E)+$0F；4 组×8B 组间步进 $20；attr 行=(($8F|3):$90)+$0F 8B。
+                // 旧 32 连写形态（单行铺）与 A 级几何不符=族①（209,086px/74.63%）根因。
+                let base = (((hi as u16) << 8) | lo as u16).wrapping_add(0x0F);
+                for grp in 0..4u16 {
+                    for j in 0..8u16 {
+                        let raw = base.wrapping_add(grp * 0x20 + j);
+                        if (0x2000..0x3000).contains(&raw) {
+                            let rel = (raw - 0x2000) as usize;
+                            let (n, o) = (rel / 0x400, rel % 0x400);
+                            if n < 4 && o < 0x3C0 {
+                                nt.tiles[n][o] = row[(grp * 8 + j) as usize]; // ②0 码=擦写（t243）
+                                upload_write += 1;
+                            }
+                        }
+                    }
+                }
+                let attr_raw = ((((hi as u16) | 3) << 8) | (c as u16)).wrapping_add(0x0F);
+                if (0x2000..0x3000).contains(&attr_raw) {
+                    let arel = (attr_raw - 0x2000) as usize;
+                    let (an, aoff) = (arel / 0x400, arel % 0x400);
+                    if an < 4 && (0x3C0..0x400).contains(&aoff) {
+                        let idx = aoff - 0x3C0;
+                        if idx + 8 <= 64 {
+                            nt.attrs[an][idx..idx + 8].copy_from_slice(&attrs);
+                        }
+                    }
+                }
+            } else {
+            // legacy 32 连写（HUD LUT 路经验证据拟合形态；LEGACYROW A/B 对照亦走此路）
             let base_addr = ((hi as u16) << 8) | lo as u16;
             if (0x2000..0x3000).contains(&base_addr) {
                 let rel = (base_addr - 0x2000) as usize;
@@ -1219,6 +1250,7 @@ fn main() {
                         }
                     }
                 }
+            }
             }
         } }
         let zi = line.find("\"zp\":\"").unwrap();
@@ -1301,10 +1333,11 @@ fn main() {
                 let lut = [0x21C0u16, 0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380];
                 let idx = 7usize.saturating_sub(hud_row_seq / 2 % 8);
                 let base = lut[idx];
-                pending_row = Some((row, attrs, base as u8, (base >> 8) as u8, 0xC0));
+                pending_row = Some((row, attrs, base as u8, (base >> 8) as u8, 0xC0, false)); // HUD=LUT 路（legacy 几何）
                 hud_row_seq += 1;
             } else {
-                pending_row = Some((row, attrs, addr_regs.0, addr_regs.1, addr_regs.2));
+                pending_row = Some((row, attrs, addr_regs.0, addr_regs.1, addr_regs.2,
+                    std::env::var("MODELGEO").is_ok())); // 族① 模型几何（默认关：A/B 实验混合未胜出，见 p0-1-family-report）
             }
         }
         let _ = &zp_prev;
