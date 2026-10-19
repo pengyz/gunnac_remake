@@ -45,3 +45,15 @@
 - 理由：#14 pair Option B 需 render-ready trace（overlay）；工作区重建是 L4 迭代环前置；
   二者不冲突（采集面 vs 工作区）。
 - 纪律：两项均走"复核 pass → commit + push"收口。
+
+
+## 【2026-10-19 23:47】团队重组（用户裁定：使用当前模型 mimo）
+- 判定人：用户（"必须重新组建团队，使用当前模型"）；执行：Lead。
+- 事实核查：7/8 成员= mify/xiaomi/mimo-v2.6-pro；**l4-analyst 钉死 deepseek-flash**（创建期模型，
+  interrupt 后不释放）。工具硬约束：同名重建=「name already used」、新名=「limit 8 reached」
+  ⇒ 字面重建不可行（需 GUI/管理侧移除槽位后方可重编）。
+- 等效重组执行：**l4-analyst 退役停用**（不再派单）；其任务全量转 mimo 队友——
+  task-170 工作区重建 + task-165 overlay 采集链 → platform-porter（mimo）；证据面复核备份
+  → decomp-auditor（mimo）。此后团队工作 100% 由 mimo 模型承担。
+- 中断残留现场已交接：rom 链接完成、phase-batch 后台进程存活（由 platform-porter 收编）。
+- 429：未发生。
