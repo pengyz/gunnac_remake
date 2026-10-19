@@ -245,10 +245,10 @@ pub fn ensure_real_within(repo_root: &Path, p: &Path, flag: &str) -> Result<(), 
 /// 记录用 env 白名单（render_frame 显式 knobs；不含 REPO_ROOT=输入定位不属渲染参数）。
 pub const ENV_KNOBS: &[&str] = &[
     "BOTH", "COLOFF", "COMP", "DBGPROBE", "DBGSTREAM", "FAMMAP", "FAMROW", "FLAGUPLOAD",
-    "FLIPOFF", "FUSE", "FUSE2", "GOLDPAL", "GRPSEL", "LOOPABL", "NOHUDLUT", "NOOWF", "PALROW",
-    "PROJ2007", "QBASE", "QUAD", "R4B", "R4BOFF", "R4BREV", "RECP3", "RECPAL", "RENDER_NT",
-    "REVORD", "ROWDBL", "ROWGOLD", "ROWMAP", "ROWOFF", "ROWWIN", "SLOTEND", "SPRABL", "TBLDRV",
-    "TEXTABL", "TEXTFALLBACK", "TRIHOP", "WHITE13",
+    "FLIPOFF", "FUSE", "FUSE2", "GOLDPAL", "GRPSEL", "LOOPABL", "MODELGEO", "NOHUDLUT", "NOOWF",
+    "PALROW", "PROJ2007", "QBASE", "QUAD", "R4B", "R4BOFF", "R4BREV", "RECP3", "RECPAL",
+    "RENDER_NT", "REVORD", "ROWDBL", "ROWGOLD", "ROWMAP", "ROWOFF", "ROWWIN", "SLOTEND",
+    "SPRABL", "TBLDRV", "TEXTABL", "TEXTFALLBACK", "TRIHOP", "WHITE13",
 ];
 
 /// 显式设置的 env 摘要（`K=V` 按 K 排序；空⇒`{}`）。
@@ -513,6 +513,264 @@ static FAM_MAP: [[u8; 32]; 30] = [
 static ROW_GOLDEN: [usize; 30] = [
     0,1,2,3,4,5,6,7,8,9,10,11,12,13,13,13,13,17,18,19,20,20,20,23,24,25,26,27,28,28,
 ];
+
+// ===== 族①事件序回放（p0-1 第二迭代；三份定谳输入）=====
+// 语义映射（定谳→实现）：
+// - l5-t93-field-mapping.md（A）：32B 行缓冲=4 行×8 列 tile 块；记录 4 字段→(x,x+1,x+16,x+17)；
+//   上传几何=4 组×8B 步进 $20（geo 档镜像 nmi_flush）；
+// - l5-0160-batch-semantics.md（含 dated 更正）：`$0160`=**单 pending 槽位域 + NMI 消费点**
+//   （置位:消费=70:70:70 严格 1:1）；"帧末单快照"已撤回——帧内可多次 32B 填充，
+//   多置位并入单槽、NMI 一次消费；
+// - probe-setter-blindspot-fix.md：probe 双流修复后事件行含 `"op":"w"/"r"`（写事件已可见）。
+
+/// 行上传快照：(row[32], attrs[8], lo, hi, c, geo)——geo: 0=legacy 32 连写 / 1=模型 +$0F /
+/// 2=模型 LUT 精确行基（不加 $0F）（族①迭代2 变量①/①'）。
+pub type RowSnap = ([u8; 32], [u8; 8], u8, u8, u8, u8);
+
+/// 快照/放置上下文（env 派生；运行期不变）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SnapCtx {
+    /// 行提取窗偏移（ROWWIN，默认 0）。
+    pub rowwin: usize,
+    /// HUD LUT 回退放行（NOHUDLUT 未置位=true）。
+    pub hud_lut: bool,
+    /// 模型几何放行（MODELGEO 已置位=true）。
+    pub model_geo: bool,
+}
+
+/// 【族①事件序回放】行上传**单 pending 槽**（l5-0160 定谳：单槽挂起位域 + NMI 单点消费）。
+/// - 置位（`$0160` 写事件 op=w 且值非 0）时快照入槽；**多置位=覆盖单槽**（并入单槽，判定 6）；
+/// - NMI 消费点（帧边界 `consume`）上传槽内容并清空；**无置位帧槽空 ⇒ 不上传**（pending==0 无更新）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingSlot<T> {
+    slot: Option<T>,
+    /// 置位次数（多置位并入单槽仍计数）。
+    pub sets: usize,
+    /// NMI 消费次数（槽非空的消费）。
+    pub consumes: usize,
+}
+
+impl<T> Default for PendingSlot<T> {
+    fn default() -> Self {
+        Self { slot: None, sets: 0, consumes: 0 }
+    }
+}
+
+impl<T> PendingSlot<T> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// 置位：快照入槽（后置位覆盖先置位——单槽语义）。
+    pub fn set(&mut self, snap: T) {
+        self.slot = Some(snap);
+        self.sets += 1;
+    }
+    /// NMI 消费点：取走槽内容并清空；槽空 ⇒ None（该帧不上传）。
+    pub fn consume(&mut self) -> Option<T> {
+        let out = self.slot.take();
+        if out.is_some() {
+            self.consumes += 1;
+        }
+        out
+    }
+    pub fn is_pending(&self) -> bool {
+        self.slot.is_some()
+    }
+    /// 只读窥视（测试用：验证快照点=置位时刻）。
+    pub fn peek(&self) -> Option<&T> {
+        self.slot.as_ref()
+    }
+}
+
+/// probe 单事件处置（op 消歧——probe-setter-blindspot-fix §2 格式）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventAct {
+    /// `op=r` 读事件：**不改状态**（双流 probe 读流；旧实现曾把读流并入镜像填充）。
+    Read,
+    /// `op=w` 写事件 / 缺 op 旧 probe 事件：镜像进 buf/attrs/regs/pal。
+    Apply,
+    /// `$0160` 置位写（op=w 且 v≠0）：改状态 + **当刻快照入单槽**。
+    ApplySet,
+}
+
+/// 事件分类（纯函数，可单测）。
+/// - `op=Some(true)`（写）：镜像；`$0160` 且 v≠0 ⇒ 置位（ApplySet）；
+/// - `op=Some(false)`（读）：跳过；
+/// - `op=None`（旧 probe 无 op 字段）：按旧行为镜像（置位走帧末快照回退——`legacy_frame_wrote`）。
+pub fn classify_event(op: Option<bool>, a: u16, v: u8) -> EventAct {
+    match op {
+        Some(false) => EventAct::Read,
+        Some(true) => {
+            if a == 0x0160 && v != 0 {
+                EventAct::ApplySet
+            } else {
+                EventAct::Apply
+            }
+        }
+        None => EventAct::Apply,
+    }
+}
+
+/// 缺 op 旧 probe 事件是否触发「帧末单快照」回退（=旧 `wrote` 谓词限制到 op-less 事件）。
+/// 旧 probe（无 op 字段）**按旧行为**：帧末快照进单槽、下帧 NMI 上传（显式标注）。
+pub fn legacy_frame_wrote(op: Option<bool>, a: u16, v: u8) -> bool {
+    op.is_none() && (0x0130..=0x0160).contains(&a) && (a != 0x0160 || v != 0)
+}
+
+/// 行快照构造（置位时刻/帧末回退共用；几何档选择见 `RowSnap` 注）。
+pub fn build_row_snap(
+    buf: &[u8; 0x31],
+    attrs: &[u8; 8],
+    regs: (u8, u8, u8),
+    lut_flag: bool,
+    hud_seq: &mut usize,
+    ctx: &SnapCtx,
+) -> RowSnap {
+    let mut row = [0u8; 32];
+    row.copy_from_slice(&buf[ctx.rowwin..ctx.rowwin + 32]);
+    let addr_ok = ((regs.1 as u16) << 8 | regs.0 as u16) >= 0x2000;
+    if !addr_ok && row.iter().any(|&v| v != 0) && ctx.hud_lut {
+        // ① 放置序=降序+双写（t109 参数表）：fills/2 → LUT 行 15 递降；HUD fallback=legacy 形态
+        const HUD_LUT: [u16; 8] =
+            [0x21C0, 0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380];
+        let idx = 7usize.saturating_sub(*hud_seq / 2 % 8);
+        let base = HUD_LUT[idx];
+        *hud_seq += 1;
+        (row, *attrs, base as u8, (base >> 8) as u8, 0xC0, 0)
+    } else {
+        // 【迭代2 变量①'】LUT 行基（$8D 覆盖）=精确行址 ⇒ 模型分组但不加 $0F（geo=2）；
+        // 直写 regs（$8E/$8F 裸基）⇒ 模型分组 + $0F 校正（geo=1）；MODELGEO 关=legacy（0）
+        let geo = if !ctx.model_geo {
+            0u8
+        } else if lut_flag {
+            2u8
+        } else {
+            1u8
+        };
+        (row, *attrs, regs.0, regs.1, regs.2, geo)
+    }
+}
+
+/// 【族①事件序回放】probe 事件序回放状态机（render_frame 默认路）。
+/// - 事件按文件序（=时间序）逐条 `apply`：写/旧事件镜像进 buf/attrs/regs/pal，读事件跳过；
+/// - `$0160` 置位写 ⇒ **当刻**快照入单 pending 槽（多置位=覆盖单槽）；
+/// - `end_frame`（帧末）：缺 op 旧 probe 按旧行为**帧末单快照回退**（显式标注）；
+/// - NMI 消费点=帧边界（main 循环 `slot.consume()`）：上传后清空；无置位帧不上传。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EventReplay {
+    pub buf: [u8; 0x31],     // $0130-$015F + $0160 行缓冲镜像
+    pub attrs: [u8; 8],      // $D3-$DA 位属性
+    pub regs: (u8, u8, u8),  // $8E/$8F/$90 行基址寄存器
+    pub pal: [u8; 7],        // $161-$167 调色板源
+    pub lut_flag: bool,      // $8D LUT 行基覆盖标记（geo=1/2 互斥）
+    pub slot: PendingSlot<RowSnap>,
+    pub hud_seq: usize,
+    pub ctx: SnapCtx,
+    /// 整份 probe 是否旧格式（**无任何 op 字段**）⇒ 帧末快照=旧行为。
+    pub legacy_file: bool,
+    /// 本帧出现缺 op 触发事件（混合 probe 的逐帧回退标记）。
+    pub frame_legacy: bool,
+    /// 本帧出现 `$0160` 置位写（帧末不再快照）。
+    pub frame_set: bool,
+    // —— 诊断计数 ——
+    pub sets: usize,           // $0160 置位写数
+    pub reads_skipped: usize,  // op=r 读事件（不改状态）
+    pub opless: usize,         // 缺 op 事件数（旧行为镜像）
+    pub legacy_frames: usize,  // 帧末快照回退帧数（显式标注口径）
+}
+
+impl EventReplay {
+    pub fn new(ctx: SnapCtx, legacy_file: bool) -> Self {
+        Self {
+            buf: [0; 0x31],
+            attrs: [0; 8],
+            regs: (0, 0, 0),
+            pal: [0; 7],
+            lut_flag: false,
+            slot: PendingSlot::new(),
+            hud_seq: 0,
+            ctx,
+            legacy_file,
+            frame_legacy: false,
+            frame_set: false,
+            sets: 0,
+            reads_skipped: 0,
+            opless: 0,
+            legacy_frames: 0,
+        }
+    }
+
+    /// 处理一条 probe 事件（文件序=时间序）。
+    pub fn apply(&mut self, a: u16, v: u8, op: Option<bool>) {
+        match classify_event(op, a, v) {
+            EventAct::Read => {
+                self.reads_skipped += 1;
+                return;
+            }
+            act => {
+                if op.is_none() {
+                    self.opless += 1;
+                }
+                match a {
+                    0x0130..=0x0160 => self.buf[(a - 0x0130) as usize] = v,
+                    0x00D3..=0x00DA => self.attrs[(a - 0x00D3) as usize] = v,
+                    0x8E => {
+                        self.regs.0 = v;
+                        self.lut_flag = false;
+                    }
+                    0x8F => {
+                        self.regs.1 = v;
+                        self.lut_flag = false;
+                    }
+                    0x90 => self.regs.2 = v,
+                    0x8D => {
+                        // t100 行地址 LUT 通道：$8D 行索引 → $EBF4 项 = 行基址（$2000+$40n）
+                        const LUT: [u16; 16] = [
+                            0x2000, 0x2040, 0x2080, 0x20C0, 0x2100, 0x2140, 0x2180, 0x21C0,
+                            0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380, 0x2CA5,
+                        ];
+                        if let Some(&base) = LUT.get(v as usize) {
+                            self.regs.0 = base as u8;
+                            self.regs.1 = (base >> 8) as u8;
+                            self.lut_flag = true; // 【族①迭代2 变量①】LUT 行基覆盖 regs（t93 §3 嫌疑①）
+                        }
+                    }
+                    0x0161..=0x0167 => self.pal[(a - 0x0161) as usize] = v,
+                    _ => {}
+                }
+                if act == EventAct::ApplySet {
+                    // 【置位时刻快照】$0160 置位（op=w 且 v≠0）⇒ buf/attrs/regs 当刻快照入单槽
+                    // （多置位=覆盖单槽；快照点=置位时刻非帧末——l5-0160 §5 建议 2）
+                    let snap = self.snapshot();
+                    self.slot.set(snap);
+                    self.frame_set = true;
+                    self.sets += 1;
+                }
+                if legacy_frame_wrote(op, a, v) {
+                    self.frame_legacy = true;
+                }
+            }
+        }
+    }
+
+    /// 帧末：缺 op 旧 probe 回退（旧行为=帧末单快照，显式标注）；op 齐全的帧不走帧末快照。
+    /// `wrote`=旧全量谓词（含读事件；LOOPABL=1 关闭填充相位时仍按旧行为判）。
+    pub fn end_frame(&mut self, wrote: bool) {
+        if wrote && !self.frame_set && (self.legacy_file || self.frame_legacy) {
+            let snap = self.snapshot();
+            self.slot.set(snap);
+            self.legacy_frames += 1;
+        }
+        self.frame_legacy = false;
+        self.frame_set = false;
+    }
+
+    /// 当刻快照（置位时刻/帧末回退共用）。
+    fn snapshot(&mut self) -> RowSnap {
+        let (regs, lut_flag, ctx) = (self.regs, self.lut_flag, self.ctx);
+        build_row_snap(&self.buf, &self.attrs, regs, lut_flag, &mut self.hud_seq, &ctx)
+    }
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -1064,30 +1322,46 @@ fn main() {
             }
         }
     }
-    let mut buf = [0u8; 0x31]; // $0130-$015F + $0160
-    let mut attrs = [0u8; 8];
-    let mut addr_regs = (0u8, 0u8, 0u8); // $8E/$8F/$90（t99：probe 写点追踪，解相位陷阱）
-    let mut regs_from_lut = false; // 【族①迭代2 变量①】$8D LUT 行基覆盖标记（模型 +0x0F 互斥用）
-    let mut palette_src = [0u8; 7]; // $161-$167 调色板源（t99 ①）
-    let mut pending_row: Option<([u8; 32], [u8; 8], u8, u8, u8, u8)> = None; // u8=几何模式 0=legacy/1=model+0F/2=model 无0F（族①迭代2）
+    // 【族①事件序回放】状态机（buf/attrs/regs/pal + 单 pending 槽——l5-0160 单槽语义）。
+    // 快照/放置上下文：ROWWIN/NOHUDLUT/MODELGEO（运行期不变；旧行为逐帧读 env 等价）。
+    let snap_ctx = SnapCtx {
+        rowwin: std::env::var("ROWWIN").ok().and_then(|v| v.parse().ok()).unwrap_or(0),
+        hud_lut: std::env::var("NOHUDLUT").is_err(),
+        model_geo: std::env::var("MODELGEO").is_ok(),
+    };
     let mut buf_fill = 0usize;
     let mut flag_fire = 0usize;
     let mut upload_write = 0usize;
-    let mut hud_row_seq = 0usize; // ②基址上下文：预装载非零行按填充序 → $2000 系 LUT 行
     let mut sx = 0u8;
     let mut sy = 0u8;
     let mut zp_prev: Vec<u8> = vec![0; 256];
     // probe 写事件（NMI 级相位）
     let probe_path = repo_root.join(format!("analysis/traces/{scene}.probe.jsonl")).to_string_lossy().into_owned();
-    let probe: Vec<(u64, u16, u8)> = std::fs::read_to_string(&probe_path).map(|t| {
+    // 【probe 双流格式】事件行 `f/pc/a/v/x/y/ar` + **`"op":"w"|"r"`**（probe-setter-blindspot-fix §2）；
+    // 缺 op=旧 probe（纯读流）⇒ None（按旧行为：全事件镜像+帧末单快照回退）。
+    let probe: Vec<(u64, u16, u8, Option<bool>)> = std::fs::read_to_string(&probe_path).map(|t| {
         t.lines().filter_map(|l| {
             let f = l.split("\"f\":").nth(1)?.split(',').next()?.parse().ok()?;
             let a = l.split("\"a\":\"").nth(1)?;
             let a = u16::from_str_radix(a.split('"').next()?, 16).ok()?;
             let v = l.split("\"v\":").nth(1)?.split(&[',', '}'][..]).next()?.parse().ok()?;
-            Some((f, a, v))
+            let op = l.split("\"op\":\"").nth(1).and_then(|x| x.chars().next()).and_then(|c| match c {
+                'w' => Some(true),
+                'r' => Some(false),
+                _ => None,
+            });
+            Some((f, a, v, op))
         }).collect()
     }).unwrap_or_default();
+    // 旧 probe（全事件无 op）⇒ 显式标注：事件序回放不启用，按旧行为帧末单快照。
+    let probe_legacy_file = !probe.is_empty() && probe.iter().all(|e| e.3.is_none());
+    if probe_legacy_file {
+        eprintln!(
+            "WARN probe 无 op 字段（旧格式读流 probe，{} 事件）——按旧行为：全事件镜像 + 帧末单快照回退（事件序回放置位路不启用）",
+            probe.len()
+        );
+    }
+    let mut replay = EventReplay::new(snap_ctx, probe_legacy_file);
     let mut probe_i = 0usize;
     let mut ptr_writes: std::collections::HashMap<u64, (u8, u8)> = std::collections::HashMap::new();
     // 归属轴（AR3-A 修正）：按段起点址匹配 t130 §2 七段（$2006 对计数段序号）——
@@ -1149,7 +1423,7 @@ fn main() {
     let mut ppu_addr: u16 = 0;
     let mut tile_page = [[0u8; 32]; 4]; // 1=字模页族（f1207 前装载），2=游戏页族（$6A）
     let mut ppu_addr_latch_high = true;
-    for (pf, pa, pv) in &probe {
+    for (pf, pa, pv, _op) in &probe {
         match pa {
             0x2F => {
                 let e = ptr_writes.entry(*pf).or_insert((0, 0));
@@ -1163,45 +1437,17 @@ fn main() {
         }
     }
     let mut trace_oam: Option<String> = None;
-    let apply_frame_writes = |buf: &mut [u8; 0x31], attrs: &mut [u8; 8],
-                                  regs: &mut (u8, u8, u8), pal: &mut [u8; 7],
-                                  f: u64, pi: &mut usize, lut_flag: &mut bool| {
-        while *pi < probe.len() && probe[*pi].0 == f {
-            let (_f, a, v) = probe[*pi];
-            *pi += 1;
-            match a {
-                0x0130..=0x0160 => buf[(a - 0x0130) as usize] = v,
-                0x00D3..=0x00DA => attrs[(a - 0x00D3) as usize] = v,
-                0x8E => { regs.0 = v; *lut_flag = false; }
-                0x8F => { regs.1 = v; *lut_flag = false; }
-                0x90 => regs.2 = v,
-                0x8D => {
-                    // t100 行地址 LUT 通道：$8D 行索引 → $EBF4 项 = 行基址（$2000+$40n）
-                    let lut = [
-                        0x2000u16, 0x2040, 0x2080, 0x20C0, 0x2100, 0x2140, 0x2180, 0x21C0,
-                        0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380, 0x2CA5,
-                    ];
-                    if let Some(&base) = lut.get(v as usize) {
-                        regs.0 = base as u8;
-                        regs.1 = (base >> 8) as u8;
-                        *lut_flag = true; // 【族①迭代2 变量①】$8D LUT 行基覆盖 regs（t93 取证 §3 嫌疑①）
-                    }
-                }
-                0x0161..=0x0167 => pal[(a - 0x0161) as usize] = v,
-                _ => {}
-            }
-        }
-    };
     for line in trace.lines() {
         let Some(rest) = line.split("\"f\":").nth(1) else { continue };
         let f: u64 = rest.split(',').next().unwrap().parse().unwrap();
         if f > frame { break; }
-        // —— NMI 语义边界（帧首）：上传上一帧填充的行缓冲（读后即废）——
+        // —— NMI 语义边界（帧首）：**单 pending 槽消费点**——上传上一帧置位时的快照并清空
+        // （l5-0160 定谳：$0160=单槽挂起位域+NMI 单点消费；无置位帧槽空=不上传）——
         // t143 对账模式：行 LUT 路径暂缓（文本层 220 真值对账）
         // t230 ①：条带上传（帧 N 填充→帧 N+1 NMI 落 nametable——持久化模型闭环）
         // 【互斥门】FLAGUPLOAD=1 时旧 pending_row 路关（zp 步进 64=双行对实锤——
         // per-flag 奇偶 half*32=真形；双路混杂=偶行带根因）
-        if std::env::var("FLAGUPLOAD").is_err() { if let Some((row, attrs, lo, hi, c, geo)) = pending_row.take() {
+        if std::env::var("FLAGUPLOAD").is_err() { if let Some((row, attrs, lo, hi, c, geo)) = replay.slot.consume() {
             if geo != 0 {
                 // 【迭代2 变量①'】geo=1（$8E/$8F 裸基）：base=hi:lo+$0F（ROM 公式校正量）；
                 // geo=2（$8D LUT 行基=精确行址 $2000+$40n）：不加 $0F，仅 4×8 分组。
@@ -1260,18 +1506,27 @@ fn main() {
         } }
         let zi = line.find("\"zp\":\"").unwrap();
         let zp = hex_decode(&line[zi + 6..][..line[zi + 6..].find('"').unwrap()]);
-        // —— 主循环相位：probe 写事件填充缓冲 ——
+        // —— 主循环相位：**事件序回放**（族①）——probe 事件按文件序（=时间序）逐条处理：
+        // 写/旧事件镜像填充 buf/attrs/regs/pal；`$0160` 置位写（op=w 且 v≠0）=**当刻快照入单槽**
+        // （多置位=覆盖单槽）；op=r 读事件跳过（双流 probe 读流不改状态）。
         if std::env::var("LOOPABL").is_err() {
-            apply_frame_writes(&mut buf, &mut attrs, &mut addr_regs, &mut palette_src, f, &mut probe_i, &mut regs_from_lut);
+            while probe_i < probe.len() && probe[probe_i].0 == f {
+                let (_f, a, v, op) = probe[probe_i];
+                probe_i += 1;
+                replay.apply(a, v, op);
+            }
         }
-        // 帧末挂起：行缓冲若本帧被写过（扫写）→ 排队下帧 NMI 上传（地址取当帧 zp）
+        // 帧末挂起（旧行为口径计数）：行缓冲若本帧被写过（扫写）→ 排队下帧 NMI 上传（地址取当帧 zp）
         // 【l4 修】上传触发域=全缓冲（$0130-$0160 含 flag $0160——旧域 $0130-$0150
         // 漏尾部字段/flag=结束卡 4020 写/帧批疑不触发根因；flag=$0160 非零=挂起类型）
-        let wrote = probe.iter().any(|(pf, pa, pv)| {
+        let wrote = probe.iter().any(|(pf, pa, pv, _op)| {
             *pf == f && (0x0130..=0x0160).contains(pa) && (*pa != 0x0160 || *pv != 0)
         });
-        buf_fill += probe.iter().filter(|(pf, pa, _)| *pf == f && (0x0130..=0x0160).contains(pa)).count();
+        buf_fill += probe.iter().filter(|(pf, pa, _, _)| *pf == f && (0x0130..=0x0160).contains(pa)).count();
         if wrote { flag_fire += 1; }
+        // —— 帧末单快照（**仅缺 op 旧 probe 回退**，显式标注）：op 齐全时槽已在置位时刻快照，
+        // "帧末单快照"语义已撤回（l5-0160 §5 建议 2）——多填充帧不再只取末态。
+        replay.end_frame(wrote);
         // —— 文本放置（t129 机制终版）：核回放写集（phase-batch 产物）直接落 nametable——
         // 77+46 变长足迹表由 ROM 链原生产出（与 t128 A 级裁定逐址一致）——
         // PPU 协议解释（t131 归属合并击根修）：$2006 写锁存地址（高/低），
@@ -1326,28 +1581,7 @@ fn main() {
                 _ => {}
             }
         }
-        if wrote {
-            let mut row = [0u8; 32];
-            // 【行窗相位】ROWWIN=k 环境变量（默认 0）——行提取窗偏移实证扫
-            let rowwin: usize = std::env::var("ROWWIN").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
-            row.copy_from_slice(&buf[rowwin..rowwin + 32]);
-            let addr_ok = ((addr_regs.1 as u16) << 8 | addr_regs.0 as u16) >= 0x2000;
-            if !addr_ok && row.iter().any(|&v| v != 0) && std::env::var("NOHUDLUT").is_err() {
-                // ① 放置序=**降序+双写**（t109 参数表：行索引逆序映射、每行双调用——
-                // 顺序填充实验反向即本因）：fills/2 → LUT 行 15 递降
-                let lut = [0x21C0u16, 0x2200, 0x2240, 0x2280, 0x22C0, 0x2300, 0x2340, 0x2380];
-                let idx = 7usize.saturating_sub(hud_row_seq / 2 % 8);
-                let base = lut[idx];
-                pending_row = Some((row, attrs, base as u8, (base >> 8) as u8, 0xC0, 0)); // HUD fallback=legacy
-                hud_row_seq += 1;
-            } else {
-                // 【迭代2 变量①'】LUT 行基（$8D 覆盖）= 精确行址 ⇒ 模型分组但不加 $0F（geo=2）；
-                // 直写 regs（$8E/$8F 裸基）⇒ 模型分组 + $0F 校正（geo=1）；MODELGEO 关=legacy（0）
-                let geo = if !std::env::var("MODELGEO").is_ok() { 0u8 }
-                          else if regs_from_lut { 2u8 } else { 1u8 };
-                pending_row = Some((row, attrs, addr_regs.0, addr_regs.1, addr_regs.2, geo));
-            }
-        }
+        // （帧末快照已由 replay.end_frame(wrote) 承担：置位时刻快照=主路；缺 op 旧 probe=帧末回退）
         let _ = &zp_prev;
         zp_prev = zp.clone();
         if f == frame.wrapping_sub(1) {
@@ -1371,7 +1605,9 @@ fn main() {
         let per_nt: Vec<(usize, usize)> = nt.tiles.iter()
             .map(|t| (t.iter().filter(|&&x| x > 0 && x < 128).count(), t.iter().filter(|&&x| x >= 128).count()))
             .collect();
-        eprintln!("DBGUPLOAD buf_fill={} flag_fire={} upload_write={} nt_nz={} per_nt(lo,hi)={:?}", buf_fill, flag_fire, upload_write, nt_nz, per_nt);
+        eprintln!("DBGUPLOAD buf_fill={} flag_fire={} upload_write={} nt_nz={} per_nt(lo,hi)={:?} replay(sets={} consumes={} legacy_frames={} reads_skipped={} opless={})",
+            buf_fill, flag_fire, upload_write, nt_nz, per_nt,
+            replay.sets, replay.slot.consumes, replay.legacy_frames, replay.reads_skipped, replay.opless);
     }
     // 渲染：nametable 32×30 + 卷轴
     let mut canvas = Canvas::new();
@@ -1551,7 +1787,7 @@ fn main() {
     let idx_path = out_dir.join(format!("{name}.idx.json"));
     std::fs::write(&idx_path, format!(
         "{{\"palette_src\":\"{}\",\"attrs\":\"{}\",\"tiles\":\"{}\"}}",
-        palette_src.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+        replay.pal.iter().map(|b| format!("{b:02x}")).collect::<String>(),
         nt.attrs[ntr].iter().map(|b| format!("{b:02x}")).collect::<String>(),
         nt.tiles[ntr].iter().map(|b| format!("{b:02x}")).collect::<String>(),
     )).expect("侧车");
@@ -1569,7 +1805,7 @@ fn main() {
         .unwrap_or_else(|e| panic!("日志 {}: {e}", log_path.display()));
     writeln!(
         log,
-        "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={} scene={scene} env={} argv={:?} in=frames:{},probe:{},text:{} out={} in_frames_read={} text_records_read={} early_exit={} text_margin={}",
+        "{name} frame={frame} base={base} scroll=({sx},{sy}) nt_nz={} probe={} scene={scene} env={} argv={:?} in=frames:{},probe:{},text:{} out={} in_frames_read={} text_records_read={} early_exit={} text_margin={} replay_mode={} replay_sets={} legacy_snap_frames={} probe_opless={} probe_reads_skipped={}",
         nt.tiles.iter().flat_map(|t| t.iter()).filter(|&&t| t != 0).count(),
         probe.len(),
         env_explicit_summary(),
@@ -1581,7 +1817,13 @@ fn main() {
         in_frames_read,
         text_records_read,
         early_exit,
-        text_margin
+        text_margin,
+        // 【显式标注】旧 probe（缺 op）=legacy 帧末快照回退；op 齐全=事件序回放（置位时刻快照）
+        if probe_legacy_file { "legacy-opless-probe" } else { "event-replay" },
+        replay.sets,
+        replay.legacy_frames,
+        replay.opless,
+        replay.reads_skipped
     )
     .unwrap();
     let _ = (SCREEN_W, SCREEN_H);
@@ -1879,5 +2121,167 @@ mod cli_tests {
     fn usage_mentions_new_flags() {
         assert!(USAGE.contains("--out-dir") && USAGE.contains("--log-path"));
         assert!(USAGE.contains("退出码 2"));
+    }
+}
+
+#[cfg(test)]
+mod event_replay_tests {
+    use super::*;
+
+    fn ctx_default() -> SnapCtx {
+        SnapCtx { rowwin: 0, hud_lut: false, model_geo: false }
+    }
+
+    fn snap_row(fill: u8) -> RowSnap {
+        ([fill; 32], [fill; 8], fill, fill, fill, fill)
+    }
+
+    /// 多置位并入单槽（l5-0160 判定 6：同帧多次置位=多批不成立，NMI 至多一次消费）。
+    #[test]
+    fn slot_multi_set_merges_single_pending() {
+        let mut slot: PendingSlot<RowSnap> = PendingSlot::new();
+        slot.set(snap_row(1));
+        slot.set(snap_row(2));
+        slot.set(snap_row(3));
+        assert_eq!(slot.sets, 3, "三次置位");
+        let out = slot.consume().expect("单槽应有内容");
+        assert_eq!(out.0[0], 3, "多置位并入单槽=最后一次快照胜");
+        assert_eq!(slot.consumes, 1);
+        assert!(slot.consume().is_none(), "单槽只消费一次（NMI 一次消费）");
+    }
+
+    /// 无置位帧不上传（$0160 槽语义 pending==0 ⇒ 无更新）。
+    #[test]
+    fn slot_no_set_no_upload() {
+        let mut slot: PendingSlot<RowSnap> = PendingSlot::new();
+        assert!(!slot.is_pending());
+        assert!(slot.consume().is_none(), "无置位帧不上传");
+        assert_eq!(slot.consumes, 0, "空消费不计 NMI 消费");
+    }
+
+    /// 快照点=置位时刻（非帧末）：置位后 buf 继续被填充不改槽内容。
+    #[test]
+    fn snapshot_taken_at_set_moment() {
+        let mut rp = EventReplay::new(ctx_default(), false);
+        // 填充 A：$0130-$014F 首字节=0x2A，$8E/$8F=行基 $2170
+        rp.apply(0x8E, 0x70, Some(true));
+        rp.apply(0x8F, 0x21, Some(true));
+        rp.apply(0x0130, 0x2A, Some(true));
+        // 置位（op=w 且 v≠0）⇒ 当刻快照入单槽
+        rp.apply(0x0160, 3, Some(true));
+        // 置位后帧内继续填充（同帧第二次 32B 填充）
+        rp.apply(0x0130, 0x99, Some(true));
+        let out = rp.slot.peek().expect("置位后槽应非空");
+        assert_eq!(out.0[0], 0x2A, "快照点=置位时刻（后续填充不改槽）");
+        assert_eq!((out.2, out.3), (0x70, 0x21), "regs=置位时刻值");
+        // NMI 消费点（帧边界）：上传槽内容并清空
+        let out = rp.slot.consume().expect("NMI 消费点应上传");
+        assert_eq!(out.0[0], 0x2A);
+        assert!(rp.slot.consume().is_none(), "清空后不再上传");
+    }
+
+    /// 事件分类：op=r 读事件不改状态/不置位；$0160 清零写不置位；缺 op=旧行为。
+    #[test]
+    fn classify_set_requires_op_w_and_nonzero() {
+        assert_eq!(classify_event(Some(true), 0x0160, 1), EventAct::ApplySet, "v=1 置位");
+        assert_eq!(classify_event(Some(true), 0x0160, 3), EventAct::ApplySet, "v=3 置位（调色板挂起型）");
+        assert_eq!(classify_event(Some(true), 0x0160, 0), EventAct::Apply, "清零写（NMI 消费清零）不置位");
+        assert_eq!(classify_event(Some(false), 0x0160, 3), EventAct::Read, "读事件不改状态/不置位");
+        assert_eq!(classify_event(Some(true), 0x0130, 7), EventAct::Apply, "行缓冲写=镜像填充");
+        assert_eq!(classify_event(None, 0x0160, 3), EventAct::Apply, "缺 op=旧 probe 旧行为（帧末快照，不置位）");
+    }
+
+    /// 读事件镜像隔离：op=r 事件不改 buf（双流 probe 读流不得污染镜像）。
+    #[test]
+    fn read_events_do_not_mutate_state() {
+        let mut rp = EventReplay::new(ctx_default(), false);
+        rp.apply(0x0130, 0x55, Some(true)); // 写镜像
+        rp.apply(0x0130, 0x11, Some(false)); // 读事件（如假读/轮询读）
+        assert_eq!(rp.buf[0], 0x55, "读事件不改 buf");
+        assert_eq!(rp.reads_skipped, 1);
+        rp.apply(0x0130, 0x22, None); // 缺 op 旧事件=旧行为（镜像）
+        assert_eq!(rp.buf[0], 0x22, "缺 op 事件按旧行为镜像");
+        assert_eq!(rp.opless, 1);
+    }
+
+    /// 缺 op 旧 probe：帧末单快照回退（旧行为）+ 显式计数。
+    #[test]
+    fn legacy_opless_frame_end_fallback() {
+        assert!(legacy_frame_wrote(None, 0x0130, 5), "旧 probe buf 写=帧末快照触发（旧行为）");
+        assert!(legacy_frame_wrote(None, 0x0160, 3), "旧 probe flag 非零=触发（旧行为）");
+        assert!(!legacy_frame_wrote(None, 0x0160, 0), "flag=0 不触发（旧行为）");
+        assert!(!legacy_frame_wrote(Some(true), 0x0130, 5), "新 probe 写事件不走帧末回退");
+        assert!(!legacy_frame_wrote(Some(false), 0x0130, 5), "读事件不触发");
+
+        // 整帧回放：旧 probe（op=None）帧末快照；op 齐全帧只走置位路
+        let mut rp = EventReplay::new(ctx_default(), true); // legacy_file=true
+        rp.apply(0x8E, 0x70, None);
+        rp.apply(0x8F, 0x21, None);
+        rp.apply(0x0130, 0x33, None);
+        rp.end_frame(true); // wrote=true（旧行为谓词）
+        assert_eq!(rp.legacy_frames, 1, "缺 op ⇒ 帧末单快照回退（旧行为，显式标注）");
+        let out = rp.slot.consume().expect("旧 probe 帧末快照可上传");
+        assert_eq!(out.0[0], 0x33);
+    }
+
+    /// op 齐全帧无置位 ⇒ 不上传（帧末不补快照）。
+    #[test]
+    fn op_frame_without_set_does_not_upload() {
+        let mut rp = EventReplay::new(ctx_default(), false);
+        rp.apply(0x0130, 0x44, Some(true)); // 仅填充，无 $0160 置位
+        rp.end_frame(true); // wrote=true 但 op 齐全 ⇒ 不走帧末快照
+        assert_eq!(rp.legacy_frames, 0);
+        assert!(rp.slot.consume().is_none(), "无置位的帧不上传");
+    }
+
+    /// MODELGEO 开关必须进 env 记录（运行日志模式归属可证——p01 A/B 曾只能靠 nt_nz 反推）。
+    #[test]
+    fn modelgeo_knob_is_recorded() {
+        assert!(ENV_KNOBS.contains(&"MODELGEO"), "MODELGEO=几何档开关须进 ENV_KNOBS 记录");
+        assert!(!ENV_KNOBS.contains(&"REPO_ROOT"));
+    }
+
+    /// 几何档选择（MODELGEO 门 + $8D LUT 互斥 + HUD LUT 回退）——p0-1 迭代2 变量①/①'。
+    #[test]
+    fn snap_geo_modes_and_hud_fallback() {
+        let buf = [0u8; 0x31];
+        let attrs = [7u8; 8];
+        let mut hud = 0usize;
+        // MODELGEO 关 ⇒ legacy 32 连写
+        let s = build_row_snap(&buf, &attrs, (0x0F, 0x20, 0xC0), false, &mut hud, &ctx_default());
+        assert_eq!(s.5, 0, "MODELGEO 关=legacy");
+        // geo=1：$8E/$8F 裸基（上传时 +$0F 校正）
+        let s = build_row_snap(
+            &buf,
+            &attrs,
+            (0x0F, 0x20, 0xC0),
+            false,
+            &mut hud,
+            &SnapCtx { rowwin: 0, hud_lut: false, model_geo: true },
+        );
+        assert_eq!(s.5, 1);
+        // geo=2：$8D LUT 精确行基（不加 $0F，仅 4×8 分组）
+        let s = build_row_snap(
+            &buf,
+            &attrs,
+            (0x00, 0x20, 0xC0),
+            true,
+            &mut hud,
+            &SnapCtx { rowwin: 0, hud_lut: false, model_geo: true },
+        );
+        assert_eq!(s.5, 2, "LUT 行基=精确行址 ⇒ 分组不加 $0F");
+        // HUD LUT 回退：regs < $2000 且行非零 ⇒ LUT 行基 + legacy 形态
+        let mut b2 = [0u8; 0x31];
+        b2[0] = 1;
+        let s = build_row_snap(
+            &b2,
+            &attrs,
+            (0x00, 0x00, 0),
+            false,
+            &mut hud,
+            &SnapCtx { rowwin: 0, hud_lut: true, model_geo: true },
+        );
+        assert_eq!(s.5, 0, "HUD LUT fallback=legacy 形态");
+        assert_eq!(hud, 1, "HUD 行序推进");
     }
 }
