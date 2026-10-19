@@ -148,3 +148,11 @@ Confidence: <0-100>
 
 小步提交：一个 commit 一个逻辑变更。门禁改动单独成 commit，不得与功能变更混提。
 安全网：本地 `pre-commit`（gates check）+ `commit-msg`（证据门禁）实时拦截；CI 在 push/PR 时跑同等检查。
+
+## 10. Agent 团队协作纪律（外链）
+
+> 【2026-10-19 用户裁定】agent 团队模式下的分工、任务完成判据（对抗审查 pass + 测试全绿 +
+> commit + **push 远端才算进度保存**）、Leader 10 分钟定时器唤醒规程（检查行任务→空闲判定→
+> 方向判定落库→派满落库→429 不重派只唤醒）、运维台账要求，见
+> [docs/agent-team-discipline.md](docs/agent-team-discipline.md) 与
+> [docs/findings/team-ops-ledger.md](docs/findings/team-ops-ledger.md)。本节不改变 §1–§9 任何约束。
