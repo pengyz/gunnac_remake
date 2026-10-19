@@ -111,14 +111,14 @@ PAIR_SPEC: list[dict] = [
      "status": STATUS_OK, "reuse": "independent", "duplicate_of": ""},
     # task-166 / task-165 §1 #8：Option B（Lead 裁定）——pair 重指向 gs5-anchor-render:3450（render-ready overlay；2026-10-19 Lead 单点收口），
     # expected 由 task-165 安装为 44e7800d…（1411B，真实"地区-2"开始屏；安装后由 expected 文件 sha 动态取）。
-    # re_render=true：g_run1/g_run2 的 l4_stg02-start 已由 task-165 step0 用本 overlay f3450 重渲
-    # （png 27fa3737…/idx 436120b6…），因此 g-manifest-v2 里的旧 run1 sha **不作否决**（仅历史对照）。
+    # task-171：g_run1/g_run2 的 l4_stg02-start 已由 task-165 step0 用本 overlay f3450 重渲
+    # （png 27fa3737…/idx 436120b6…）；g-manifest-v2 的旧 run1 sha（ebc6372f…）走**显式历史 allowlist**
+    # （HISTORICAL_V2_RUN1_SHA），不再用任何布尔豁免；其余 21 对仍严格核对。
     {"name": "l4_stg02-start", "scene": "gs5-anchor-render", "frame": 3450,
      "capture_tag": "stg02-start", "trigger": "injected",
      "expected_file": "l4_stg02-start.png",
      "status": STATUS_OK, "reuse": "independent", "duplicate_of": "",
-     "re_render": True,
-     "note": "Option B（Lead 裁定 task-166）：pair=gs5-anchor-render:3450；expected=44e7800d…（task-165 安装）；g_run1/g_run2 actual 已由 task-165 step0 重渲（27fa3737…），g-manifest-v2 run1 sha 为历史值不作否决"},
+     "note": "Option B（Lead 裁定 task-166）：pair=gs5-anchor-render:3450；expected=44e7800d…（task-165 安装）；g_run1/g_run2 actual 已由 task-165 step0 重渲（27fa3737…）；v2 旧 run1 sha ebc6372f 仅历史 allowlist"},
     {"name": "l4_stg03-start", "scene": "stg03-timeline", "frame": 5700,
      "capture_tag": "stg03-start-approx", "trigger": "injected",
      "expected_file": "l4_stg03-start.png",
@@ -158,6 +158,24 @@ PAIR_SPEC: list[dict] = [
 SPEC_BY_NAME = {p["name"]: p for p in PAIR_SPEC}
 MAPPING_COLUMNS = ["name", "scene", "frame", "capture_tag", "trigger", "expected_source",
                    "status", "reuse", "duplicate_of"]
+
+# task-171：g-manifest-v2 中 #14 的**历史** run1/run2 sha 白名单（task-165 step0 前的旧 actual）。
+# 仅允许这**一个确定的历史值**；当前磁盘值（27fa3737…）直接相等通过；任何其他漂移必须 FAIL。
+# （取代已删除的 "re_render" 布尔豁免——避免未来 #14 任何重渲漂移被静默。）
+HISTORICAL_V2_RUN1_SHA: dict[str, frozenset[str]] = {
+    "l4_stg02-start": frozenset({
+        "ebc6372f79d93748591ea13e7d6f05cb5e576f2530557c88b019c706bb79cb94",
+    }),
+}
+
+
+def v2_run1_sha_ok(name: str, v2_sha: str | None, disk_sha: str | None) -> tuple[bool, str | None]:
+    """g-manifest-v2 run1 sha vs 磁盘：相等⇒OK；#14 历史白名单⇒OK（标记 historical）；其余⇒FAIL。"""
+    if not v2_sha or not disk_sha or v2_sha == disk_sha:
+        return True, None
+    if v2_sha in HISTORICAL_V2_RUN1_SHA.get(name, frozenset()):
+        return True, "historical-allowlist"
+    return False, f"v2 run1 sha={v2_sha[:12]}… 与磁盘 {disk_sha[:12]}… 不符（不在历史 allowlist）"
 
 
 def sha256_file(path: pathlib.Path) -> str | None:
@@ -346,11 +364,14 @@ def build_manifest(render_dir: pathlib.Path, expected_dir: pathlib.Path,
                 issues.append(f"{name}: render_argv 缺失（日志不可解析）")
         if rec is not None:
             # g-manifest-v2 交叉核对（run shas/expected_file；只报警不覆盖）。
-            # re_render=true（#14 Option B，task-165 step0 已重渲 g_run1/g_run2）⇒ 旧 run1 sha 仅历史对照，不作否决。
-            if (not spec.get("re_render")
-                    and rec.get("actual_run1_sha256") and a1
-                    and rec["actual_run1_sha256"] != a1):
-                issues.append(f"{name}: g-manifest-v2 run1 sha 与磁盘不符")
+            # task-171：仅允许 #14 一个确定的历史 sha（HISTORICAL_V2_RUN1_SHA），其余任何不符一律 FAIL。
+            ok_sha, why = v2_run1_sha_ok(name, rec.get("actual_run1_sha256"), a1)
+            if not ok_sha:
+                issues.append(f"{name}: {why}")
+            elif why == "historical-allowlist":
+                pairs[-1]["notes"] = (
+                    (pairs[-1]["notes"] + "；") if pairs[-1]["notes"] else ""
+                ) + "g-manifest-v2 run1 sha 为历史 ebc6372f…（显式 allowlist；当前磁盘 27fa3737…）"
             if rec.get("expected_file") and rec["expected_file"] != spec["expected_file"]:
                 issues.append(f"{name}: expected_file 与 g-manifest-v2 不符")
         else:

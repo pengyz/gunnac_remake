@@ -74,8 +74,28 @@ def test_spec_22_rows_schema_and_counts():
     assert p14["capture_tag"] == "stg02-start" and p14["trigger"] == "injected"
     assert p14["status"] == L.STATUS_OK and p14["reuse"] == "independent"
     assert p14["duplicate_of"] == ""
-    # task-165 step0 已重渲 g_run1/g_run2 的 #14 actual ⇒ v2 旧 run1 sha 仅历史对照（不作否决）
-    assert p14.get("re_render") is True
+    # task-171：布尔豁免已移除；#14 旧值收窄为显式历史 allowlist
+    assert not any(p.get("re_render") for p in L.PAIR_SPEC)
+    assert L.HISTORICAL_V2_RUN1_SHA == {
+        "l4_stg02-start": frozenset({
+            "ebc6372f79d93748591ea13e7d6f05cb5e576f2530557c88b019c706bb79cb94"})}
+
+
+def test_v2_run1_sha_allowlist_semantics():
+    """task-171：仅 #14 的历史 ebc6372f 白名单可通过；当前值相等通过；其余漂移一律 FAIL。"""
+    old = "ebc6372f79d93748591ea13e7d6f05cb5e576f2530557c88b019c706bb79cb94"
+    cur = "27fa3737335346322615d8cdc7ba21ff50d764b1a05f7928a09a51baf40d6281"
+    # 相等 ⇒ OK（无 historical 标记）
+    assert L.v2_run1_sha_ok("l4_stg02-start", cur, cur) == (True, None)
+    # #14 旧值 ⇒ 显式 allowlist 通过
+    assert L.v2_run1_sha_ok("l4_stg02-start", old, cur) == (True, "historical-allowlist")
+    # #14 其他任意漂移 ⇒ FAIL
+    assert L.v2_run1_sha_ok("l4_stg02-start", "deadbeef" * 8, cur)[0] is False
+    # 其他 pair 的旧值不在白名单 ⇒ FAIL（其余 21 对严格）
+    assert L.v2_run1_sha_ok("gameplay-stage1_f01260", old, cur)[0] is False
+    # 缺失任一侧 ⇒ 不否决（缺图/无 v2 记录由其它分支兜底）
+    assert L.v2_run1_sha_ok("l4_stg02-start", None, cur) == (True, None)
+    assert L.v2_run1_sha_ok("l4_stg02-start", old, None) == (True, None)
     # task-166 四联/#17/#18：trigger natural→injected 更正
     for n in ("l4_stg06-late", "l4_stg08-combat", "l4_stg08-late", "l4_stg08-start",
               "l4_stg07-combat", "l4_stg07-start"):
