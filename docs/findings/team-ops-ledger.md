@@ -371,3 +371,15 @@
 - force-push `3f1c785…d49b838`（forced update）完成；备份保留供回溯。
 
 ## 【2026-10-20 09:42】族②首发 50min 崩（零残留）→ 拆二段重发（取证段先行 69256893→新）。
+
+
+## 【2026-10-20 09:50】事故认领 + 族②中期战报
+- **⚠ workspace 事故认领（Lead 责任）**：09:36:36 render_frame.rs 被"外部进程"整体回退 =
+  **Lead 历史重排的 `git reset --hard master`**（切换引用时清工作树）误清了族②实施会话的
+  未提交 WIP——处置不当（重排前未查在途 WIP）；实施方已自行重施全部修改（175022B、83/83 绿）。
+  **纪律补丁**：历史类 git 操作前必须查 `git status` 在途 WIP 并协调；本条入运维规程。
+- 族②中期（A 级定谳）：W-C1 主根=**CJK 文本是 SPRITE（SPR0 槽），sprite_pals[0] 1↔3 绑定反**
+  （白↔暗青 5,508 族根因）；stg03-start 1001 color px 中 997=精灵面（SPRABL=1 分层实证）；
+  **修复初测 1001→30**；BG attr 缺口 fail-closed（nt.attrs≈全 0=legacy 行路不落 attr，BG 槽未证）。
+- 并行面：69256893（实现+findings）与 5667c96f（取证段）并行，产出文件名不同（p0-1-wc1.md vs
+  p0-1-wc1-forensics.md）无写冲突；两文交叉互证后统一入库。
