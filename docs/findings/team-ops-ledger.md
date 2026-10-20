@@ -369,3 +369,5 @@
   一度被删，经 backup/pre-patrol-cleanup（branch+tag+refs/original 三重备份）完整恢复后
   改用 plumbing 重放——全程无内容损失；
 - force-push `3f1c785…d49b838`（forced update）完成；备份保留供回溯。
+
+## 【2026-10-20 09:42】族②首发 50min 崩（零残留）→ 拆二段重发（取证段先行 69256893→新）。
