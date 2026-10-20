@@ -516,15 +516,19 @@ static ROW_GOLDEN: [usize; 30] = [
 
 // ===== 族①事件序回放（p0-1 第二迭代；三份定谳输入）=====
 // 语义映射（定谳→实现）：
-// - l5-t93-field-mapping.md（A）：32B 行缓冲=4 行×8 列 tile 块；记录 4 字段→(x,x+1,x+16,x+17)；
-//   上传几何=4 组×8B 步进 $20（geo 档镜像 nmi_flush）；
+// - l5-t93-field-mapping.md（A）：记录 4 字段→(x,x+1,x+16,x+17)（缓冲内位置不变）；
+//   > 【2026-10-20 更正（t93 翻案注/G3 §2-3，A）】32B 行缓冲=**2 行×16 列** tile 块
+//   > （buf[0..16]→行 R cols base..+15、buf[16..32]→行 R+1 同列 base..+15，步进 +$20/行）；
+//   > 旧"4 行×8 列、4 组×8B 步进 $20"系 `AND #$F` 步进误读（seed F08B-F0DA：X+=8 双连发+AND #$F
+//   > 循环+lo+=$20+CPX #$20 收），已翻案作废；attr 体=($8F|3):$90 **无 +$0F**（F04B-F057 直读）。
 // - l5-0160-batch-semantics.md（含 dated 更正）：`$0160`=**单 pending 槽位域 + NMI 消费点**
 //   （置位:消费=70:70:70 严格 1:1）；"帧末单快照"已撤回——帧内可多次 32B 填充，
 //   多置位并入单槽、NMI 一次消费；
 // - probe-setter-blindspot-fix.md：probe 双流修复后事件行含 `"op":"w"/"r"`（写事件已可见）。
 
 /// 行上传快照：(row[32], attrs[8], lo, hi, c, geo)——geo: 0=legacy 32 连写 / 1=模型 +$0F /
-/// 2=模型 LUT 精确行基（不加 $0F）（族①迭代2 变量①/①'）。
+/// 2=模型 LUT 精确行基（不加 $0F）（族①迭代2 变量①/①'；模型档几何=2 行×16 列翻案形，
+/// 见 `modelgeo_addr_off`）。
 pub type RowSnap = ([u8; 32], [u8; 8], u8, u8, u8, u8);
 
 /// 【$0160 v 分型路由】置位快照载荷——**置位快照记 v 值**，NMI 消费按 v 分流（p0-1 vtype 迭代）：
@@ -645,6 +649,40 @@ pub fn classify_event(op: Option<bool>, a: u16, v: u8) -> EventAct {
 /// 旧 probe（无 op 字段）**按旧行为**：帧末快照进单槽、下帧 NMI 上传（显式标注）。
 pub fn legacy_frame_wrote(op: Option<bool>, a: u16, v: u8) -> bool {
     op.is_none() && (0x0130..=0x0160).contains(&a) && (a != 0x0160 || v != 0)
+}
+
+/// 【2×16 翻案（A）】MODELGEO 行上传几何：行缓冲下标 → 相对 base 的地址偏移——
+/// seed bank15:$F08B-$F0DA（X+=8 双连发 + `AND #$F` 循环 ×2 + lo+=$20 + `CPX #$20` 收）：
+/// 32B=**2 行×16 列**——buf[0..16]→base+0..15（行 R）、buf[16..32]→base+$20..+$2F（行 R+1 同列）。
+/// > 【2026-10-20 更正（t93 翻案注/G3 §2-3）】旧 4 组×8B（4 行×8 列、buf[grp*8+j]→base+grp*$20+j）
+/// > 几何已翻案作废（`AND #$F` 步进误读把 X+=8 双连发当成了地址步进）。
+pub fn modelgeo_addr_off(i: usize) -> u16 {
+    ((i / 16) as u16) * 0x20 + (i % 16) as u16
+}
+
+/// 【2×16 翻案（A）】MODELGEO attr 体地址 = `($8F|3):$90`（8B）——**无 +$0F**
+/// （seed bank15:$F04B-$F057 直读；旧实现误把行基 +$0F 校正一并加到 attr）。
+pub fn modelgeo_attr_addr(hi: u8, c: u8) -> u16 {
+    (((hi as u16) | 3) << 8) | (c as u16)
+}
+
+/// 【2×16 翻案（A）】MODELGEO 行体落位（geo=1/2 共用；base 已含 geo 档校正量）：
+/// 32B=2 行×16 列（见 `modelgeo_addr_off`）；**0 码=擦写必须生效**（t243，不走 preserve）。
+/// 返回落格数（attr 区/表外不落——`nt_tile_cell` 口径）。
+pub fn modelgeo_apply_row(nt: &mut Nametable, row: &[u8; 32], base: u16) -> usize {
+    let mut writes = 0usize;
+    for i in 0..32usize {
+        let raw = base.wrapping_add(modelgeo_addr_off(i));
+        if (0x2000..0x3000).contains(&raw) {
+            let rel = (raw - 0x2000) as usize;
+            let (n, o) = (rel / 0x400, rel % 0x400);
+            if n < 4 && o < 0x3C0 {
+                nt.tiles[n][o] = row[i]; // ②0 码=擦写（t243）
+                writes += 1;
+            }
+        }
+    }
+    writes
 }
 
 /// 行快照构造（置位时刻/帧末回退共用；几何档选择见 `RowSnap` 注）。
@@ -1708,26 +1746,16 @@ fn main() {
                     row_uploads += 1;
                     if geo != 0 {
                         // 【迭代2 变量①'】geo=1（$8E/$8F 裸基）：base=hi:lo+$0F（ROM 公式校正量）；
-                        // geo=2（$8D LUT 行基=精确行址 $2000+$40n）：不加 $0F，仅 4×8 分组。
+                        // geo=2（$8D LUT 行基=精确行址 $2000+$40n）：不加 $0F，仅 2×16 分组。
                         let add_off: u16 = if geo == 1 { 0x0F } else { 0 };
-                        // 【族① A 级模型】nmi_flush 镜像（bank15:$F040-F0DA；game-core terrain.rs:307-339）：
-                        // base=($8F:$8E)+$0F；4 组×8B 组间步进 $20；attr 行=(($8F|3):$90)+$0F 8B。
-                        // 旧 32 连写形态（单行铺）与 A 级几何不符=族①（209,086px/74.63%）根因。
+                        // 【族① A 级模型·2×16 翻案更正（2026-10-20，t93 翻案注/G3 §2-3）】
+                        // seed bank15:$F08B-$F0DA：X+=8 双连发+`AND #$F` 循环+lo+=$20+`CPX #$20` 收
+                        // ⇒ 32B=**2 行×16 列**：buf[0..16]→base+0..15、buf[16..32]→base+$20..+$2F；
+                        // attr 行=($8F|3):$90 **无 +$0F**（$F04B-$F057 直读）。旧 4 组×8B（4 行×8 列、
+                        // attr 随行基 +$0F）几何系 l5-t93 §2 `AND #$F` 步进误读，已翻案作废。
                         let base = (((hi as u16) << 8) | lo as u16).wrapping_add(add_off);
-                        for grp in 0..4u16 {
-                            for j in 0..8u16 {
-                                let raw = base.wrapping_add(grp * 0x20 + j);
-                                if (0x2000..0x3000).contains(&raw) {
-                                    let rel = (raw - 0x2000) as usize;
-                                    let (n, o) = (rel / 0x400, rel % 0x400);
-                                    if n < 4 && o < 0x3C0 {
-                                        nt.tiles[n][o] = row[(grp * 8 + j) as usize]; // ②0 码=擦写（t243）
-                                        upload_write += 1;
-                                    }
-                                }
-                            }
-                        }
-                        let attr_raw = ((((hi as u16) | 3) << 8) | (c as u16)).wrapping_add(add_off);
+                        upload_write += modelgeo_apply_row(&mut nt, &row, base);
+                        let attr_raw = modelgeo_attr_addr(hi, c);
                         if (0x2000..0x3000).contains(&attr_raw) {
                             let arel = (attr_raw - 0x2000) as usize;
                             let (an, aoff) = (arel / 0x400, arel % 0x400);
@@ -2669,7 +2697,7 @@ mod event_replay_tests {
             &SnapCtx { rowwin: 0, hud_lut: false, model_geo: true },
         );
         assert_eq!(s.5, 1);
-        // geo=2：$8D LUT 精确行基（不加 $0F，仅 4×8 分组）
+        // geo=2：$8D LUT 精确行基（不加 $0F，仅 2×16 分组——t93 翻案几何）
         let s = build_row_snap(
             &buf,
             &attrs,
@@ -2692,6 +2720,48 @@ mod event_replay_tests {
         );
         assert_eq!(s.5, 0, "HUD LUT fallback=legacy 形态");
         assert_eq!(hud, 1, "HUD 行序推进");
+    }
+
+    /// 【2×16 翻案几何（A）】32B=2 行×16 列：buf[0..16]→base+0..15（行 R）、
+    /// buf[16..32]→base+$20..+$2F（行 R+1 同列）；旧 4×8（grp*8）映射必须不再出现。
+    #[test]
+    fn modelgeo_geometry_is_2x16_not_4x8() {
+        assert_eq!(modelgeo_addr_off(0), 0x00, "行 R 首列");
+        assert_eq!(modelgeo_addr_off(8), 0x08, "旧行 R 第 9 列=+8（旧 4×8 会落 +$20）");
+        assert_eq!(modelgeo_addr_off(15), 0x0F, "行 R 尾列=+15");
+        assert_eq!(modelgeo_addr_off(16), 0x20, "行 R+1 首列=base+$20（步进 $20/行）");
+        assert_eq!(modelgeo_addr_off(31), 0x2F, "行 R+1 尾列=+$2F");
+        // 32 槽地址互不重叠
+        let mut seen = std::collections::HashSet::new();
+        for i in 0..32usize {
+            assert!(seen.insert(modelgeo_addr_off(i)), "槽 {i} 地址唯一");
+        }
+        // 落位：2 行×16 列、0 码=擦写必须生效
+        let mut nt = Nametable::default();
+        let mut row = [0u8; 32];
+        row[0] = 5;
+        row[16] = 6;
+        assert_eq!(modelgeo_apply_row(&mut nt, &row, 0x2280), 32);
+        assert_eq!(nt.tiles[0][0x280], 5, "buf[0]→base");
+        assert_eq!(nt.tiles[0][0x28F], 0, "行 R 尾列=buf[15]");
+        assert_eq!(nt.tiles[0][0x2A0], 6, "buf[16]→base+$20（行 R+1）");
+        assert_eq!(nt.tiles[0][0x2AF], 0, "行 R+1 尾列=buf[31]");
+        row[0] = 0;
+        modelgeo_apply_row(&mut nt, &row, 0x2280);
+        assert_eq!(nt.tiles[0][0x280], 0, "0 码擦写生效（t243）");
+    }
+
+    /// 【attr 无 +$0F（A）】attr 体地址=($8F|3):$90（8B）——行基 +$0F 校正不落 attr
+    /// （t93 翻案注/G3 §2-3；旧实现误随行基加 +$0F）。
+    #[test]
+    fn modelgeo_attr_addr_has_no_add_off() {
+        assert_eq!(modelgeo_attr_addr(0x22, 0xC0), 0x23C0, "$8F|3 → $23");
+        assert_eq!(modelgeo_attr_addr(0x20, 0x90), 0x2390, "$8F 低 2 位被置 3");
+        assert_ne!(
+            modelgeo_attr_addr(0x22, 0xC0),
+            0x23C0u16.wrapping_add(0x0F),
+            "attr 不加 $0F（旧行为 0x23CF 已翻案）"
+        );
     }
 }
 
